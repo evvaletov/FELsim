@@ -31,6 +31,7 @@ class COSYAdapter(SimulatorBase):
                  excel_path: Optional[str] = None,
                  mode: str = 'transfer_matrix',
                  config: Optional[Dict] = None,
+                 transfer_matrix_order: Optional[int] = None,
                  debug: bool = None):
 
         if not _COSY_AVAILABLE:
@@ -47,6 +48,7 @@ class COSYAdapter(SimulatorBase):
             self._native_sim = COSYSimulator(
                 excel_path=excel_path or 'dummy.xlsx',
                 config_dict=self._config,
+                transfer_matrix_order=transfer_matrix_order,
                 debug=debug
             )
             self._particle_sim = None
@@ -56,6 +58,7 @@ class COSYAdapter(SimulatorBase):
             self._particle_sim = COSYParticleSimulator(
                 excel_path=excel_path or 'dummy.xlsx',
                 config_dict=self._config,
+                transfer_matrix_order=transfer_matrix_order,
                 debug=debug
             )
             self._native_sim = self._particle_sim
@@ -544,6 +547,29 @@ class COSYAdapter(SimulatorBase):
         """Set beam energy and update COSY configuration."""
         super().set_beam_energy(energy_mev)
         self._native_sim.update_simulation_config(KE=energy_mev)
+
+    def set_transfer_matrix_order(self, order: int):
+        """Set transfer matrix order for PM command output."""
+        changes = self._native_sim.update_simulation_config(transfer_matrix_order=order)
+        if changes:
+            self.logger.info(f"Updated transfer_matrix_order: {changes['transfer_matrix_order']}")
+        return changes
+
+    def get_transfer_matrix_order(self) -> int:
+        """Get current transfer matrix order."""
+        return self._native_sim.transfer_matrix_order
+
+    def get_simulation_config(self) -> Dict:
+        """Get complete simulation configuration including energy, order, dimensions, and transfer_matrix_order."""
+        return self._native_sim.get_full_config()
+
+    def update_simulation_config(self, **kwargs) -> Dict:
+        """
+        Update simulation parameters.
+
+        Valid parameters: KE, order, dimensions, transfer_matrix_order
+        """
+        return self._native_sim.update_simulation_config(**kwargs)
 
     def supports_mode(self, mode: SimulationMode) -> bool:
         """Check if simulation mode is supported."""

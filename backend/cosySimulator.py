@@ -10,7 +10,7 @@ from loggingConfig import get_logger_with_fallback
 
 class COSYSimulator(BeamlineBuilder):
     def __init__(self, excel_path, json_config_path=None, config_dict=None, debug=None, use_enge_coeffs=True,
-                 use_mge_for_dipoles=False):
+                 use_mge_for_dipoles=False, transfer_matrix_order=None):
         """Initialize COSY simulator with beamline specification and configuration."""
         super().__init__(excel_path, json_config_path)
 
@@ -19,6 +19,12 @@ class COSYSimulator(BeamlineBuilder):
         self.KE = sim_config.get('KE', 45.0)
         self.order = sim_config.get('order', 3)
         self.dimensions = sim_config.get('dimensions', 2)
+
+        # Transfer matrix order for PM command - defaults to 1 (linear), cannot exceed computation order
+        if transfer_matrix_order is None:
+            self.transfer_matrix_order = sim_config.get('transfer_matrix_order', 1)
+        else:
+            self.transfer_matrix_order = transfer_matrix_order
 
         # Optimization state
         self.optimization_init_code = ""
@@ -55,6 +61,20 @@ class COSYSimulator(BeamlineBuilder):
         self.particle_checkpoint_count = 0
 
         self.logger, self.debug = get_logger_with_fallback(__name__, debug)
+
+        # Validate transfer_matrix_order
+        if self.transfer_matrix_order > self.order:
+            self.logger.warning(
+                f"transfer_matrix_order={self.transfer_matrix_order} exceeds "
+                f"computation order={self.order}, clamping to {self.order}"
+            )
+            self.transfer_matrix_order = self.order
+        elif self.transfer_matrix_order < 1:
+            self.logger.warning(
+                f"transfer_matrix_order={self.transfer_matrix_order} is invalid, setting to 1"
+            )
+            self.transfer_matrix_order = 1
+
         self.use_enge_coeffs = use_enge_coeffs
         self.use_mge_for_dipoles = use_mge_for_dipoles
         self.quad_aperture = 0.027
@@ -123,7 +143,7 @@ PROCEDURE RUN ;
     RPE {self.KE} ;
     LATTICE ;
 {{Optimization}}
-    CO 1 ; PM 99 ;
+    CO {self.transfer_matrix_order} ; PM 99 ;
     GT MAP F0 MU0 A0 B0 G0 R0 ;
     OPENF 51 'result.txt' 'UNKNOWN';
         WRITE 51 '{{';
@@ -793,8 +813,8 @@ END ;
         )
 
     def update_simulation_config(self, **kwargs):
-        """Update simulation parameters (KE, order, dimensions)."""
-        valid = {'KE', 'order', 'dimensions'}
+        """Update simulation parameters (KE, order, dimensions, transfer_matrix_order)."""
+        valid = {'KE', 'order', 'dimensions', 'transfer_matrix_order'}
         invalid = set(kwargs.keys()) - valid
         if invalid:
             raise ValueError(f"Invalid parameters: {invalid}. Valid: {valid}")
@@ -806,6 +826,28 @@ END ;
                 changes[key] = {'old': old_val, 'new': new_val}
                 setattr(self, key, new_val)
                 self.config.setdefault('simulation', {})[key] = new_val
+
+        # Validate transfer_matrix_order if it was changed
+        if 'transfer_matrix_order' in changes or 'order' in changes:
+            if self.transfer_matrix_order > self.order:
+                old_tm_order = self.transfer_matrix_order
+                self.transfer_matrix_order = self.order
+                self.logger.warning(
+                    f"transfer_matrix_order={old_tm_order} exceeds computation order={self.order}, "
+                    f"clamped to {self.order}"
+                )
+                if 'transfer_matrix_order' not in changes:
+                    changes['transfer_matrix_order'] = {'old': old_tm_order, 'new': self.order}
+                else:
+                    changes['transfer_matrix_order']['new'] = self.order
+            elif self.transfer_matrix_order < 1:
+                old_tm_order = self.transfer_matrix_order
+                self.transfer_matrix_order = 1
+                self.logger.warning(f"transfer_matrix_order={old_tm_order} is invalid, set to 1")
+                if 'transfer_matrix_order' not in changes:
+                    changes['transfer_matrix_order'] = {'old': old_tm_order, 'new': 1}
+                else:
+                    changes['transfer_matrix_order']['new'] = 1
 
         if 'KE' in changes:
             self._recalculate_energy_dependent_parameters()
@@ -910,7 +952,12 @@ END ;
         ]
 
         return {
-            'simulation': {'KE': self.KE, 'order': self.order, 'dimensions': self.dimensions},
+            'simulation': {
+                'KE': self.KE,
+                'order': self.order,
+                'dimensions': self.dimensions,
+                'transfer_matrix_order': self.transfer_matrix_order
+            },
             'variable_mapping': self.config.get('variable_mapping', {}),
             'optimization_initial_point': dict(self.optimization_initial_point),
             'optimization_objectives': self.config.get('optimization_objectives', {}),

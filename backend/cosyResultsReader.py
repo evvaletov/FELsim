@@ -255,6 +255,221 @@ class COSYResultsReader:
             'raw': json_data
         }
 
+    def read_transfer_map_full(self, filename='fort.99', max_order=None):
+        """
+        Read complete transfer map including higher-order coefficients.
+
+        Parses fort.99 to extract all aberration coefficients up to the specified order.
+        Each line contains 6 coefficients (for x, x', y, y', l, δK outputs) and a 6-digit
+        index indicating which partial derivative.
+
+        Parameters
+        ----------
+        filename : str
+            COSY output file (default: 'fort.99')
+        max_order : int, optional
+            Maximum order to read (1-5). If None, reads all available orders.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys 1, 2, 3, ... for each order:
+            {
+                1: (6, 6) array - linear transfer matrix,
+                2: dict - 2nd order coefficients {index: [6 coeffs]},
+                3: dict - 3rd order coefficients {index: [6 coeffs]},
+                ...
+            }
+
+        Notes
+        -----
+        Index format: 6 digits [i, j, k, l, m, n] representing powers of [x, x', y, y', l, δK]
+        - Order = i+j+k+l+m+n
+        - Example: '110000' = ∂²/∂x∂x' (2nd order)
+        - Example: '200100' = ∂³/∂x²∂y' (3rd order)
+
+        Each coefficient line gives all 6 output components:
+        coeff_x  coeff_x'  coeff_y  coeff_y'  coeff_l  coeff_δK  index
+        """
+        filepath = os.path.join(self.results_dir, filename)
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"COSY output not found: {filepath}")
+
+        # Storage for each order
+        coefficients_by_order = {}
+
+        with open(filepath, 'r') as f:
+            for line in f:
+                line_stripped = line.strip()
+
+                # Skip empty lines and separators
+                if not line_stripped or line_stripped.startswith('--') or len(line_stripped) < 10:
+                    continue
+
+                parts = line_stripped.split()
+                if len(parts) < 2:
+                    continue
+
+                index = parts[-1]
+
+                # Check for valid 6-digit index
+                if not (len(index) == 6 and index.isdigit()):
+                    continue
+
+                # Calculate order from sum of digits
+                order = sum(int(d) for d in index)
+
+                # Skip if beyond max_order
+                if max_order is not None and order > max_order:
+                    continue
+
+                # Skip zero-order (000000) - just constants
+                if order == 0:
+                    continue
+
+                try:
+                    coeff_values = []
+
+                    # Parse up to 6 coefficient values
+                    for i in range(min(6, len(parts) - 1)):
+                        coeff_str = parts[i]
+
+                        # Handle concatenated scientific notation (e.g., "1.23E-04-5.67E-08")
+                        if coeff_str.count('E') > 1 or coeff_str.count('e') > 1:
+                            numbers = re.findall(r'[+-]?\d+\.?\d*[Ee][+-]?\d+', coeff_str)
+                            if numbers:
+                                coeff_values.append(float(numbers[0]))
+                                continue
+
+                        coeff_values.append(float(coeff_str))
+
+                    # Pad with zeros if needed
+                    while len(coeff_values) < 6:
+                        coeff_values.append(0.0)
+
+                    # Store by order
+                    if order not in coefficients_by_order:
+                        coefficients_by_order[order] = {}
+
+                    coefficients_by_order[order][index] = coeff_values[:6]
+
+                except (ValueError, IndexError) as e:
+                    self.logger.warning(f"Parse error on line: {line_stripped}")
+                    self.logger.warning(f"  {e}")
+                    continue
+
+        # Convert order 1 to matrix form
+        if 1 in coefficients_by_order:
+            linear_dict = coefficients_by_order[1]
+            transfer_matrix = np.zeros((6, 6))
+
+            # Map indices to columns
+            index_to_col = {
+                '100000': 0,  # ∂/∂x
+                '010000': 1,  # ∂/∂x'
+                '001000': 2,  # ∂/∂y
+                '000100': 3,  # ∂/∂y'
+                '000010': 4,  # ∂/∂l
+                '000001': 5  # ∂/∂δK
+            }
+
+            for index, col in index_to_col.items():
+                if index in linear_dict:
+                    transfer_matrix[:, col] = linear_dict[index]
+                else:
+                    # Identity for missing longitudinal
+                    if col >= 4:
+                        transfer_matrix[col, col] = 1.0
+
+            coefficients_by_order[1] = transfer_matrix
+
+        if self.debug:
+            self.logger.debug(f"\n{'=' * 60}")
+            self.logger.debug(f"Transfer Map Extraction (Full)")
+            self.logger.debug(f"{'=' * 60}")
+            for order in sorted(coefficients_by_order.keys()):
+                if order == 1:
+                    self.logger.debug(f"  Order {order}: 6×6 matrix")
+                else:
+                    n_terms = len(coefficients_by_order[order])
+                    self.logger.debug(f"  Order {order}: {n_terms} coefficient terms")
+            self.logger.debug(f"{'=' * 60}\n")
+
+        return coefficients_by_order
+
+    def get_aberration_coefficient(self, output_coord, input_indices, order=None):
+        """
+        Extract specific aberration coefficient from transfer map.
+
+        Parameters
+        ----------
+        output_coord : int or str
+            Output coordinate (0-5 or 'x', 'xp', 'y', 'yp', 'l', 'delta')
+        input_indices : list of int
+            Powers of input coordinates [i_x, i_xp, i_y, i_yp, i_l, i_delta]
+            Example: [2, 0, 0, 0, 0, 0] for x²  (T_200000)
+            Example: [1, 1, 0, 0, 0, 0] for xx' (T_110000)
+        order : int, optional
+            Expected order (for validation). If None, calculated from input_indices.
+
+        Returns
+        -------
+        float
+            Coefficient value
+
+        Examples
+        --------
+        >>> reader = COSYResultsReader()
+        >>> # Get T_200000 (x from x²) for x output
+        >>> coeff = reader.get_aberration_coefficient('x', [2, 0, 0, 0, 0, 0])
+        >>> # Get T_110000 (x from xx') for x output
+        >>> coeff = reader.get_aberration_coefficient(0, [1, 1, 0, 0, 0, 0])
+        """
+        # Map coordinate names to indices
+        coord_map = {'x': 0, 'xp': 1, 'y': 2, 'yp': 3, 'l': 4, 'delta': 5}
+
+        if isinstance(output_coord, str):
+            if output_coord not in coord_map:
+                raise ValueError(f"Unknown coordinate: {output_coord}. Use {list(coord_map.keys())}")
+            out_idx = coord_map[output_coord]
+        else:
+            out_idx = int(output_coord)
+            if not 0 <= out_idx < 6:
+                raise ValueError(f"output_coord must be 0-5, got {out_idx}")
+
+        # Validate input_indices
+        if len(input_indices) != 6:
+            raise ValueError(f"input_indices must have 6 elements, got {len(input_indices)}")
+
+        # Calculate order
+        calc_order = sum(input_indices)
+        if order is not None and calc_order != order:
+            raise ValueError(f"Calculated order {calc_order} doesn't match specified order {order}")
+
+        # Build index string
+        index_str = ''.join(str(i) for i in input_indices)
+
+        # Read full map up to this order
+        full_map = self.read_transfer_map_full(max_order=calc_order)
+
+        if calc_order not in full_map:
+            raise ValueError(f"Order {calc_order} not found in transfer map")
+
+        if calc_order == 1:
+            # For linear, extract from matrix
+            matrix = full_map[1]
+            col = input_indices.index(1)  # Find which input has power 1
+            return float(matrix[out_idx, col])
+        else:
+            # For higher orders, look up in dict
+            order_dict = full_map[calc_order]
+            if index_str not in order_dict:
+                raise ValueError(f"Coefficient {index_str} not found in order {calc_order} map")
+
+            coeffs = order_dict[index_str]
+            return float(coeffs[out_idx])
+
     def read_linear_transfer_map(self, filename='fort.99'):
         """
         Read 6×6 linear transfer matrix from COSY output.
@@ -289,12 +504,59 @@ class COSYResultsReader:
         - 000010 → ∂/∂l₀    (column 4)
         - 000001 → ∂/∂δK₀   (column 5)
         """
+        # Use the full reader to get just order 1
+        full_map = self.read_transfer_map_full(filename=filename, max_order=1)
+
+        if 1 not in full_map:
+            raise ValueError("No linear (order 1) coefficients found in transfer map")
+
+        return full_map[1]
+
+    def read_transfer_map_all_orders(self, filename='fort.99', max_order=None):
+        """
+        Read transfer map coefficients of all orders from COSY output.
+
+        Parameters
+        ----------
+        filename : str
+            COSY output file name
+        max_order : int, optional
+            Maximum order to read (default: read all available)
+
+        Returns
+        -------
+        dict
+            Dictionary mapping order → coefficients
+            {
+                1: 6×6 linear map,
+                2: dict of 2nd order coefficients,
+                3: dict of 3rd order coefficients,
+                ...
+            }
+
+        Notes
+        -----
+        Second and third order coefficients are stored as dicts with index tuples as keys:
+        - 2nd order: {(target, src1, src2): value}
+        - 3rd order: {(target, src1, src2, src3): value}
+
+        Coordinate indices: 0=x, 1=x', 2=y, 3=y', 4=l, 5=δK
+
+        Examples
+        --------
+        >>> reader = COSYResultsReader()
+        >>> maps = reader.read_transfer_map_all_orders(max_order=3)
+        >>> linear_map = maps[1]  # 6×6 matrix
+        >>> # Get x coefficient from x²: maps[2][(0, 0, 0)]
+        >>> # Get x coefficient from x³: maps[3][(0, 0, 0, 0)]
+        """
         filepath = os.path.join(self.results_dir, filename)
 
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"COSY output not found: {filepath}")
 
-        coefficients = {}
+        # Store all coefficients by index
+        all_coefficients = {}
 
         with open(filepath, 'r') as f:
             for line in f:
@@ -313,117 +575,272 @@ class COSYResultsReader:
                 if not (len(index) == 6 and index.isdigit()):
                     continue
 
-                target_indices = ['100000', '010000', '001000', '000100', '000010', '000001']
+                try:
+                    # Parse coefficient values for all 6 target coordinates
+                    coeff_values = []
 
-                if index in target_indices:
-                    try:
-                        coeff_values = []
+                    for i in range(min(6, len(parts) - 1)):
+                        coeff_str = parts[i]
 
-                        for i in range(min(6, len(parts) - 1)):
-                            coeff_str = parts[i]
+                        # Handle concatenated scientific notation
+                        if coeff_str.count('E') > 1 or coeff_str.count('e') > 1:
+                            numbers = re.findall(r'[+-]?\d+\.?\d*[Ee][+-]?\d+', coeff_str)
+                            if numbers:
+                                coeff_values.append(float(numbers[0]))
+                                continue
 
-                            # Handle concatenated scientific notation
-                            if coeff_str.count('E') > 1 or coeff_str.count('e') > 1:
-                                numbers = re.findall(r'[+-]?\d+\.?\d*[Ee][+-]?\d+', coeff_str)
-                                if numbers:
-                                    coeff_values.append(float(numbers[0]))
-                                    continue
+                        coeff_values.append(float(coeff_str))
 
-                            coeff_values.append(float(coeff_str))
+                    while len(coeff_values) < 6:
+                        coeff_values.append(0.0)
 
-                        while len(coeff_values) < 6:
-                            coeff_values.append(0.0)
+                    all_coefficients[index] = coeff_values[:6]
 
-                        coefficients[index] = coeff_values[:6]
+                except (ValueError, IndexError) as e:
+                    self.logger.error(f"Parse error on line: {line_stripped}")
+                    self.logger.error(f"  {e}")
+                    continue
 
-                    except (ValueError, IndexError) as e:
-                        self.logger.error(f"Parse error on line: {line_stripped}")
-                        self.logger.error(f"  {e}")
-                        continue
+        # Organize by order
+        coeffs_by_order = {}
 
-        # Verify we have required transverse indices
-        required_transverse = ['100000', '010000', '001000', '000100']
-        missing_transverse = [idx for idx in required_transverse if idx not in coefficients]
+        for index, values in all_coefficients.items():
+            # Calculate order (sum of digits in index)
+            order = sum(int(d) for d in index)
 
-        if missing_transverse:
-            found = [idx for idx in required_transverse if idx in coefficients]
-            raise ValueError(
-                f"Missing transverse indices in {filename}: {missing_transverse}\n"
-                f"Found: {found}\n"
-                f"Try increasing 'order' parameter in COSY config (e.g., order=3)"
-            )
+            if max_order is not None and order > max_order:
+                continue
 
-        # Check for longitudinal indices
-        longitudinal_indices = ['000010', '000001']
-        has_longitudinal = all(idx in coefficients for idx in longitudinal_indices)
+            if order not in coeffs_by_order:
+                coeffs_by_order[order] = {}
 
-        if not has_longitudinal:
-            missing = [idx for idx in longitudinal_indices if idx not in coefficients]
-            self.logger.debug(
-                f"Missing longitudinal indices {missing} - assuming 2D simulation"
-            )
+            coeffs_by_order[order][index] = values
 
-        # Build 6×6 matrix
-        transfer_matrix = np.zeros((6, 6))
+        # Convert to appropriate data structures
+        result = {}
 
-        # Transverse block (always present)
-        transfer_matrix[:, 0] = coefficients['100000']
-        transfer_matrix[:, 1] = coefficients['010000']
-        transfer_matrix[:, 2] = coefficients['001000']
-        transfer_matrix[:, 3] = coefficients['000100']
+        # Order 0 (constant term, usually zero)
+        if 0 in coeffs_by_order:
+            result[0] = np.array(coeffs_by_order[0]['000000'])
 
-        # Longitudinal block (identity if missing)
-        if '000010' in coefficients:
-            transfer_matrix[:, 4] = coefficients['000010']
-        else:
-            transfer_matrix[4, 4] = 1.0
+        # Order 1 (linear map as 6×6 matrix)
+        if 1 in coeffs_by_order:
+            linear_map = np.zeros((6, 6))
+            index_to_col = {
+                '100000': 0, '010000': 1, '001000': 2,
+                '000100': 3, '000010': 4, '000001': 5
+            }
 
-        if '000001' in coefficients:
-            transfer_matrix[:, 5] = coefficients['000001']
-        else:
-            transfer_matrix[5, 5] = 1.0
+            for index, col in index_to_col.items():
+                if index in coeffs_by_order[1]:
+                    linear_map[:, col] = coeffs_by_order[1][index]
+                elif col == 4 or col == 5:
+                    # Default longitudinal to identity
+                    linear_map[col, col] = 1.0
+
+            result[1] = linear_map
+
+        # Order 2 and higher (as indexed dictionaries)
+        for order in range(2, max(coeffs_by_order.keys()) + 1 if coeffs_by_order else 2):
+            if order not in coeffs_by_order:
+                continue
+
+            order_dict = {}
+
+            for index, values in coeffs_by_order[order].items():
+                # Convert index to source coordinate tuple
+                source_coords = self._index_to_coords(index)
+
+                # Store coefficients for each target coordinate
+                for target_coord in range(6):
+                    if abs(values[target_coord]) > 1e-15:  # Skip negligible terms
+                        key = (target_coord,) + source_coords
+                        order_dict[key] = values[target_coord]
+
+            result[order] = order_dict
 
         if self.debug:
-            self.logger.debug("\n" + "=" * 60)
-            self.logger.debug("Transfer Matrix Extraction")
-            self.logger.debug("=" * 60)
-            self.logger.debug(f"Longitudinal dynamics: {'Yes' if has_longitudinal else 'No (2D)'}")
+            self.logger.debug(f"\n{'=' * 60}")
+            self.logger.debug("Transfer Map - All Orders")
+            self.logger.debug(f"{'=' * 60}")
+            for order in sorted(result.keys()):
+                if order == 1:
+                    self.logger.debug(
+                        f"Order {order}: 6×6 matrix with {np.count_nonzero(result[order])} non-zero elements")
+                elif order == 0:
+                    self.logger.debug(f"Order {order}: constant term")
+                else:
+                    self.logger.debug(f"Order {order}: {len(result[order])} non-zero coefficients")
+            self.logger.debug(f"{'=' * 60}\n")
 
-            # Check coupling
-            x_y_coupling = np.any(transfer_matrix[:2, 2:4] != 0) or np.any(transfer_matrix[2:4, :2] != 0)
-            trans_long_coupling = (np.any(transfer_matrix[:4, 4:6] != 0) or
-                                   np.any(transfer_matrix[4:6, :4] != 0))
+        return result
 
-            self.logger.debug(f"X-Y coupling: {'Yes' if x_y_coupling else 'No'}")
-            self.logger.debug(f"Transverse-Longitudinal coupling: {'Yes' if trans_long_coupling else 'No'}")
+    def _index_to_coords(self, index_str):
+        """
+        Convert 6-digit COSY index to source coordinate tuple.
 
-            # Show matrix structure
-            coord_labels = ['x', "x'", 'y', "y'", 'l', 'δK']
-            self.logger.debug("\nMatrix structure:")
-            header = "        " + "".join(f"{lbl:>8s} " for lbl in coord_labels)
-            self.logger.debug(header)
+        Example: '200000' → (0, 0) for x²
+                 '110000' → (0, 1) for xx'
+                 '300000' → (0, 0, 0) for x³
 
-            for i, row_label in enumerate(coord_labels):
-                row_str = f"  {row_label:>4s}  "
-                for j in range(6):
-                    val = transfer_matrix[i, j]
-                    if abs(val) < 1e-10:
-                        row_str += "    ·    "
-                    else:
-                        row_str += f"{val:>8.4f} "
-                self.logger.debug(row_str)
+        Returns tuple of coordinate indices where each coordinate appears
+        according to its power.
+        """
+        powers = [int(d) for d in index_str]
+        coords = []
 
-            # Show dispersion if present
-            if has_longitudinal and np.any(transfer_matrix[:4, 5] != 0):
-                self.logger.debug(f"\nDispersion elements:")
-                self.logger.debug(f"  M₁₆ (x|δ)  = {transfer_matrix[0, 5]:>10.6f} m")
-                self.logger.debug(f"  M₂₆ (x'|δ) = {transfer_matrix[1, 5]:>10.6f}")
-                self.logger.debug(f"  M₃₆ (y|δ)  = {transfer_matrix[2, 5]:>10.6f} m")
-                self.logger.debug(f"  M₄₆ (y'|δ) = {transfer_matrix[3, 5]:>10.6f}")
+        for coord_idx, power in enumerate(powers):
+            coords.extend([coord_idx] * power)
 
-            self.logger.debug("=" * 60 + "\n")
+        return tuple(coords)
 
-        return transfer_matrix
+    def _coords_to_index(self, coord_tuple):
+        """
+        Convert coordinate tuple to 6-digit COSY index.
+
+        Example: (0, 0) → '200000' for x²
+                 (0, 1) → '110000' for xx'
+                 (0, 0, 0) → '300000' for x³
+        """
+        powers = [0] * 6
+        for coord in coord_tuple:
+            powers[coord] += 1
+        return ''.join(str(p) for p in powers)
+
+    def get_aberration_coefficient(self, target_coord, source_coords, order=None):
+        """
+        Get specific aberration coefficient from transfer map.
+
+        Parameters
+        ----------
+        target_coord : int or str
+            Target coordinate (0-5 or 'x', 'a'/'xp', 'y', 'b'/'yp', 'l', 'delta')
+        source_coords : tuple of int or str
+            Source coordinates as tuple
+            Example: (0, 0) for x² coefficient
+            Example: (0, 1) for xa coefficient
+            Example: (0, 0, 0) for x³ coefficient
+        order : int, optional
+            Expected order (for validation)
+
+        Returns
+        -------
+        float
+            Aberration coefficient value
+
+        Notes
+        -----
+        COSY coordinates: [x, a, y, b, l, δK] where:
+        - a = px/p0 (normalized transverse momentum, ≈ x' for paraxial beams)
+        - b = py/p0 (normalized transverse momentum, ≈ y' for paraxial beams)
+        - Aliases 'xp' and 'yp' are accepted for compatibility but map to a and b
+
+        Examples
+        --------
+        >>> reader = COSYResultsReader()
+        >>> # Get T_200000: x coefficient from x²
+        >>> coeff = reader.get_aberration_coefficient('x', (0, 0))
+        >>> # Get T_110000: x coefficient from xa (or x×x' in paraxial approx)
+        >>> coeff = reader.get_aberration_coefficient('x', (0, 1))
+        >>> coeff = reader.get_aberration_coefficient('x', ('x', 'a'))
+        >>> # Get T_300000: x coefficient from x³
+        >>> coeff = reader.get_aberration_coefficient('x', (0, 0, 0))
+        """
+        # Map coordinate names (accept both COSY notation and common aliases)
+        coord_map = {
+            'x': 0,
+            'a': 1, 'xp': 1,  # a = px/p0, xp accepted as alias
+            'y': 2,
+            'b': 3, 'yp': 3,  # b = py/p0, yp accepted as alias
+            'l': 4,
+            'delta': 5, 'dk': 5
+        }
+
+        if isinstance(target_coord, str):
+            if target_coord not in coord_map:
+                raise ValueError(f"Unknown coordinate: {target_coord}")
+            target_idx = coord_map[target_coord]
+        else:
+            target_idx = int(target_coord)
+
+        # Convert source coord names to indices
+        source_tuple = tuple(
+            coord_map[c] if isinstance(c, str) else int(c)
+            for c in source_coords
+        )
+
+        # Determine order
+        calc_order = len(source_tuple)
+        if order is not None and calc_order != order:
+            raise ValueError(f"Calculated order {calc_order} != specified order {order}")
+
+        # Read map
+        maps = self.read_transfer_map_all_orders(max_order=calc_order)
+
+        if calc_order not in maps:
+            raise ValueError(f"Order {calc_order} not found in transfer map")
+
+        # Look up coefficient
+        if calc_order == 1:
+            # Linear case: extract from matrix
+            return float(maps[1][target_idx, source_tuple[0]])
+        else:
+            # Higher order: look up in dict
+            key = (target_idx,) + source_tuple
+            if key not in maps[calc_order]:
+                return 0.0  # Coefficient not present (zero)
+            return float(maps[calc_order][key])
+
+    def get_aberration_from_powers(self, target_coord, power_list):
+        """
+        Get aberration coefficient using power notation.
+
+        Convenience method that accepts powers [i, j, k, l, m, n] representing
+        coordinate powers and converts to source coordinate tuple format.
+
+        Parameters
+        ----------
+        target_coord : int or str
+            Target coordinate (0-5 or 'x', 'a'/'xp', 'y', 'b'/'yp', 'l', 'delta')
+        power_list : list or tuple of 6 ints
+            Powers of [x, a, y, b, l, δK] coordinates
+            Example: [2, 0, 0, 0, 0, 0] for x²
+            Example: [1, 1, 0, 0, 0, 0] for xa (x×a, or x×x' in paraxial approx)
+            Example: [3, 0, 0, 0, 0, 0] for x³
+
+        Returns
+        -------
+        float
+            Aberration coefficient value
+
+        Notes
+        -----
+        COSY uses [x, a, y, b, l, δK] where a = px/p0 and b = py/p0.
+        For paraxial beams, a ≈ x' and b ≈ y', but the distinction matters
+        for large angles or higher-order momentum-dependent aberrations.
+
+        Examples
+        --------
+        >>> reader = COSYResultsReader()
+        >>> # Get T_200000: x from x²
+        >>> coeff = reader.get_aberration_from_powers('x', [2, 0, 0, 0, 0, 0])
+        >>> # Get T_110000: x from xa
+        >>> coeff = reader.get_aberration_from_powers('x', [1, 1, 0, 0, 0, 0])
+        >>> # Get T_300000: x from x³
+        >>> coeff = reader.get_aberration_from_powers('x', [3, 0, 0, 0, 0, 0])
+        """
+        if len(power_list) != 6:
+            raise ValueError(f"power_list must have 6 elements, got {len(power_list)}")
+
+        # Convert powers to source coordinate tuple
+        # [2, 0, 0, 0, 0, 0] → (0, 0) for x²
+        # [1, 1, 0, 0, 0, 0] → (0, 1) for xa
+        # [3, 0, 0, 0, 0, 0] → (0, 0, 0) for x³
+        source_coords = []
+        for coord_idx, power in enumerate(power_list):
+            source_coords.extend([coord_idx] * int(power))
+
+        return self.get_aberration_coefficient(target_coord, tuple(source_coords))
 
     def read_json_results(self, filename='result.txt'):
         """Read JSON-formatted results from COSY output."""
