@@ -833,16 +833,11 @@ class beamline:
             segment._fringe_params_front = None
             segment._fringe_params_end = None
             if isinstance(segment.fringeType, list):
-                xData = segment.fringeType[0].copy()
-                yData = segment.fringeType[1].copy()
-                xDataEnd = xData.copy()
-                for i in range(len(xDataEnd)):
-                    xDataEnd[i] += segment.endPos
+                xData = np.array(segment.fringeType[0], dtype=np.float64)
+                yData = np.array(segment.fringeType[1], dtype=np.float64)
+                xDataEnd = xData + segment.endPos
                 segment._fringe_params_end = self.endFit(xDataEnd, yData, segment.endPos)
-                xDataFront = xData.copy()
-                for i in range(len(xDataFront)):
-                    xDataFront[i] *= -1
-                    xDataFront[i] += segment.startPos
+                xDataFront = -xData + segment.startPos
                 segment._fringe_params_front = self.frontFit(xDataFront, yData, segment.startPos)
 
     def update_fringe_cache(self):
@@ -927,56 +922,38 @@ class beamline:
         for segment in reversed(beamline):
             if isinstance(segment.fringeType, list):
                 if segment._fringe_params_end is None:
-                    xData = segment.fringeType[0].copy()
-                    yData = segment.fringeType[1].copy()
-                    for i in range(len(xData)):
-                        xData[i] += segment.endPos
+                    xData = np.array(segment.fringeType[0], dtype=np.float64) + segment.endPos
+                    yData = np.array(segment.fringeType[1], dtype=np.float64)
                     params = self.endFit(xData, yData, segment.endPos)
                 else:
                     params = segment._fringe_params_end
                 yfield = self._endModel(zLine, *params)
-                zeroTracker = 0
-                while (zLine[zeroTracker] < segment.endPos and zeroTracker < zLine.size):
-                    yfield[zeroTracker] = 0
-                    zeroTracker += 1
+                yfield[zLine < segment.endPos] = 0
                 y_values += yfield
             elif (segment.fringeType == 'first order decay'):
                 B0 = 1
                 strength = 1
                 yfield = self._endModel(zLine, segment.endPos - (
                             np.log((1 - self.ORIGINFACTOR) / self.ORIGINFACTOR) / strength), B0, strength)
-                zeroTracker = 0
-                while (zLine[zeroTracker] < segment.endPos and zeroTracker < zLine.size):
-                    yfield[zeroTracker] = 0
-                    zeroTracker += 1
+                yfield[zLine < segment.endPos] = 0
                 y_values += yfield
         for segment in beamline:
             if isinstance(segment.fringeType, list):
                 if segment._fringe_params_front is None:
-                    xData = segment.fringeType[0].copy()
-                    yData = segment.fringeType[1].copy()
-                    for i in range(len(xData)):
-                        xData[i] *= -1
-                    for i in range(len(xData)):
-                        xData[i] += segment.startPos
+                    xData = -np.array(segment.fringeType[0], dtype=np.float64) + segment.startPos
+                    yData = np.array(segment.fringeType[1], dtype=np.float64)
                     params = self.frontFit(xData, yData, segment.startPos)
                 else:
                     params = segment._fringe_params_front
                 yfield = self._frontModel(zLine, *params)
-                zeroTracker = len(zLine) - 1
-                while (zLine[zeroTracker] > segment.startPos and zeroTracker >= 0):
-                    yfield[zeroTracker] = 0
-                    zeroTracker -= 1
+                yfield[zLine > segment.startPos] = 0
                 y_values += yfield
             elif (segment.fringeType == 'first order decay'):
                 B0 = 1
                 strength = 5
                 yfield = self._frontModel(zLine, segment.startPos + (
                             np.log((1 - self.ORIGINFACTOR) / self.ORIGINFACTOR) / strength), B0, strength)
-                zeroTracker = len(zLine) - 1
-                while (zLine[zeroTracker] > segment.startPos and zeroTracker >= 0):
-                    yfield[zeroTracker] = 0
-                    zeroTracker -= 1
+                yfield[zLine > segment.startPos] = 0
                 y_values += yfield
         i = 0
         while (i < len(beamline)):
