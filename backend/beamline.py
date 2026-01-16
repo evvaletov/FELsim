@@ -819,6 +819,7 @@ class beamline:
         self.beamline = line
         self.totalLen = 0
         self.defineEndFrontPos()
+        self._cache_fringe_parameters()
 
     def defineEndFrontPos(self):
         self.totalLen = 0
@@ -826,6 +827,27 @@ class beamline:
             seg.startPos = self.totalLen
             self.totalLen += seg.length
             seg.endPos = self.totalLen
+
+    def _cache_fringe_parameters(self):
+        for segment in self.beamline:
+            segment._fringe_params_front = None
+            segment._fringe_params_end = None
+            if isinstance(segment.fringeType, list):
+                xData = segment.fringeType[0].copy()
+                yData = segment.fringeType[1].copy()
+                xDataEnd = xData.copy()
+                for i in range(len(xDataEnd)):
+                    xDataEnd[i] += segment.endPos
+                segment._fringe_params_end = self.endFit(xDataEnd, yData, segment.endPos)
+                xDataFront = xData.copy()
+                for i in range(len(xDataFront)):
+                    xDataFront[i] *= -1
+                    xDataFront[i] += segment.startPos
+                segment._fringe_params_front = self.frontFit(xDataFront, yData, segment.startPos)
+
+    def update_fringe_cache(self):
+        self.defineEndFrontPos()
+        self._cache_fringe_parameters()
 
     def interpolateData(self, xData, yData, interval):
         rbf = interpolate.Rbf(xData, yData)
@@ -904,11 +926,14 @@ class beamline:
         y_values = np.zeros_like(zLine)
         for segment in reversed(beamline):
             if isinstance(segment.fringeType, list):
-                xData = segment.fringeType[0].copy()
-                yData = segment.fringeType[1].copy()
-                for i in range(len(xData)):
-                    xData[i] += segment.endPos
-                params = self.endFit(xData, yData, segment.endPos)
+                if segment._fringe_params_end is None:
+                    xData = segment.fringeType[0].copy()
+                    yData = segment.fringeType[1].copy()
+                    for i in range(len(xData)):
+                        xData[i] += segment.endPos
+                    params = self.endFit(xData, yData, segment.endPos)
+                else:
+                    params = segment._fringe_params_end
                 yfield = self._endModel(zLine, *params)
                 zeroTracker = 0
                 while (zLine[zeroTracker] < segment.endPos and zeroTracker < zLine.size):
@@ -927,13 +952,16 @@ class beamline:
                 y_values += yfield
         for segment in beamline:
             if isinstance(segment.fringeType, list):
-                xData = segment.fringeType[0].copy()
-                yData = segment.fringeType[1].copy()
-                for i in range(len(xData)):
-                    xData[i] *= -1
-                for i in range(len(xData)):
-                    xData[i] += segment.startPos
-                params = self.frontFit(xData, yData, segment.startPos)
+                if segment._fringe_params_front is None:
+                    xData = segment.fringeType[0].copy()
+                    yData = segment.fringeType[1].copy()
+                    for i in range(len(xData)):
+                        xData[i] *= -1
+                    for i in range(len(xData)):
+                        xData[i] += segment.startPos
+                    params = self.frontFit(xData, yData, segment.startPos)
+                else:
+                    params = segment._fringe_params_front
                 yfield = self._frontModel(zLine, *params)
                 zeroTracker = len(zLine) - 1
                 while (zLine[zeroTracker] > segment.startPos and zeroTracker >= 0):
