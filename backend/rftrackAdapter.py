@@ -242,16 +242,17 @@ class RFTrackAdapter(SimulatorBase):
             f"{self._lattice.size()} elements (L={self._lattice.get_length():.3f} m)"
         )
 
-        self._lattice.track(self._bunch)
+        # Track returns the tracked bunch (original is not modified in place)
+        tracked_bunch = self._lattice.track(self._bunch)
 
-        final_rftrack = self._bunch.get_phase_space()
+        final_rftrack = tracked_bunch.get_phase_space()
         final_particles = self.transform_coordinates(
             final_rftrack, CoordinateSystem.RFTRACK, CoordinateSystem.FELSIM
         )
         twiss = self._calculate_twiss(final_particles)
 
-        n_good = self._bunch.get_ngood()
-        n_lost = self._bunch.get_nlost()
+        n_good = tracked_bunch.get_ngood()
+        n_lost = tracked_bunch.get_nlost()
 
         self.logger.info(
             f"Tracking complete: {n_good} good, {n_lost} lost particles"
@@ -395,10 +396,13 @@ class RFTrackAdapter(SimulatorBase):
 
         elif elem_type in ['DIPOLE', 'DPH', 'DIPOLE_WEDGE', 'DPW']:
             angle = params.get('angle', 0.0)
-            if angle != 0:
+            if angle != 0 and length > 0:
                 elem = rft.SBend()
                 elem.set_length(length)
-                elem.set_angle(np.radians(angle), self._Pc)
+                # Use set_K0 (curvature = 1/rho = angle/length) instead of set_angle
+                # for proper curvilinear coordinate tracking in RF-Track Lattice
+                K0 = np.radians(angle) / length
+                elem.set_K0(K0)
             else:
                 elem = rft.Drift(length)
 
@@ -433,7 +437,10 @@ class RFTrackAdapter(SimulatorBase):
 
         Coordinate systems:
         - FELSIM: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T(10^-3), δW/W(10^-3)]
-        - RFTRACK: [x(m), x'(rad), y(m), y'(rad), t(s), δ]
+        - RFTRACK: [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
+
+        Note: RF-Track Bunch6d uses mm, mrad, mm/c, and MeV/c units.
+        Column 5 is momentum P, not energy E.
 
         Parameters
         ----------
@@ -455,24 +462,40 @@ class RFTrackAdapter(SimulatorBase):
         result = np.zeros_like(particles)
 
         if from_system == CoordinateSystem.FELSIM and to_system == CoordinateSystem.RFTRACK:
-            result[:, 0:4] = particles[:, 0:4] * 1e-3  # mm/mrad → m/rad
-            result[:, 4] = particles[:, 4] * 1e-12     # ΔToF/T → t (approximate)
-            result[:, 5] = particles[:, 5] * 1e-3 / (self._beta**2)  # δW/W → δp/p
+            # FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T×10³, δW/W×10³]
+            # RF-Track: [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
+            # Transverse coordinates: same units, no conversion needed
+            result[:, 0:4] = particles[:, 0:4]
+            # Longitudinal time: ΔToF/T×10³ → t (mm/c)
+            # For small deviations, approximate t ≈ 0 + relative offset
+            # The FELsim coordinate is relative; RF-Track t is arrival time
+            result[:, 4] = particles[:, 4]  # Keep relative timing
+            # Energy → Momentum: δW/W×10³ → P = P_ref × (1 + δP/P)
+            # For relativistic particles: δP/P ≈ δE/E
+            result[:, 5] = self._Pc * (1.0 + particles[:, 5] * 1e-3)
 
         elif from_system == CoordinateSystem.RFTRACK and to_system == CoordinateSystem.FELSIM:
-            result[:, 0:4] = particles[:, 0:4] * 1e3   # m/rad → mm/mrad
-            result[:, 4] = particles[:, 4] * 1e12     # t → ΔToF/T
-            result[:, 5] = particles[:, 5] * 1e3 * (self._beta**2)
+            # RF-Track: [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
+            # FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T×10³, δW/W×10³]
+            # Transverse coordinates: same units
+            result[:, 0:4] = particles[:, 0:4]
+            # Time: keep as relative timing
+            result[:, 4] = particles[:, 4]
+            # Momentum → relative energy deviation
+            # P → δW/W×10³ = (P/P_ref - 1) × 10³
+            result[:, 5] = (particles[:, 5] / self._Pc - 1.0) * 1e3
 
         elif from_system == CoordinateSystem.COSY and to_system == CoordinateSystem.RFTRACK:
-            result[:, 0:4] = particles[:, 0:4]
-            result[:, 4] = particles[:, 4] / (self._beta * PhysicalConstants.C)  # l → t
-            result[:, 5] = particles[:, 5]
+            # COSY uses m and rad; RF-Track Bunch6d uses mm and mrad
+            result[:, 0:4] = particles[:, 0:4] * 1e3  # m/rad → mm/mrad
+            result[:, 4] = particles[:, 4] / (self._beta * PhysicalConstants.C) * 1e3  # l(m) → t(mm/c)
+            result[:, 5] = self._Pc * (1.0 + particles[:, 5])  # δ → P
 
         elif from_system == CoordinateSystem.RFTRACK and to_system == CoordinateSystem.COSY:
-            result[:, 0:4] = particles[:, 0:4]
-            result[:, 4] = particles[:, 4] * (self._beta * PhysicalConstants.C)  # t → l
-            result[:, 5] = particles[:, 5]
+            # RF-Track uses mm/mrad; COSY uses m/rad
+            result[:, 0:4] = particles[:, 0:4] * 1e-3  # mm/mrad → m/rad
+            result[:, 4] = particles[:, 4] * (self._beta * PhysicalConstants.C) * 1e-3  # t(mm/c) → l(m)
+            result[:, 5] = particles[:, 5] / self._Pc - 1.0  # P → δ
 
         else:
             raise NotImplementedError(
@@ -561,10 +584,13 @@ class RFTrackAdapter(SimulatorBase):
 
     def collect_evolution(self,
                           particles: np.ndarray,
-                          checkpoint_elements: Union[str, List[int]] = 'all',
-                          use_screens: bool = True) -> BeamEvolution:
+                          checkpoint_elements: Union[str, List[int]] = 'all') -> BeamEvolution:
         """
         Collect beam evolution data at element boundaries.
+
+        Tracks element-by-element to capture phase space at each checkpoint.
+        Uses RF-Track Lattice environment which tracks in curvilinear coordinates
+        along the design orbit.
 
         Parameters
         ----------
@@ -572,8 +598,6 @@ class RFTrackAdapter(SimulatorBase):
             Initial distribution in FELsim coordinates
         checkpoint_elements : str or list
             'all' or list of element indices for checkpoints
-        use_screens : bool
-            Use RF-Track Screen elements for checkpoints
 
         Returns
         -------
@@ -581,7 +605,7 @@ class RFTrackAdapter(SimulatorBase):
         """
         self.validate_particles(particles)
 
-        if self._lattice is None:
+        if not self.beamline:
             raise ValueError("Beamline not set")
 
         evolution = BeamEvolution(
@@ -590,71 +614,63 @@ class RFTrackAdapter(SimulatorBase):
             beam_energy=self.beam_energy
         )
 
-        evolution.add_sample(0.0, particles.copy(), self._calculate_twiss(particles))
-
         n_elements = len(self.beamline)
         if checkpoint_elements == 'all':
-            checkpoint_list = list(range(n_elements))
+            checkpoint_set = set(range(n_elements))
         else:
-            checkpoint_list = checkpoint_elements
+            checkpoint_set = set(checkpoint_elements)
 
-        if use_screens:
-            self._build_lattice_with_screens(checkpoint_list)
+        # Initial state
+        evolution.add_sample(0.0, particles.copy(), self._calculate_twiss(particles))
 
+        # Convert to RF-Track coordinates
         particles_rftrack = self.transform_coordinates(
             particles, CoordinateSystem.FELSIM, CoordinateSystem.RFTRACK
         )
-        self._bunch = rft.Bunch6d(
-            self.particle_mass, self.particle_charge, self._Pc, particles_rftrack
-        )
 
-        self._lattice.track(self._bunch)
-
-        if use_screens:
-            screen_data = self._lattice.get_bunch_at_screens(self._bunch)
-            s = 0.0
-            screen_idx = 0
-
-            for idx, elem in enumerate(self.beamline):
-                s += elem.length
-
-                if idx in checkpoint_list and screen_idx < len(screen_data):
-                    ps_rftrack = screen_data[screen_idx].get_phase_space()
-                    ps_felsim = self.transform_coordinates(
-                        ps_rftrack, CoordinateSystem.RFTRACK, CoordinateSystem.FELSIM
-                    )
-                    evolution.add_sample(s, ps_felsim, self._calculate_twiss(ps_felsim))
-                    screen_idx += 1
-
-                evolution.elements.append(ElementInfo(
-                    element_type=elem.element_type,
-                    s_start=s - elem.length,
-                    s_end=s,
-                    length=elem.length,
-                    color=self._get_element_color(elem.element_type),
-                    index=idx,
-                    parameters=elem.parameters
-                ))
-
-        evolution.total_length = sum(e.length for e in self.beamline)
-        self._build_lattice()  # restore original lattice
-
-        return evolution
-
-    def _build_lattice_with_screens(self, checkpoint_indices: List[int]):
-        """Build lattice with Screen elements at specified indices."""
-        self._lattice = rft.Lattice()
-        self._native_elements = []
-
+        # Track element by element
+        s = 0.0
         for idx, elem in enumerate(self.beamline):
+            # Build single-element lattice
             native_elem = self._convert_element_to_native(elem)
-            self._native_elements.append(native_elem)
-            self._lattice.append(native_elem)
+            single_lat = rft.Lattice()
+            single_lat.append(native_elem)
+            single_lat.set_aperture(self.default_aperture, self.default_aperture)
 
-            if idx in checkpoint_indices:
-                screen = rft.Screen()
-                screen.set_name(f"Screen_{idx}")
-                self._lattice.append(screen)
+            # Create bunch for this segment
+            bunch = rft.Bunch6d(
+                self.particle_mass, self.particle_charge, self._Pc, particles_rftrack
+            )
+
+            # Track through element (returns tracked bunch)
+            tracked_bunch = single_lat.track(bunch)
+
+            # Update position
+            s += elem.length
+
+            # Get phase space from tracked bunch
+            particles_rftrack = tracked_bunch.get_phase_space()
+
+            # Record element info
+            evolution.elements.append(ElementInfo(
+                element_type=elem.element_type,
+                s_start=s - elem.length,
+                s_end=s,
+                length=elem.length,
+                color=self._get_element_color(elem.element_type),
+                index=idx,
+                parameters=elem.parameters
+            ))
+
+            # Checkpoint if requested
+            if idx in checkpoint_set and particles_rftrack.size > 0:
+                ps_felsim = self.transform_coordinates(
+                    particles_rftrack, CoordinateSystem.RFTRACK, CoordinateSystem.FELSIM
+                )
+                evolution.add_sample(s, ps_felsim, self._calculate_twiss(ps_felsim))
+
+        evolution.total_length = s
+        return evolution
 
     def _load_from_excel(self, excel_path: str):
         """Load beamline from Excel specification."""
@@ -704,7 +720,12 @@ class RFTrackAdapter(SimulatorBase):
         )
 
     def _calculate_twiss(self, particles: np.ndarray) -> Dict:
-        """Calculate Twiss parameters from particle distribution (FELsim coords)."""
+        """
+        Calculate Twiss parameters from particle distribution (FELsim coords).
+
+        FELsim coordinates: [x(mm), x'(mrad), y(mm), y'(mrad), ...]
+        Returns beta in m, gamma in rad/m, emittance in π·mm·mrad.
+        """
         if particles.shape[0] < 2:
             return {}
 
@@ -714,12 +735,14 @@ class RFTrackAdapter(SimulatorBase):
             sig_x2, sig_xp2, sig_xxp = cov[0, 0], cov[1, 1], cov[0, 1]
 
             emit_sq = sig_x2 * sig_xp2 - sig_xxp**2
-            emittance = np.sqrt(max(0, emit_sq))
+            emittance = np.sqrt(max(0, emit_sq))  # π·mm·mrad
 
             if emittance > 0:
-                beta = sig_x2 / emittance * 1e-3
+                # beta = mm²/(mm·mrad) = mm/mrad = m
+                beta = sig_x2 / emittance
                 alpha = -sig_xxp / emittance
-                gamma = sig_xp2 / emittance * 1e3
+                # gamma = mrad²/(mm·mrad) = mrad/mm = rad/m
+                gamma = sig_xp2 / emittance
             else:
                 beta = alpha = gamma = 0.0
 
