@@ -18,6 +18,7 @@ class CoordinateSystem(Enum):
     FELSIM = "felsim"  # [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T(10^-3), δW/W(10^-3)]
     COSY = "cosy"  # [x(m), a, y(m), b, l(m), δK]
     ELEGANT = "elegant"  # [x(m), x'(rad), y(m), y'(rad), t(s), δ]
+    RFTRACK = "rftrack"  # [x(m), x'(rad), y(m), y'(rad), z(m), δ]
 
 
 class SimulationMode(Enum):

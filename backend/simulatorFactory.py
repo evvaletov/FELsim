@@ -13,11 +13,20 @@ from felsimAdapter import FELsimAdapter
 from cosyAdapter import COSYAdapter
 from beamEvolution import BeamEvolution
 
+# RF-Track is optional - import if available
+try:
+    from rftrackAdapter import RFTrackAdapter
+    _RFTRACK_AVAILABLE = True
+except ImportError:
+    _RFTRACK_AVAILABLE = False
+    RFTrackAdapter = None
+
 
 class SimulatorType(Enum):
     """Supported simulator backends."""
     FELSIM = "felsim"
     COSY = "cosy"
+    RFTRACK = "rftrack"
 
 
 class SimulatorFactory:
@@ -33,6 +42,10 @@ class SimulatorFactory:
         SimulatorType.FELSIM.value: FELsimAdapter,
         SimulatorType.COSY.value: COSYAdapter,
     }
+
+    # Register RF-Track if available
+    if _RFTRACK_AVAILABLE:
+        _registry[SimulatorType.RFTRACK.value] = RFTrackAdapter
 
     @classmethod
     def create(cls,
@@ -108,8 +121,14 @@ class SimulatorFactory:
                 evolution = sim.collect_evolution(particles, interval)
             elif sim.name == "COSY":
                 evolution = sim.collect_evolution(particles, checkpoints)
+            elif sim.name == "RF-Track":
+                evolution = sim.collect_evolution(particles, checkpoints)
             else:
-                raise ValueError(f"Unknown simulator: {sim.name}")
+                # Generic fallback using collect_evolution if available
+                if hasattr(sim, 'collect_evolution'):
+                    evolution = sim.collect_evolution(particles, checkpoints)
+                else:
+                    raise ValueError(f"Unknown simulator: {sim.name}")
             results[sim.name] = evolution
 
         cls._plot_evolution_comparison(results)
