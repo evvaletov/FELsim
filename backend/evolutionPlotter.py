@@ -24,13 +24,17 @@ class EvolutionPlotter:
         'DRIFT': 'white',
         'driftLattice': 'white',
         'QPF': 'cornflowerblue',
+        'QUAD_F': 'cornflowerblue',
         'qpfLattice': 'cornflowerblue',
         'QPD': 'lightcoral',
+        'QUAD_D': 'lightcoral',
         'qpdLattice': 'lightcoral',
         'DPH': 'forestgreen',
+        'DIPOLE': 'forestgreen',
         'dipole': 'forestgreen',
         'DIPOLE_CONSOLIDATED': 'forestgreen',
         'DPW': 'lightgreen',
+        'DIPOLE_WEDGE': 'lightgreen',
         'dipole_wedge': 'lightgreen'
     }
 
