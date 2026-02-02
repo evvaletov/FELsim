@@ -527,6 +527,9 @@ class RFTrackAdapter(SimulatorBase):
             self._native_elements.append(native_elem)
             self._lattice.append(native_elem)
 
+        # Set lattice aperture to match element apertures
+        self._lattice.set_aperture(self.default_aperture, self.default_aperture)
+
         self.logger.debug(
             f"Built RF-Track lattice: {self._lattice.size()} elements, "
             f"L={self._lattice.get_length():.3f} m"
