@@ -78,7 +78,8 @@ class EvolutionPlotter:
              interactive: bool = True,
              shape: Dict = None,
              scatter: bool = False,
-             save_path: Optional[str] = None) -> plt.Figure:
+             save_path: Optional[str] = None,
+             envelope_ylim: Optional[tuple] = None) -> plt.Figure:
         """
         Plot beam evolution through beamline.
 
@@ -100,6 +101,8 @@ class EvolutionPlotter:
             Use scatter plot with density coloring instead of hexbin
         save_path : str, optional
             Export figure to file
+        envelope_ylim : tuple, optional
+            Y-axis limits (ymin, ymax) for envelope plot in mm
 
         Returns
         -------
@@ -140,7 +143,7 @@ class EvolutionPlotter:
 
         if show_envelope and ax_envelope is not None:
             self._plot_envelope(ax_envelope, twiss_df, evolution.elements,
-                                show_schematic)
+                                show_schematic, envelope_ylim)
 
         initial_s = evolution.s_positions[0]
         if show_phase_space and ax_phase is not None and initial_s in evolution.particles:
@@ -177,7 +180,8 @@ class EvolutionPlotter:
 
         return fig
 
-    def _plot_envelope(self, ax, twiss_df, elements, show_schematic):
+    def _plot_envelope(self, ax, twiss_df, elements, show_schematic,
+                        envelope_ylim=None):
         """Plot envelope evolution with optional beamline schematic overlay."""
         s = twiss_df['s'].values
         env_x = twiss_df['envelope_x'].values
@@ -196,6 +200,10 @@ class EvolutionPlotter:
         ax.legend(loc='upper left')
         ax.set_xlim(0, s[-1] if len(s) > 0 else 1)
         ax.grid(True, alpha=0.3)
+
+        # Apply user-specified y-limits if provided
+        if envelope_ylim is not None:
+            ax.set_ylim(envelope_ylim)
 
         if show_schematic and elements:
             ymin, ymax = ax.get_ylim()
