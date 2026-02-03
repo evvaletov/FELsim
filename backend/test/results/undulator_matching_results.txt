@@ -1,0 +1,125 @@
+================================================================================
+MkIII Undulator Entrance Twiss Matching Results
+================================================================================
+Date: 2026-02-03
+Author: Eremey Valetov
+
+SUMMARY
+-------
+Successfully matched target Twiss parameters at undulator entrance using
+sequential quadrupole optimization through 11 steps.
+
+================================================================================
+BEAM PARAMETERS
+================================================================================
+Energy:              40.0 MeV
+Lorentz gamma:       79.28
+Lorentz beta:        0.999920
+Normalized emittance: 8.0 π·mm·mrad
+Geometric emittance: 0.1009 π·mm·mrad
+Energy spread:       0.5% rms
+Bunch duration:      2 ps FWHM
+RF frequency:        2856 MHz
+
+================================================================================
+INITIAL TWISS (at linac exit)
+================================================================================
+βx = 6.30 m      αx = 0.00
+βy = 6.30 m      αy = 0.00
+
+================================================================================
+TARGET TWISS (at undulator entrance, element index 117)
+================================================================================
+βx = 1.40 m      αx = 0.47
+βy = 0.24 m      αy = 0.00
+
+================================================================================
+ACHIEVED TWISS
+================================================================================
+βx = 1.4000 m    αx = 0.4700    (error: -0.0%)
+βy = 0.2400 m    αy = 0.0000    (error: -0.0%)
+εx = 0.100 π·mm·mrad (preserved)
+εy = 0.098 π·mm·mrad (preserved)
+
+Feasibility: ACHIEVABLE
+
+================================================================================
+QUADRUPOLE CURRENTS (Sequential Optimization)
+================================================================================
+
+Step 1: First Quadrupole Doublet
+  Quad index 1:   I = 0.846 A
+  Quad index 3:   I = 1.056 A
+
+Step 2: First Chromaticity Quad
+  Quad index 10:  I = 3.560 A
+
+Step 3: Quadrupole Triplet (DC2)
+  Quad index 16:  I = 1.968 A
+  Quad index 18:  I = 4.876 A
+  Quad index 20:  I = 3.553 A
+
+Step 4: Second Chromaticity Quad
+  Quad index 27:  I = 4.560 A
+
+Step 5: Double Quadrupole Triplet
+  Quad index 33:  I = 2.682 A
+  Quad index 35:  I = 2.378 A
+  Quad index 37:  I = 0.010 A
+  (Symmetric copies: 37→39, 35→41, 33→43)
+
+Step 6: Third Chromaticity Quad
+  Quad index 50:  I = 4.632 A
+
+Step 7: IP Quadrupole Doublet
+  Quad index 56:  I = 3.121 A
+  Quad index 58:  I = 3.309 A
+
+Step 8: Quadrupole Doublet (DC4)
+  Quad index 61:  I = 5.169 A
+  Quad index 63:  I = 4.043 A
+
+Step 9: Fourth Chromaticity Quad
+  Quad index 70:  I = 4.738 A
+
+Step 10: Quadrupole Doublet (DC5)
+  Quad index 76:  I = 3.822 A
+  Quad index 78:  I = 4.967 A
+
+Step 11: Final Undulator Matching (5 quads)
+  Quad index 80:  I = 1.413 A
+  Quad index 87:  I = 3.387 A
+  Quad index 93:  I = 1.900 A
+  Quad index 95:  I = 2.524 A
+  Quad index 97:  I = 1.559 A
+
+================================================================================
+OPTIMIZATION DETAILS
+================================================================================
+Method: Nelder-Mead (sequential, section-by-section)
+Particles: 2000
+Total iterations: ~1200
+Total time: ~250 s
+
+Beamline file: beam_excel/Beamline_elements_3.xlsx
+Total elements: 138
+Undulator entrance index: 117
+
+================================================================================
+NOTES
+================================================================================
+1. Results are reproducible across multiple runs with different particle counts
+   (500, 1000, 2000 particles all converge to same solution).
+
+2. The sequential optimization approach optimizes each beamline section
+   independently, building up the optics progressively from linac exit to
+   undulator entrance.
+
+3. Chromaticity correction quads (indices 10, 27, 50, 70) are set to achieve
+   zero dispersion at downstream locations.
+
+4. The final matching step uses 5 quadrupoles (indices 80, 87, 93, 95, 97)
+   to match 4 Twiss constraints (βx, αx, βy, αy), providing one extra
+   degree of freedom for robust convergence.
+
+================================================================================
