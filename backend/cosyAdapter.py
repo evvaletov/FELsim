@@ -88,19 +88,27 @@ class COSYAdapter(SimulatorBase):
             'DPW': 'DPW'
         }
 
-        self.excel_path = excel_path
+        if path:
+            self._load_beamline(path, _is_excel)
 
-        if excel_path and excel_path != 'dummy.xlsx':
-            try:
-                parsed_elements = self._native_sim.parse_beamline()
-                self.logger.debug(f"Parsed {len(parsed_elements)} beamline elements from {excel_path}")
-            except FileNotFoundError:
-                self.logger.debug(f"Excel file not found: {excel_path}")
-            except Exception as e:
-                self.logger.warning(f"Could not parse beamline from {excel_path}: {e}")
+    def _load_beamline(self, lattice_path, is_excel):
+        """Load beamline from a lattice file (Excel, JSON, or YAML)."""
+        try:
+            if is_excel:
+                parsed = self._native_sim.parse_beamline()
+            else:
+                import latticeLoader
+                parsed = latticeLoader.parse_beamline(lattice_path)
+                self._native_sim.beamline = parsed
+            self._beamline_parsed = True
+            self.logger.debug(f"Parsed {len(parsed)} beamline elements from {lattice_path}")
+        except FileNotFoundError:
+            self.logger.debug(f"Lattice file not found: {lattice_path}")
+        except Exception as e:
+            self.logger.warning(f"Could not parse beamline from {lattice_path}: {e}")
 
     def _ensure_beamline_parsed(self):
-        """Parse beamline from Excel if not already done."""
+        """Parse beamline if not already done."""
         if self._beamline_parsed:
             return
 
@@ -108,16 +116,14 @@ class COSYAdapter(SimulatorBase):
             self._beamline_parsed = True
             return
 
-        if self.excel_path and self.excel_path != 'dummy.xlsx':
-            try:
-                parsed = self._native_sim.parse_beamline()
-                self.logger.debug(f"Auto-parsed {len(parsed)} elements before simulation")
-                self._beamline_parsed = True
+        path = self.lattice_path
+        if path:
+            _is_excel = path.lower().endswith(('.xlsx', '.xls'))
+            self._load_beamline(path, _is_excel)
+            if self._beamline_parsed:
                 return
-            except Exception as e:
-                raise ValueError(f"Cannot parse beamline from {self.excel_path}: {e}") from e
 
-        raise ValueError("No beamline available. Provide excel_path or call set_beamline()")
+        raise ValueError("No beamline available. Provide lattice_path or call set_beamline()")
 
     def collect_evolution(self,
                           particles: np.ndarray,
