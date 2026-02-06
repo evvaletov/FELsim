@@ -1,6 +1,9 @@
 """
 Convert an Excel beamline lattice file to the FELsim JSON lattice format.
 
+Element type names in format_version 2 follow PALS conventions.
+See manuals/lattice_specification.md for the mapping.
+
 Uses only the data already parsed by ExcelElements (no new columns or
 transformations). The output can be loaded by JsonLatticeLoader and
 should produce equivalent beamline representations.
@@ -20,10 +23,8 @@ import pandas as pd
 
 from excelElements import ExcelElements
 
-FORMAT_VERSION = 1
-
-# Excel short names → canonical JSON type names
-_TYPE_MAP = {
+# Excel short names -> canonical JSON type names (v1)
+_TYPE_MAP_V1 = {
     "QPF": ("QUADRUPOLE", "focusing"),
     "QPD": ("QUADRUPOLE", "defocusing"),
     "DPH": "DIPOLE",
@@ -38,9 +39,26 @@ _TYPE_MAP = {
     "BSW": "BSW",
 }
 
+# PALS-aligned type names (v2)
+_TYPE_MAP_V2 = {
+    "QPF": ("Quadrupole", "focusing"),
+    "QPD": ("Quadrupole", "defocusing"),
+    "DPH": "SBend",
+    "DPW": "DIPOLE_WEDGE",  # no PALS equivalent
+    "BPM": "BPM",
+    "OTR": "OTR",
+    "STV": "CORRECTOR_V",
+    "STH": "CORRECTOR_H",
+    "SPC": "SPECTROMETER",
+    "UND": "Wiggler",
+    "XRS": "XRS",
+    "BSW": "BSW",
+}
+
 
 def convert(excel_path, output_path=None, name=None, description=None,
-            reference_energy_mev=45.0, particle_type="electron"):
+            reference_energy_mev=45.0, particle_type="electron",
+            format_version=1):
     """Convert an Excel lattice file to JSON.
 
     Parameters
@@ -57,6 +75,9 @@ def convert(excel_path, output_path=None, name=None, description=None,
         Reference kinetic energy in MeV.
     particle_type : str
         Particle species.
+    format_version : int
+        Output format version (1 or 2). Default 1 for backward compatibility.
+        Note: excelToYaml defaults to format_version=2 since YAML is a v2-era format.
 
     Returns
     -------
@@ -70,12 +91,12 @@ def convert(excel_path, output_path=None, name=None, description=None,
     if name is None:
         name = excel_path.stem
 
-    elements, sectors = _build_elements(df)
+    elements, sectors = _build_elements(df, format_version)
 
     lattice = {
         "beamline": {
             "metadata": {
-                "format_version": FORMAT_VERSION,
+                "format_version": format_version,
                 "name": name,
                 "version": "1.0",
                 "description": description or f"Converted from {excel_path.name}",
@@ -125,10 +146,10 @@ def _safe(val):
     return val
 
 
-def _build_elements(df):
+def _build_elements(df, format_version=1):
     """Build JSON element list and sector grouping from DataFrame."""
     elements = []
-    sector_map = {}  # sector name → list of element names
+    sector_map = {}
     used_names = set()
 
     for _, row in df.iterrows():
@@ -146,7 +167,7 @@ def _build_elements(df):
 
         length = float(z_end - z_start)
 
-        json_type, polarity = _map_type(etype)
+        json_type, polarity = _map_type(etype, format_version)
         params = _build_parameters(etype, row)
         fringe = _build_fringe(row)
         aperture = _build_aperture(etype, row)
@@ -201,9 +222,10 @@ def _make_name(row, used_names):
     return name
 
 
-def _map_type(excel_type):
+def _map_type(excel_type, format_version=1):
     """Map Excel element type to (JSON type, polarity or None)."""
-    mapped = _TYPE_MAP.get(excel_type, excel_type)
+    type_map = _TYPE_MAP_V2 if format_version >= 2 else _TYPE_MAP_V1
+    mapped = type_map.get(excel_type, excel_type)
     if isinstance(mapped, tuple):
         return mapped
     return mapped, None
@@ -290,17 +312,21 @@ def _build_metadata(row):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} <input.xlsx> [output.json]")
+        print(f"Usage: python {sys.argv[0]} <input.xlsx> [output.json] [--v2]")
         sys.exit(1)
 
-    excel_file = sys.argv[1]
-    json_file = sys.argv[2] if len(sys.argv) > 2 else None
+    fv = 2 if "--v2" in sys.argv else 1
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+
+    excel_file = args[0]
+    json_file = args[1] if len(args) > 1 else None
 
     result = convert(excel_file, json_file, name="UH_FEL_Beamline",
-                     description="University of Hawaii FEL beamline")
+                     description="University of Hawaii FEL beamline",
+                     format_version=fv)
 
     n = len(result["beamline"]["elements"])
     if json_file:
-        print(f"Converted {n} elements → {json_file}")
+        print(f"Converted {n} elements -> {json_file} (format_version {fv})")
     else:
         print(json.dumps(result, indent=2))
