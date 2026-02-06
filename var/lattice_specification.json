@@ -1,10 +1,10 @@
 {
   "beamline": {
     "metadata": {
-      "format_version": 1,
+      "format_version": 2,
       "name": "UH_FEL_Beamline",
-      "version": "1.0",
-      "description": "University of Hawaii FEL beamline specification",
+      "version": "2.0",
+      "description": "University of Hawaii FEL beamline specification (PALS-aligned)",
       "author": "Beam Physics Group",
       "date": "2025-01-15",
       "reference_energy_mev": 45.0,
@@ -24,7 +24,7 @@
     "elements": [
       {
         "name": "D_LIN_01",
-        "type": "DRIFT",
+        "kind": "Drift",
         "s_start_m": 0.0,
         "s_end_m": 0.358775,
         "length_m": 0.358775,
@@ -36,7 +36,7 @@
 
       {
         "name": "LQ1",
-        "type": "QUADRUPOLE",
+        "kind": "Quadrupole",
         "polarity": "focusing",
         "s_start_m": 0.358775,
         "s_end_m": 0.447675,
@@ -59,7 +59,8 @@
 
       {
         "name": "BPM_LIN",
-        "type": "BPM",
+        "kind": "Instrument",
+        "instrument_type": "BPM",
         "s_start_m": 0.447675,
         "s_end_m": 0.447675,
         "length_m": 0.0,
@@ -72,7 +73,7 @@
 
       {
         "name": "LQ2",
-        "type": "QUADRUPOLE",
+        "kind": "Quadrupole",
         "polarity": "defocusing",
         "s_start_m": 0.644525,
         "s_end_m": 0.733425,
@@ -96,7 +97,8 @@
 
       {
         "name": "VC1",
-        "type": "CORRECTOR_V",
+        "kind": "Kicker",
+        "plane": "vertical",
         "s_start_m": 0.733425,
         "s_end_m": 0.733425,
         "length_m": 0.0,
@@ -112,7 +114,8 @@
 
       {
         "name": "OS1",
-        "type": "OTR",
+        "kind": "Instrument",
+        "instrument_type": "OTR",
         "s_start_m": 1.632864,
         "s_end_m": 1.632864,
         "length_m": 0.0,
@@ -148,7 +151,7 @@
 
       {
         "name": "DC1_DPH_1A",
-        "type": "DIPOLE",
+        "kind": "SBend",
         "s_start_m": 1.707921,
         "s_end_m": 1.796821,
         "length_m": 0.0889,
@@ -192,7 +195,7 @@
 
       {
         "name": "DC1_DPHQ",
-        "type": "QUADRUPOLE",
+        "kind": "Quadrupole",
         "polarity": "focusing",
         "s_start_m": 2.033041,
         "s_end_m": 2.121941,
@@ -233,7 +236,7 @@
 
       {
         "name": "FC1_DPH_1",
-        "type": "DIPOLE",
+        "kind": "SBend",
         "s_start_m": 11.109409,
         "s_end_m": 11.146798,
         "length_m": 0.037389,
@@ -254,7 +257,7 @@
 
       {
         "name": "FEL_UND_1",
-        "type": "UNDULATOR",
+        "kind": "Wiggler",
         "s_start_m": 12.388967,
         "s_end_m": 12.929467,
         "length_m": 0.5405,
@@ -273,7 +276,7 @@
 
       {
         "name": "SOL_EXAMPLE",
-        "type": "SOLENOID",
+        "kind": "Solenoid",
         "s_start_m": null,
         "s_end_m": null,
         "length_m": 0.2,
@@ -287,7 +290,7 @@
 
       {
         "name": "SXT_EXAMPLE",
-        "type": "SEXTUPOLE",
+        "kind": "Sextupole",
         "s_start_m": null,
         "s_end_m": null,
         "length_m": 0.1,
@@ -301,7 +304,7 @@
 
       {
         "name": "RFC_EXAMPLE",
-        "type": "RF_CAVITY",
+        "kind": "RFCavity",
         "s_start_m": null,
         "s_end_m": null,
         "length_m": 1.0,
