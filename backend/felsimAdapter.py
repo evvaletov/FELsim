@@ -16,8 +16,7 @@ from simulatorBase import (
 from beamEvolution import BeamEvolution, ElementInfo
 from evolutionPlotter import EvolutionPlotter
 from beamPropagator import propagate
-from excelElements import ExcelElements
-
+import latticeLoader
 from beamline import driftLattice, qpfLattice, qpdLattice, dipole, dipole_wedge
 from ebeam import beam as ebeam_class
 from beamOptimizer import beamOptimizer
@@ -31,7 +30,8 @@ class FELsimAdapter(SimulatorBase):
     Use get_native_beamline() for direct access to FELsim objects.
     """
 
-    def __init__(self, excel_path: Optional[str] = None, **kwargs):
+    def __init__(self, lattice_path: Optional[str] = None,
+                 excel_path: Optional[str] = None, **kwargs):
         super().__init__(name="Python", native_coordinates=CoordinateSystem.FELSIM)
 
         self.simulation_mode = SimulationMode.PARTICLE_TRACKING  # Only mode supported
@@ -48,8 +48,9 @@ class FELsimAdapter(SimulatorBase):
             'DIPOLE_WEDGE': dipole_wedge, 'DPW': dipole_wedge
         }
 
-        if excel_path:
-            self._load_from_excel(excel_path)
+        path = lattice_path or excel_path
+        if path:
+            self._load_lattice(path)
 
     # -------------------------------------------------------------------------
     # Core interface
@@ -164,10 +165,9 @@ class FELsimAdapter(SimulatorBase):
             }
         )
 
-    def _load_from_excel(self, excel_path: str):
-        """Load beamline from Excel specification."""
-        excel = ExcelElements(excel_path)
-        native = excel.create_beamline()
+    def _load_lattice(self, lattice_path: str):
+        """Load beamline from Excel, JSON, or YAML lattice file."""
+        native = latticeLoader.create_beamline(lattice_path)
 
         for elem in native:
             elem.setE(self.beam_energy)

@@ -60,8 +60,10 @@ class SimulatorFactory:
             Simulator type ('felsim', 'cosy')
         **kwargs : dict
             Simulator-specific parameters:
-            - FELsim: (no special parameters)
-            - COSY: excel_path, mode, config, debug
+            - Common: lattice_path (Excel, JSON, or YAML)
+            - FELsim: (no additional parameters)
+            - COSY: mode, config, debug
+            - RF-Track: space_charge, aperture, G_quad, debug
         """
         if isinstance(simulator_type, SimulatorType):
             sim_type = simulator_type.value

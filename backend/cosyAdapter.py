@@ -28,6 +28,7 @@ class COSYAdapter(SimulatorBase):
     """Adapter providing unified interface to COSY INFINITY simulator."""
 
     def __init__(self,
+                 lattice_path: Optional[str] = None,
                  excel_path: Optional[str] = None,
                  mode: str = 'transfer_matrix',
                  config: Optional[Dict] = None,
@@ -43,10 +44,19 @@ class COSYAdapter(SimulatorBase):
         self._config = config or {}
         self._beamline_parsed = False
 
+        path = lattice_path or excel_path
+        self.lattice_path = path
+        self.excel_path = excel_path  # backward compat
+
+        # COSY's native simulator requires an excel_path for BeamlineBuilder.
+        # For JSON/YAML lattices, we pass 'dummy.xlsx' and inject parsed dicts.
+        _is_excel = path and path.lower().endswith(('.xlsx', '.xls'))
+        sim_excel_path = path if _is_excel else 'dummy.xlsx'
+
         if mode == 'transfer_matrix':
             self.simulation_mode = SimulationMode.TRANSFER_MATRIX
             self._native_sim = COSYSimulator(
-                excel_path=excel_path or 'dummy.xlsx',
+                excel_path=sim_excel_path,
                 config_dict=self._config,
                 transfer_matrix_order=transfer_matrix_order,
                 debug=debug
@@ -56,7 +66,7 @@ class COSYAdapter(SimulatorBase):
         elif mode == 'particle_tracking':
             self.simulation_mode = SimulationMode.PARTICLE_TRACKING
             self._particle_sim = COSYParticleSimulator(
-                excel_path=excel_path or 'dummy.xlsx',
+                excel_path=sim_excel_path,
                 config_dict=self._config,
                 transfer_matrix_order=transfer_matrix_order,
                 debug=debug

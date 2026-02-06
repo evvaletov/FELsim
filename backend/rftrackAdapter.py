@@ -76,6 +76,7 @@ class RFTrackAdapter(SimulatorBase):
     DEFAULT_APERTURE = 0.05
 
     def __init__(self,
+                 lattice_path: Optional[str] = None,
                  excel_path: Optional[str] = None,
                  mode: str = 'particle_tracking',
                  space_charge: bool = False,
@@ -91,8 +92,10 @@ class RFTrackAdapter(SimulatorBase):
 
         Parameters
         ----------
+        lattice_path : str, optional
+            Path to lattice file (Excel, JSON, or YAML)
         excel_path : str, optional
-            Path to Excel beamline definition file
+            Backward-compatible alias for lattice_path
         mode : str
             Simulation mode ('particle_tracking' only for RF-Track)
         space_charge : bool
@@ -174,9 +177,11 @@ class RFTrackAdapter(SimulatorBase):
         }
 
         # Load beamline if provided
-        self.excel_path = excel_path
-        if excel_path:
-            self._load_from_excel(excel_path)
+        path = lattice_path or excel_path
+        self.lattice_path = path
+        self.excel_path = excel_path  # backward compat
+        if path:
+            self._load_lattice(path)
 
     def _update_relativistic_params(self):
         """Update relativistic parameters from beam energy."""
@@ -675,23 +680,22 @@ class RFTrackAdapter(SimulatorBase):
         evolution.total_length = s
         return evolution
 
-    def _load_from_excel(self, excel_path: str):
-        """Load beamline from Excel specification."""
-        from excelElements import ExcelElements
+    def _load_lattice(self, lattice_path: str):
+        """Load beamline from Excel, JSON, or YAML lattice file."""
+        import latticeLoader
 
         try:
-            excel = ExcelElements(excel_path)
-            native_elements = excel.create_beamline()
+            native_elements = latticeLoader.create_beamline(lattice_path)
 
             self.beamline = []
             for elem in native_elements:
                 self.beamline.append(self._convert_element_from_native(elem))
 
             self._build_lattice()
-            self.logger.info(f"Loaded {len(self.beamline)} elements from {excel_path}")
+            self.logger.info(f"Loaded {len(self.beamline)} elements from {lattice_path}")
 
         except Exception as e:
-            self.logger.error(f"Failed to load beamline from {excel_path}: {e}")
+            self.logger.error(f"Failed to load beamline from {lattice_path}: {e}")
             raise
 
     def _convert_element_from_native(self, native_elem: Any) -> BeamlineElement:
