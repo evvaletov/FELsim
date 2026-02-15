@@ -1,0 +1,410 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{xcolor}
+
+\sisetup{
+  separate-uncertainty = true,
+  per-mode = symbol,
+}
+
+\title{W4: COSY INFINITY Cross-Validation of FELsim Beamline Optimisation}
+\author{Eremey Valetov}
+\date{15 February 2026}
+
+\begin{document}
+\maketitle
+
+\section{Objective}
+
+Cross-validate FELsim's 11-stage sequential Nelder-Mead beamline optimisation
+against COSY INFINITY's internal FIT command. Both codes solve the same problem:
+matching Twiss parameters at the undulator entrance of the UH MkV FEL transport
+line (118 elements, 23 quadrupoles) to the targets of
+Weinberg, Fisher \& Li~\cite{weinberg2025}.
+
+The goal is independent confirmation that the optimised quadrupole settings
+achieve the required undulator matching --- not necessarily identical currents,
+but equivalent final Twiss.
+
+
+\section{Method}
+
+\subsection{Translation to COSY FIT}
+
+FELsim's 11-stage optimisation was translated into 11 sequential COSY FIT
+blocks within a single FOX input file. Each FIT block:
+\begin{itemize}
+  \item Declares variables (quadrupole currents) and bounds,
+  \item Re-executes the full lattice (via \texttt{LATTICE}),
+  \item Evaluates a combined MSE objective from the Twiss/dispersion goals,
+  \item Iterates until convergence ($\varepsilon = 10^{-8}$, $N_\mathrm{max} = 1000$).
+\end{itemize}
+
+Optimised variables persist between FIT blocks, so each subsequent stage
+inherits the results of all prior stages.
+
+\subsection{Key Implementation Details}
+
+\paragraph{Combined MSE objective.}
+COSY's FIT with individual objectives (\texttt{ENDFIT} with multiple
+\texttt{OBJ}) resets to initial values when \emph{any} objective fails to
+converge. A single combined MSE objective avoids this:
+\begin{equation}
+  \mathrm{OBJ}(1) = \frac{1}{N}\sum_{i=1}^{N} w_i\,(f_i - g_i)^2,
+\end{equation}
+where $f_i$ is the computed Twiss parameter, $g_i$ the target, and $w_i$ the
+weight. The sum is evaluated without \texttt{CONS()}, preserving DA derivatives
+for gradient-based optimisation (FIT algorithm~1).
+
+\paragraph{Initial Twiss from beam distribution.}
+FELsim computes Twiss from particle statistics of a Gaussian beam
+($\sigma_x = \SI{0.8}{mm}$, $\varepsilon = \SI{0.101}{\pi.mm.mrad}$).
+The initial beta function is $\beta_0 = \sigma_x^2/\varepsilon \approx
+\SI{6.34}{m}$, not $\beta_0 = \SI{1}{m}$. Using the wrong initial Twiss
+gives completely incorrect transport ($\alpha_x = -2.8$ instead of $\approx 0$
+after Stage~1). This was the most critical implementation finding.
+
+\paragraph{Dipole model.}
+Hard-edge dipoles (\texttt{DIL} without \texttt{FC}) with edge angles from
+the beamline specification. The \texttt{DIL} $\beta$ parameter is set to zero
+(no fringe field integral), meaning edge kicks use $\tan(\epsilon)/\rho$
+without the fringe field correction term. See Section~\ref{sec:physics} for
+implications.
+
+
+\section{Results}
+
+\subsection{Beam and Target Parameters}
+
+\begin{table}[h]
+\centering
+\caption{Beam parameters and undulator Twiss targets.}
+\label{tab:params}
+\begin{tabular}{@{}lS@{}}
+\toprule
+Parameter & {Value} \\
+\midrule
+Energy & \SI{40}{MeV} \\
+Normalised emittance $\varepsilon_n$ & \SI{8}{\pi.mm.mrad} \\
+Geometric emittance $\varepsilon$ & \SI{0.101}{\pi.mm.mrad} \\
+Initial beam size $\sigma_{x,y}$ & \SI{0.8}{mm} \\
+Initial $\beta_0$ & \SI{6.34}{m} \\
+\midrule
+Target $\beta_x$ & \SI{1.400}{m} \\
+Target $\alpha_x$ & 0.470 \\
+Target $\beta_y$ & \SI{0.242}{m} \\
+Target $\alpha_y$ & 0.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent These parameters are identical for the S1 (2~ps) and S3 (0.5~ps)
+configurations --- the transverse beam parameters and undulator Twiss targets
+do not depend on bunch length, so the optimisation result is the same for both.
+
+
+\subsection{COSY FIT Convergence}
+
+The full 11-stage FIT converges in a single COSY execution.
+Table~\ref{tab:twiss} compares the final Twiss at the undulator entrance.
+
+\begin{table}[h]
+\centering
+\caption{Final Twiss at undulator entrance: COSY FR\,0, COSY FR\,1,
+FELsim, and targets.}
+\label{tab:twiss}
+\begin{tabular}{@{}l SSSS @{}}
+\toprule
+{Parameter} & {Target} & {COSY FR\,0} & {COSY FR\,1} & {FELsim NM} \\
+\midrule
+$\beta_x$ (\si{m})  & 1.400  & 1.400  & 1.400  & 1.400  \\
+$\alpha_x$          & 0.470  & 0.470  & 0.470  & 0.470  \\
+$\beta_y$ (\si{m})  & 0.242  & 0.242  & 0.242  & 0.242  \\
+$\alpha_y$          & 0.000  & 0.000  & 0.000  & 0.000  \\
+\midrule
+{MSE}               & {---}  & {4.50e-9} & {7.93e-8} & {2.89e-5} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both COSY runs match the targets to high precision. COSY's gradient-based
+FIT (algorithm~1, using DA derivatives) converges $\sim 10^4\times$
+more precisely than Nelder-Mead. FR\,0 and FR\,1 achieve comparable
+MSE ($\sim 10^{-8}$--$10^{-9}$), confirming that fringe fields do not
+degrade convergence when warm-starting is used.
+
+
+\subsection{Quadrupole Current Comparison}
+
+A detailed comparison of optimised quadrupole currents across FELsim,
+COSY FR\,0, and COSY FR\,1 is given in Table~\ref{tab:currents_fr1}
+(Section~\ref{sec:fr1}).
+
+Stages~1--2 and 6--9 show excellent agreement across all three runs
+($\Delta < \SI{0.1}{A}$). The principal discrepancy is Stage~5 (double
+triplet, elements 33--43): COSY finds a local minimum with
+\emph{negative} currents for elements 35 and 37, while FELsim
+(constrained to $[0, 10]$~A) finds all-positive currents. A four-point
+multistart over Stage~5 starting values confirmed that COSY's
+gradient-based optimiser consistently converges to the negative-polarity
+basin.
+
+Stages~10 and 11 also differ from FELsim, partly because the different
+Stage~5 outcome propagates through the downstream lattice, and partly
+due to the dipole model difference discussed in Section~\ref{sec:physics}.
+
+
+\subsection{Dispersion}
+
+The COSY-optimised solution shows residual horizontal dispersion
+$\eta_x \approx \SI{33}{mm}$ at the undulator entrance.
+The Stage~11 objective includes dispersion zeroing at element~92
+(5th chromaticity quad) with weight~0.5, but does not constrain
+$\eta_x'$. Between element~92 and the undulator (element~117),
+the non-zero $\eta_x'$ causes dispersion to accumulate through
+the final triplet drifts.
+
+FELsim shows comparable residual dispersion at element~92
+(0.017 in optimizer units), confirming this is a lattice design
+feature rather than a code discrepancy.
+
+
+\subsection{Single-Dipole Transfer Matrix Comparison}
+\label{sec:sandwich}
+
+To quantify the dipole model difference, we compare the 6$\times$6
+transfer matrix of individual DPW-DPH-DPW ``sandwiches'' between FELsim
+and COSY under three fringe settings: \texttt{FR~0} (no fringe),
+\texttt{FR~3} (third-order fringe), and \texttt{FR~3} with \texttt{FC}
+(Enge coefficients, where available).
+
+\begin{table}[h]
+\centering
+\caption{Vertical edge kick $M_{43}$ and Y-plane stability for representative
+dipole triplets. FELsim uses a triangle-model fringe correction;
+COSY uses the \texttt{DIL} element under different \texttt{FR} settings.}
+\label{tab:sandwich}
+\begin{tabular}{@{} l c SSSS @{}}
+\toprule
+{Dipole} & {$\theta$ ($^\circ$)} & {FELsim} & {COSY FR\,0} & {COSY FR\,3} & {COSY FR\,3+FC} \\
+\midrule
+\multicolumn{6}{@{}l}{\emph{$M_{43}$ (vertical kick, $\mathrm{rad/m}$)}} \\
+Transport  & 1.5   & -7.42e-3 & -7.71e-3 & -6.78e-3 & {---} \\
+Chicane    & 4.0   & -1.11e-1 & -1.21e-1 & -8.93e-2 & {---} \\
+FC1        & 11.25 & -9.50e-1 & -1.04e+0 & -7.79e-1 & -2.27e-1 \\
+\midrule
+\multicolumn{6}{@{}l}{\emph{$|\mathrm{Tr}(M_y)/2|$ (stability, $<1$ required)}} \\
+Transport  & 1.5   & 0.9997 & 0.9997 & 0.9997 & {---} \\
+Chicane    & 4.0   & 0.9977 & 0.9975 & 0.9982 & {---} \\
+FC1        & 11.25 & 0.9823 & 0.9805 & 0.9855 & 0.9957 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three findings emerge from Table~\ref{tab:sandwich}:
+\begin{enumerate}
+  \item FELsim's Y-kick lies between COSY FR\,0 and FR\,3 for every
+    dipole type, but closer to FR\,0 (the hard-edge model).
+  \item The discrepancy grows with bending angle: 3.9\% at 1.5$^\circ$,
+    8.9\% at 4$^\circ$, and 10\% at 11.25$^\circ$ (FR\,0 vs FELsim).
+  \item The \texttt{FC} Enge coefficients (available for the FC1/FC2
+    chicane dipoles) produce much weaker Y-kicks (76\% less than FELsim),
+    indicating that realistic fringe fields partially cancel the geometric
+    edge focusing.
+\end{enumerate}
+
+The cumulative effect of all 14 dipole sandwiches in FELsim gives
+$|\mathrm{Tr}(M_y)/2| = 1.203$ --- formally \emph{unstable} without
+quadrupoles. The quads must therefore provide sufficient Y-plane focusing
+to stabilise the beamline. When FELsim-optimised currents (calibrated to
+FELsim's dipole model) are injected into COSY (with its different edge
+kicks), the compensation breaks down, explaining the Y-plane instability
+observed in cross-validation ($|\mathrm{Tr}(M_y)/2| = 29$).
+
+
+\subsection{COSY FIT with First-Order Fringe Fields (FR\,1)}
+\label{sec:fr1}
+
+To assess the impact of dipole fringe fields on the optimisation, we
+re-ran the full 11-stage COSY FIT with the \texttt{FR\,1} command enabled,
+which includes first-order fringe field effects (Enge-model based
+Runge-Kutta integration through the fringe region).
+
+\paragraph{Cold-start failure.}
+Running FR\,1 from the same default initial guesses as FR\,0 produces
+poor convergence: MSE~$= 1.7 \times 10^{-1}$ at order~3 and
+$5.7 \times 10^{-1}$ at order~1. The Y-plane becomes unstable
+($|\mathrm{Tr}(M_y)/2| = 1.43$) because the changed dipole edge kicks
+push the sequential FIT stages into incompatible local minima. The
+gradient-based FIT (algorithm~1) cannot recover once early stages
+converge to a wrong basin.
+
+\paragraph{Warm-start from FR\,0.}
+Using the converged FR\,0 quadrupole currents as initial guesses for
+FR\,1 resolves the convergence problem completely. The optimiser needs
+only small adjustments from the nearby FR\,0 solution:
+\begin{center}
+\begin{tabular}{@{}lSS@{}}
+\toprule
+{Run} & {MSE} & {$\Delta I_\mathrm{max}$ (A)} \\
+\midrule
+FR\,0 (baseline)         & 4.50e-9  & {---} \\
+FR\,1 (cold start)       & 1.66e-1  & {---} \\
+FR\,1 (warm from FR\,0)  & 7.93e-8  & 0.76 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The warm-started FR\,1 run achieves MSE~$= 7.9 \times 10^{-8}$,
+comparable to the FR\,0 baseline, with a maximum current change of
+0.76~A. Stages~1--2 and 6--9 barely change; the main adjustments are
+in the triplets (Stages~3, 5, 10--11).
+
+Table~\ref{tab:currents_fr1} compares the quadrupole currents across
+all three converged runs: FELsim, COSY FR\,0, and COSY FR\,1.
+
+\begin{table}[h]
+\centering
+\caption{Optimised quadrupole currents: FELsim, COSY FR\,0, and
+COSY FR\,1 (warm-started from FR\,0).}
+\label{tab:currents_fr1}
+\sisetup{table-format=2.4}
+\begin{tabular}{@{} c l SSS c @{}}
+\toprule
+{Elem} & {Section} & {FELsim (A)} & {COSY FR\,0 (A)} & {COSY FR\,1 (A)} & {Stage} \\
+\midrule
+1   & First doublet     & 0.822  & 0.839  & 0.842  & 1 \\
+3   & First doublet     & 1.043  & 1.052  & 1.057  & 1 \\
+10  & Chromaticity 1    & 3.883  & 3.957  & 3.979  & 2 \\
+16  & Triplet 1         & 2.240  & 1.993  & 1.994  & 3 \\
+18  & Triplet 1         & 4.953  & 4.859  & 4.955  & 3 \\
+20  & Triplet 1         & 3.426  & 3.499  & 3.599  & 3 \\
+27  & Chromaticity 2    & 4.666  & 4.685  & 4.711  & 4 \\
+33  & Double triplet    & 2.694  & 0.357  & 0.518  & 5 \\
+35  & Double triplet    & 2.652  & $-$1.975 & $-$1.849 & 5 \\
+37  & Double triplet    & 0.277  & $-$1.995 & $-$1.985 & 5 \\
+50  & Chromaticity 3    & 4.674  & 4.685  & 4.696  & 6 \\
+56  & IP doublet        & 3.122  & 3.168  & 3.218  & 7 \\
+58  & IP doublet        & 3.313  & 3.321  & 3.361  & 7 \\
+61  & Post-IP doublet   & 5.178  & 5.166  & 5.252  & 8 \\
+63  & Post-IP doublet   & 4.043  & 4.011  & 4.080  & 8 \\
+70  & Chromaticity 4    & 4.682  & 4.662  & 4.811  & 9 \\
+76  & Triplet 2         & 3.934  & 3.869  & 3.953  & 10 \\
+78  & Triplet 2         & 4.079  & 4.452  & 4.506  & 10 \\
+80  & Triplet 2         & 0.014  & 0.608  & 0.592  & 10 \\
+87  & Chromaticity 5    & 1.362  & 1.259  & 1.610  & 11 \\
+93  & Final triplet     & 0.945  & 2.348  & 2.473  & 11 \\
+95  & Final triplet     & 2.885  & 3.802  & 3.602  & 11 \\
+97  & Final triplet     & 2.192  & 4.747  & 3.995  & 11 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{FR\,3 computational cost.}
+Third-order fringe field computation (\texttt{FR\,3}) was attempted but
+is prohibitively expensive: each lattice evaluation takes $>$15~minutes
+due to Runge-Kutta integration through 14~dipole fringe regions, even at
+first-order DA. A full 11-stage FIT (requiring hundreds of lattice
+evaluations) would take days. The single-dipole comparison
+(Table~\ref{tab:sandwich}) provides FR\,3 results for individual elements.
+
+
+\section{Physics Model Differences}
+\label{sec:physics}
+
+\subsection{Dipole Edge Fringe Fields}
+
+FELsim's \texttt{dipole\_wedge} class applies a simplified triangle-model
+fringe field correction to the vertical edge kick:
+\begin{equation}
+  T_y = \tan\!\left(\epsilon - \frac{\ell_e}{6}\,\frac{1+\sin^2\!\epsilon}
+        {\rho\,\cos\epsilon}\right),
+\end{equation}
+where $\ell_e$ is the physical DPW length, $\epsilon$ is the edge angle,
+and $\rho$ is the bending radius. COSY's \texttt{DIL} with $\beta=0$
+(our FR\,0 baseline) gives $T_y = \tan\epsilon$ without fringe correction,
+while FR\,3 computes fringe fields to third order using the half-gap
+parameter.
+
+Each individual dipole shows a 4--20\% difference in the Y-kick
+(Table~\ref{tab:sandwich}). Over 14 dipoles (28 edge kicks), this
+accumulates to Y-plane instability when currents are exchanged between
+codes.
+
+COSY provides more physically accurate fringe field treatments:
+the \texttt{FC} command with Enge function coefficients (measured values
+are available for the FC1/FC2 dipoles), the \texttt{FR} command for
+higher-order fringe fields, and the \texttt{MGE} command for 1D field map
+integration. The \texttt{MGE} approach requires a correctly scaled
+field map (currently unavailable for this beamline).
+
+\subsection{Current Sign Handling}
+
+FELsim's quadrupole model uses $k = |eGI/(m_e c \beta\gamma)|$,
+making the transfer matrix independent of the sign of $I$.
+COSY's \texttt{MQ} uses $B_\mathrm{pole} = \pm G I r$, where the sign
+determines the focusing plane. Consequently, COSY's FIT can explore
+negative-current solutions that reverse the focusing/defocusing planes,
+while FELsim's Nelder-Mead (with bounds $[0, 10]$~A) is restricted to
+the positive quadrant.
+
+This explains why COSY consistently finds the negative-polarity Stage~5
+solution: it is a genuine local minimum accessible to COSY but not to
+FELsim's bounded optimiser. Both solutions satisfy the Stage~5 objectives.
+
+
+\section{Summary}
+
+\begin{enumerate}
+  \item COSY INFINITY FIT successfully reproduces the 11-stage beamline
+    optimisation in a single execution, achieving MSE~$\sim 10^{-8}$--$10^{-9}$
+    for both FR\,0 and FR\,1 (warm-started).
+    FELsim's Nelder-Mead achieves MSE~$= 2.9 \times 10^{-5}$.
+  \item All three codes/settings match the undulator Twiss targets to
+    high precision. The lower COSY MSE reflects the advantage of
+    gradient-based (DA) optimisation over Nelder-Mead.
+  \item Enabling first-order fringe fields (\texttt{FR\,1}) requires
+    warm-starting from the FR\,0 solution. Cold-start with FR\,1 fails
+    (MSE~$\sim 0.2$) because the changed dipole edge kicks push the
+    sequential FIT stages into incompatible local minima.
+  \item Third-order fringe fields (\texttt{FR\,3}) are prohibitively
+    expensive: each lattice evaluation takes $>$15~minutes due to
+    Runge-Kutta integration through 14 dipole fringe regions.
+    Single-dipole comparisons (Table~\ref{tab:sandwich}) quantify
+    the FR\,3 effect.
+  \item The principal discrepancy is Stage~5, where COSY converges to
+    negative-polarity currents while FELsim (constrained to $[0, 10]$~A)
+    finds all-positive currents (Section~\ref{sec:physics}).
+  \item Initial Twiss from the beam distribution ($\beta_0 = \sigma^2/\varepsilon
+    \approx \SI{6.34}{m}$) is critical for correct transport computation.
+  \item Direct current injection between codes fails due to the dipole edge
+    fringe correction difference (5--8\% per edge, accumulating to Y-plane
+    instability). The codes agree on final Twiss when each optimises
+    within its own model.
+  \item S1 and S3 produce identical transverse optimisation results.
+\end{enumerate}
+
+\paragraph{Next steps.}
+\begin{itemize}
+  \item Obtain the correct scaling coefficient for the chicane dipole field
+    map to enable MGE-based simulation (the most physically accurate
+    dipole model available in COSY).
+  \item Add $\eta_x'$ or $\eta_x(117)$ objective to control undulator dispersion.
+  \item Constrain Stage~5 variables to $I > 0$ (e.g., via $I^2$
+    parameterisation) to find the positive-polarity COSY solution.
+\end{itemize}
+
+
+\begin{thebibliography}{9}
+\bibitem{weinberg2025}
+  M.~Weinberg, A.~Fisher, and R.~Li,
+  ``Design of the UH Mark V Free Electron Laser,''
+  arXiv:2510.14061v1, Table~I.
+\end{thebibliography}
+
+\end{document}

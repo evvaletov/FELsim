@@ -10,7 +10,7 @@ from loggingConfig import get_logger_with_fallback
 
 class COSYSimulator(BeamlineBuilder):
     def __init__(self, excel_path, json_config_path=None, config_dict=None, debug=None, use_enge_coeffs=True,
-                 use_mge_for_dipoles=False, transfer_matrix_order=None):
+                 use_mge_for_dipoles=False, transfer_matrix_order=None, fringe_field_order=0):
         """Initialize COSY simulator with beamline specification and configuration."""
         super().__init__(excel_path, json_config_path)
 
@@ -37,6 +37,7 @@ class COSYSimulator(BeamlineBuilder):
         self.fit_eps = 1E-8
         self.fit_nmax = 1000
         self.fit_nalgorithm = 3
+        self.fit_combined_mse = True  # Single combined MSE objective (vs individual objectives)
         self.optimization_enabled = False
 
         # Apply config if provided
@@ -46,12 +47,22 @@ class COSYSimulator(BeamlineBuilder):
             self._add_optimization_objectives(self.config['optimization_objectives'], reset=True)
             self.optimization_enabled = True
 
-        # Twiss parameter mapping
+        # Twiss parameter mapping: (axis, param) → COSY expression
+        # None values require special handling in _generate_objective_expression
         self.MEASURE_MAP = {
             ("x", "alpha"): "A0(1)", ("y", "alpha"): "A0(2)",
             ("x", "beta"): "B0(1)", ("y", "beta"): "B0(2)",
-            ("x", "gamma"): "G0(1)", ("y", "gamma"): "G0(2)"
+            ("x", "gamma"): "G0(1)", ("y", "gamma"): "G0(2)",
+            ("x", "dispersion"): "ME(1,6)", ("y", "dispersion"): "ME(3,6)",
+            ("x", "envelope"): None, ("y", "envelope"): None,
         }
+
+        # Geometric emittance in pi.mm.mrad — required for envelope objectives
+        self.geometric_emittance = None
+
+        # Initial Twiss parameters for objective computation (default: round beam, unit beta)
+        self.initial_twiss_x = {'beta': 1.0, 'alpha': 0.0}
+        self.initial_twiss_y = {'beta': 1.0, 'alpha': 0.0}
 
         # Particle tracking
         self.particle_tracking_mode = False
@@ -77,6 +88,7 @@ class COSYSimulator(BeamlineBuilder):
 
         self.use_enge_coeffs = use_enge_coeffs
         self.use_mge_for_dipoles = use_mge_for_dipoles
+        self.fringe_field_order = fringe_field_order
         self.quad_aperture = 0.027
         self.dipole_aperture = 0.0127
 
@@ -97,7 +109,9 @@ class COSYSimulator(BeamlineBuilder):
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.current_dir = os.getcwd()
         self.default_cosy_dir = os.path.expanduser('/usr/local/bin')
-        self.search_dirs = [self.script_dir, self.current_dir, self.default_cosy_dir]
+        self.cosy_dist_dir = os.path.expanduser('~/COSY/10.2/UNIX')
+        self.search_dirs = [self.script_dir, self.current_dir, self.default_cosy_dir,
+                            self.cosy_dist_dir]
 
         # MGE parameters
         self.mge_array_name = "MkIIIChicaneDipoleField"
@@ -131,8 +145,8 @@ class COSYSimulator(BeamlineBuilder):
         return f"""
 INCLUDE 'COSY' ;
 PROCEDURE RUN ;
-    VARIABLE A0 100 2 ; VARIABLE B0 100 2 ; VARIABLE G0 100 2 ;
-    VARIABLE R0 100 2 ; VARIABLE MU0 100 2 ; VARIABLE F0 100 6 ;
+    VARIABLE A0 100 {self.dimensions} ; VARIABLE B0 100 {self.dimensions} ; VARIABLE G0 100 {self.dimensions} ;
+    VARIABLE R0 100 {self.dimensions} ; VARIABLE MU0 100 {self.dimensions} ; VARIABLE F0 100 {2*self.dimensions} ;
 {{Initialization}}
     PROCEDURE LATTICE ;
         UM ; CR ;
@@ -141,14 +155,25 @@ PROCEDURE RUN ;
 
     OV {self.order} {self.dimensions} 0 ;
     RPE {self.KE} ;
+    FR {self.fringe_field_order} ;
     LATTICE ;
 {{Optimization}}
     CO {self.transfer_matrix_order} ; PM 99 ;
-    GT MAP F0 MU0 A0 B0 G0 R0 ;
+
     OPENF 51 'result.txt' 'UNKNOWN';
         WRITE 51 '{{';
         WRITE 51 '"spos": '&S(SPOS)&',';
-        WRITE 51 '"optimization_enabled": '&S({1 if self.optimization_enabled else 0})&',' ;
+        WRITE 51 '"optimization_enabled": {1 if self.optimization_enabled else 0}' ;
+{{Variables}}
+        WRITE 51 '}}';
+    CLOSEF 51 ;
+
+    GT MAP F0 MU0 A0 B0 G0 R0 ;
+
+    OPENF 51 'result.txt' 'UNKNOWN';
+        WRITE 51 '{{';
+        WRITE 51 '"spos": '&S(SPOS)&',';
+        WRITE 51 '"optimization_enabled": {1 if self.optimization_enabled else 0},' ;
         WRITE 51 '"twiss": {{' ;
            WRITE 51 '  "beta_x": "'&S(CONS(B0(1)))&'",' ;
            WRITE 51 '  "beta_y": "'&S(CONS(B0(2)))&'",' ;
@@ -228,7 +253,6 @@ END ;
     VARIABLE MAP_IDX 1 ;
     VARIABLE IDX 1 ;
     VARIABLE NOM 1 ;
-    VARIABLE MAP_TMP 6 6 ;
     VARIABLE OBJ 1 100 ;
 """
             if self.debug:
@@ -387,16 +411,76 @@ END ;
 
         axis, param = measure[0].lower(), measure[1].lower()
         if (axis, param) not in self.MEASURE_MAP:
-            raise ValueError(f"Invalid measure ({axis}, {param}). Valid: {list(self.MEASURE_MAP.keys())}")
+            valid = sorted(f"{a}.{p}" for a, p in self.MEASURE_MAP.keys())
+            raise ValueError(f"Invalid measure ({axis}, {param}). Valid: {valid}")
 
         return axis, param
 
+    def _generate_twiss_fox(self, indent="        "):
+        """Generate FOX code for Twiss computation from transfer matrix.
+
+        Uses initial_twiss_x/y: β(s) = R₁₁²β₀ - 2R₁₁R₁₂α₀ + R₁₂²γ₀, etc.
+        Assumes MAP(IDX) has already been loaded from MAP_ARR.
+        """
+        bx0 = self.initial_twiss_x['beta']
+        ax0 = self.initial_twiss_x['alpha']
+        gx0 = (1 + ax0**2) / bx0
+        by0 = self.initial_twiss_y['beta']
+        ay0 = self.initial_twiss_y['alpha']
+        gy0 = (1 + ay0**2) / by0
+
+        lines = []
+        # β₀=1, α₀=0, γ₀=1 is the default — use simplified expressions
+        if abs(ax0) < 1e-12 and abs(bx0 - 1) < 1e-12:
+            lines.append(f"{indent}B0(1) := ME(1,1)*ME(1,1) + ME(1,2)*ME(1,2) ;")
+            lines.append(f"{indent}A0(1) := -(ME(1,1)*ME(2,1) + ME(1,2)*ME(2,2)) ;")
+        elif abs(ax0) < 1e-12:
+            lines.append(f"{indent}B0(1) := ME(1,1)*ME(1,1)*{bx0} + ME(1,2)*ME(1,2)*{gx0} ;")
+            lines.append(f"{indent}A0(1) := -(ME(1,1)*ME(2,1)*{bx0} + ME(1,2)*ME(2,2)*{gx0}) ;")
+        else:
+            lines.append(f"{indent}B0(1) := ME(1,1)*ME(1,1)*{bx0} - 2*ME(1,1)*ME(1,2)*{ax0} + ME(1,2)*ME(1,2)*{gx0} ;")
+            lines.append(f"{indent}A0(1) := -(ME(1,1)*ME(2,1)*{bx0} - (ME(1,1)*ME(2,2)+ME(1,2)*ME(2,1))*{ax0} + ME(1,2)*ME(2,2)*{gx0}) ;")
+
+        if abs(ay0) < 1e-12 and abs(by0 - 1) < 1e-12:
+            lines.append(f"{indent}B0(2) := ME(3,3)*ME(3,3) + ME(3,4)*ME(3,4) ;")
+            lines.append(f"{indent}A0(2) := -(ME(3,3)*ME(4,3) + ME(3,4)*ME(4,4)) ;")
+        elif abs(ay0) < 1e-12:
+            lines.append(f"{indent}B0(2) := ME(3,3)*ME(3,3)*{by0} + ME(3,4)*ME(3,4)*{gy0} ;")
+            lines.append(f"{indent}A0(2) := -(ME(3,3)*ME(4,3)*{by0} + ME(3,4)*ME(4,4)*{gy0}) ;")
+        else:
+            lines.append(f"{indent}B0(2) := ME(3,3)*ME(3,3)*{by0} - 2*ME(3,3)*ME(3,4)*{ay0} + ME(3,4)*ME(3,4)*{gy0} ;")
+            lines.append(f"{indent}A0(2) := -(ME(3,3)*ME(4,3)*{by0} - (ME(3,3)*ME(4,4)+ME(3,4)*ME(4,3))*{ay0} + ME(3,4)*ME(4,4)*{gy0}) ;")
+
+        return "\n".join(lines) + "\n"
+
     def _generate_objective_expression(self, objective):
-        """Generate COSY objective expression from objective dict."""
+        """Generate COSY objective expression from objective dict.
+
+        When fit_combined_mse is True, returns a squared weighted term without
+        CONS() — preserves DA derivatives for gradient-based FIT (algorithm 1).
+        When False, returns ABS(CONS(...)) terms for individual-objective FIT.
+        """
         measure = self._validate_measure(objective["measure"])
         goal = objective["goal"]
         weight = objective.get("weight", 1)
+        axis, param = measure
         cosy_var = self.MEASURE_MAP[measure]
+
+        if cosy_var is None and param == "envelope":
+            if self.geometric_emittance is None:
+                raise ValueError(
+                    "Set geometric_emittance (pi.mm.mrad) before using envelope objectives. "
+                    "Call sim.set_geometric_emittance(epsilon)."
+                )
+            plane = 1 if axis == "x" else 2
+            eps_si = self.geometric_emittance * 1e-6  # pi.mm.mrad → m·rad
+            expr = f"1000*SQRT({eps_si}*B0({plane}))"
+            if self.fit_combined_mse:
+                return f"{weight}*({expr} - {goal})*({expr} - {goal})"
+            return f"{weight}*ABS(1000*SQRT({eps_si}*CONS(B0({plane}))) - {goal})"
+
+        if self.fit_combined_mse:
+            return f"{weight}*({cosy_var} - {goal})*({cosy_var} - {goal})"
         return f"{weight}*ABS(CONS({cosy_var}) - {goal})"
 
     def _add_optimization_objectives(self, objectives_config, reset=False):
@@ -467,32 +551,66 @@ END ;
         # Generate FIT block
         fit_vars_str = " ".join(sorted(fit_vars))
         fit_body = ""
+        combined_mse = self.fit_combined_mse
         obj_refs = []
         obj_idx = 1
+        n_goals = 0
 
+        if combined_mse:
+            fit_body += "        OBJ(1) := 0 ;\n"
+
+        twiss_fox = self._generate_twiss_fox(indent="        ")
         for elem_num in sorted(objectives_by_elem.keys()):
-            fit_body += f"        LOOP IDX 1 6 ; MAP_TMP(IDX) := MAP_ARR(IDX, {elem_num}) ; ENDLOOP ;\n"
-            fit_body += f"        GT MAP_TMP F0 MU0 A0 B0 G0 R0 ;\n"
+            fit_body += f"        LOOP IDX 1 6 ; MAP(IDX) := MAP_ARR(IDX, {elem_num}) ; ENDLOOP ;\n"
+            fit_body += twiss_fox
 
             for obj in objectives_by_elem[elem_num]:
                 expr = self._generate_objective_expression(obj)
-                fit_body += f"        OBJ({obj_idx}) := {expr} ;\n"
-                obj_refs.append(f"OBJ({obj_idx})")
+
+                if combined_mse:
+                    # Accumulate squared terms into OBJ(1) before B0/A0 are overwritten
+                    fit_body += f"        OBJ(1) := OBJ(1) + {expr} ;\n"
+                    n_goals += 1
+                else:
+                    fit_body += f"        OBJ({obj_idx}) := {expr} ;\n"
+                    obj_refs.append(f"OBJ({obj_idx})")
+                    obj_idx += 1
 
                 if self.debug:
                     measure_str = f"{obj['measure'][0]}.{obj['measure'][1]}"
+                    label = "MSE term" if combined_mse else f"objective {obj_idx - 1}"
                     self.logger.debug(
-                        f"Added objective {obj_idx}: {measure_str} → {obj['goal']} "
+                        f"Added {label}: {measure_str} → {obj['goal']} "
                         f"(weight={obj.get('weight', 1)}) at element {elem_num}"
                     )
 
-                obj_idx += 1
+        if combined_mse:
+            fit_body += f"        OBJ(1) := OBJ(1) / {n_goals} ;\n"
+            obj_list_str = "OBJ(1)"
+        else:
+            obj_list_str = " ".join(obj_refs)
 
-        obj_list_str = " ".join(obj_refs)
+        # Post-FIT diagnostic: re-run lattice with optimized variables and print Twiss at objectives
+        diag_twiss = self._generate_twiss_fox(indent="    ")
+        diag = "\n    { Post-FIT verification }\n    LATTICE ;\n"
+        for elem_num in sorted(objectives_by_elem.keys()):
+            diag += f"    LOOP IDX 1 6 ; MAP(IDX) := MAP_ARR(IDX, {elem_num}) ; ENDLOOP ;\n"
+            diag += diag_twiss
+            diag += (
+                f"    WRITE 6 'POST-FIT elem {elem_num}: "
+                f"ax='&SF(CONS(A0(1)),'(F12.6)')&"
+                f"' ay='&SF(CONS(A0(2)),'(F12.6)')&"
+                f"' bx='&SF(CONS(B0(1)),'(F12.6)')&"
+                f"' by='&SF(CONS(B0(2)),'(F12.6)')&"
+                f"' Dx='&SF(CONS(ME(1,6)),'(F12.6)') ;\n"
+            )
+        for v in sorted(fit_vars):
+            diag += f"    WRITE 6 'POST-FIT {v}='&SF(CONS({v}),'(F12.6)') ;\n"
+
         fit_code = f"""    FIT {fit_vars_str} ;
             LATTICE ;
     {fit_body}    ENDFIT {eps} {nmax} {nalg} {obj_list_str} ;
-    """
+    {diag}"""
 
         self.optimization_fit_blocks.append({
             "init_code": init_code,
@@ -504,10 +622,11 @@ END ;
 
         self.optimization_enabled = True
 
+        n_obj_str = f"{n_goals} MSE terms" if combined_mse else f"{len(obj_refs)} objective(s)"
         if self.debug:
             self.logger.debug(
                 f"Created FIT block #{len(self.optimization_fit_blocks)} with "
-                f"{len(fit_vars)} variable(s) and {len(obj_refs)} objective(s)"
+                f"{len(fit_vars)} variable(s) and {n_obj_str}"
             )
             if len(self.optimization_fit_blocks) == 1:
                 self.logger.debug("Optimization automatically enabled")
@@ -783,10 +902,8 @@ END ;
                     'type': 'DIPOLE_CONSOLIDATED',
                     'length': main.get('length', 0.0889),
                     'angle': main.get('angle', 0.0),
-                    'entrance_angle': entrance.get('wedge_angle', 0) if self._get_enge_sign(
-                        entrance.get('enge_fct', 0)) > 0 else 0,
-                    'exit_angle': exit_wedge.get('wedge_angle', 0) if self._get_enge_sign(
-                        exit_wedge.get('enge_fct', 0)) < 0 else 0,
+                    'entrance_angle': entrance.get('wedge_angle', 0),
+                    'exit_angle': exit_wedge.get('wedge_angle', 0),
                     'pole_gap': main.get('pole_gap', self.dipole_aperture),
                     'entrance_enge_coeffs': entrance_enge,
                     'exit_enge_coeffs': exit_enge,
@@ -800,6 +917,85 @@ END ;
                 i += 1
 
         return grouped
+
+    def set_geometric_emittance(self, emittance):
+        """Set geometric emittance for envelope objective calculations.
+
+        Parameters
+        ----------
+        emittance : float
+            Geometric emittance in pi.mm.mrad (same unit as FELsim's ebeam.epsilon).
+        """
+        self.geometric_emittance = emittance
+
+    def set_initial_twiss(self, beta_x, alpha_x, beta_y, alpha_y):
+        """Set initial Twiss parameters for objective computation in FIT blocks.
+
+        FELsim's beamOptimizer computes Twiss from particle statistics, so the
+        objectives depend on the initial beam distribution. This method sets the
+        equivalent initial Twiss so that transfer-matrix-based Twiss in COSY
+        matches FELsim's particle-based values.
+
+        Parameters
+        ----------
+        beta_x, alpha_x : float
+            Initial horizontal Twiss parameters at beamline entrance [m, rad].
+        beta_y, alpha_y : float
+            Initial vertical Twiss parameters at beamline entrance [m, rad].
+        """
+        self.initial_twiss_x = {'beta': beta_x, 'alpha': alpha_x}
+        self.initial_twiss_y = {'beta': beta_y, 'alpha': alpha_y}
+        if self.debug:
+            self.logger.debug(f"Geometric emittance set to {emittance} pi.mm.mrad")
+
+    def get_element_index_mapping(self):
+        """Build mapping from original beamline indices to COSY consolidated indices.
+
+        COSY's _detect_dipole_triplets() consolidates DPW-DPH-DPW sequences into
+        single dipole elements, shifting all downstream indices. This mapping is
+        required to translate FELsim element indices to COSY MAP_ARR indices.
+
+        Consolidated indices are 0-based. For MAP_ARR references in FIT blocks,
+        add 1 (MAP_ARR uses 1-based indexing).
+
+        Returns
+        -------
+        dict
+            'orig_to_consolidated': {orig_idx: consolidated_idx}
+            'consolidated_to_orig': {consolidated_idx: [orig_indices]}
+            'n_original': total original elements
+            'n_consolidated': total consolidated elements
+        """
+        grouped = self._detect_dipole_triplets()
+
+        orig_to_cons = {}
+        cons_to_orig = {}
+        orig_idx = 0
+
+        for cons_idx, elem in enumerate(grouped):
+            if elem['type'] == 'DIPOLE_CONSOLIDATED':
+                indices = [orig_idx, orig_idx + 1, orig_idx + 2]
+                for oi in indices:
+                    orig_to_cons[oi] = cons_idx
+                cons_to_orig[cons_idx] = indices
+                orig_idx += 3
+            else:
+                orig_to_cons[orig_idx] = cons_idx
+                cons_to_orig[cons_idx] = [orig_idx]
+                orig_idx += 1
+
+        if self.debug:
+            self.logger.debug(
+                f"Element index mapping: {orig_idx} original → {len(grouped)} consolidated "
+                f"({orig_idx - len(grouped)} elements absorbed by triplet consolidation)"
+            )
+
+        return {
+            'orig_to_consolidated': orig_to_cons,
+            'consolidated_to_orig': cons_to_orig,
+            'n_original': orig_idx,
+            'n_consolidated': len(grouped),
+        }
 
     def _check_for_mge_dipoles(self, grouped_elements):
         """Check if any dipoles will use MGE mode."""
@@ -1229,6 +1425,14 @@ END ;
         src_bin = self._find_file('COSY.bin')
         if src_bin:
             shutil.copy(src_bin, os.path.join(output_dir, 'COSY.bin'))
+
+        # Copy SYSCA.DAT if fringe fields are enabled (required by COSY FR >= 1)
+        if self.fringe_field_order > 0:
+            src_sysca = self._find_file('SYSCA.DAT')
+            if src_sysca:
+                shutil.copy(src_sysca, os.path.join(output_dir, 'SYSCA.DAT'))
+            else:
+                self.logger.warning("SYSCA.DAT not found — required for FR >= 1")
 
         input_file = self.generate_input(output_dir)
 

@@ -6,8 +6,8 @@ export const TWISS_OPTIONS = [
     { value: '\\alpha', label: '\\alpha', modal_val: 'alpha' },
     { value: '\\beta (m)', label: '\\beta (m)', modal_val: 'beta' },
     { value: '\\gamma (rad/m)', label: '\\gamma (rad/m)', modal_val: 'gamma' },
-    { value: 'D (mm)', label: 'D (mm)', modal_val: 'dispersion' },
-    { value: 'D\' (mrad)', label: 'D\' (mrad)', modal_val: 'dispersion_prime' },
+    { value: 'D (m)', label: 'D (m)', modal_val: 'dispersion' },
+    { value: 'D\'', label: 'D\'', modal_val: 'dispersion_prime' },
     { value: '\\phi (deg)', label: '\\phi (deg)', modal_val: 'angle' },
     { value: 'Envelope\\ E (mm)', label: 'Envelope\\ E (mm)', modal_val: 'envelope' }
 ]

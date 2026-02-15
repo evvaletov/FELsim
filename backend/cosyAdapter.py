@@ -33,6 +33,7 @@ class COSYAdapter(SimulatorBase):
                  mode: str = 'transfer_matrix',
                  config: Optional[Dict] = None,
                  transfer_matrix_order: Optional[int] = None,
+                 fringe_field_order: int = 0,
                  debug: bool = None):
 
         if not _COSY_AVAILABLE:
@@ -59,6 +60,7 @@ class COSYAdapter(SimulatorBase):
                 excel_path=sim_excel_path,
                 config_dict=self._config,
                 transfer_matrix_order=transfer_matrix_order,
+                fringe_field_order=fringe_field_order,
                 debug=debug
             )
             self._particle_sim = None
@@ -69,6 +71,7 @@ class COSYAdapter(SimulatorBase):
                 excel_path=sim_excel_path,
                 config_dict=self._config,
                 transfer_matrix_order=transfer_matrix_order,
+                fringe_field_order=fringe_field_order,
                 debug=debug
             )
             self._native_sim = self._particle_sim

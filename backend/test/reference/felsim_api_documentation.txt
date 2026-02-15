@@ -1,0 +1,469 @@
+﻿FELsim Documentation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Schematic
+        init():
+                
+        plotBeamPositionTransform():
+                Simulates and visualizes the movement of particles through an input beamline.
+
+
+                Ex.
+from schematic import draw_beamline
+schem = draw_beamline()
+schem.plotBeamPositionTransform(matrixVariables, beamSegments, shape = shape)
+                Parameters:
+matrixVariables: 2d list of variables representing a list of particle data (generated from ebeam class)
+                Example. 
+from ebeam import beam
+matrixVariables = ebeam.gen_6d_gaussian(0,[1,.2,1,0.2,1,1],1000)
+
+
+beamSegments: Numpy array/list containing beamline objects which represent the beam. Beam objects taken from 
+                Ex. 
+sec1 = driftLattice(0.5)
+sec2 = qpfLattice(current = 2.28)
+sec3 = driftLattice(0.25)
+sec4 = qpdLattice(current = 2.28)
+sec5 = driftLattice(0.25)
+sec6 = qpfLattice(current = 2.28)
+sec7 = driftLattice(0.25)
+sec8 = qpdLattice(current = 2.28)
+sec9 = driftLattice(0.50)
+sec10 = dipole(length=0.0889, angle=1.5)
+beamSegments = [sec1,sec2,sec3,sec4,sec5,sec6,sec7,sec8,sec9,sec10]
+                
+shape: dictionary about the shape of acceptance for the x and y positions of particles. Only two shapes implemented as of 12/27/2024
+Supported shapes:
+               - Circle: Requires "radius" and "origin" keys.
+               - Rectangle: Requires "length", "width", and "origin" keys.
+
+
+                        Ex.{“shape”: str shape name, ***shape info***, “origin”: (int x, int y)}
+shape = {"shape": "circle", "radius": 5, "origin": (0,5)}
+shape = {"shape": "rectangle", "length": 200, "width": 500, "origin": (10,-4)}
+                                
+                        For more parameter info, see code comments
+
+
+
+
+Beam Optimizer
+        init():
+                Sets default beamline and particles to optimize on
+                Ex. 
+test = beamOptimizer(beamline, matrixVariables)
+Example 1.1                
+                
+                Parameters:
+                        beamline: list of objects from the beamline.py class
+                Ex. 
+sec1 = driftLattice(0.5)
+sec2 = qpfLattice(current = 2.28)
+sec3 = driftLattice(0.25)
+sec4 = qpdLattice(current = 2.28)
+sec5 = driftLattice(0.25)
+sec6 = qpfLattice(current = 2.28)
+sec7 = driftLattice(0.25)
+sec8 = qpdLattice(current = 2.28)
+sec9 = driftLattice(0.50)
+sec10 = dipole(length=0.0889, angle=1.5)
+line = [sec1,sec2,sec3,sec4,sec5,sec6,sec7,sec8,sec9,sec10]
+beamtype = beamline()
+beamline = beamtype.changeBeamType(line, "proton", 55)
+Example 1.2
+
+
+                matrixVariables: 2d list of variables representing a list of particle data
+                Ex. 
+from ebeam import beam
+matrixVariables = ebeam.gen_6d_gaussian(0,[1,.2,1,0.2,1,1],1000)
+                        Example 1.3
+        Calc():
+Finds values for beam segment parameters to reach a numerical goal for the particle set.
+Ex. 
+result = test.calc("Nelder-Mead", segmentVar, startPoint, objectives)
+Example 1.4
+
+
+Parameters:
+                        Method: String name of scipy.optimize method for minimization
+Ex. “Nelder-Mead”, “COBYLA”, see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+
+
+segmentVar: dictionary of the relationships between x variables to optimize. Each integer key corresponds to the end of a specified interval within the beamline list to optimize. Each list value pair has information for x variable, 
+
+
+Ex. [str variable name, str segment attribute to optimize] 
+If you want to optimize indice 2’s length, quadruple at indice 1’s current, and dipole at indice 3’s angle, format would follow:
+segmentVar = {2: ["L","length", lambda num:num],
+1: ["I", "current", lambda num:num],
+3: ["A", "angle", lambda num:num],...}
+                        Example 1.5
+
+
+                        Segment values can be mathematically related, such as:
+segmentVar = {5: ["I", "current", lambda num:num],
+1: ["I", "current", lambda num:num/np.sqrt(2)],
+3: ["I", "current", lambda num:num**2],...}
+Example 1.6
+
+
+For any manually beam segment types added in the beamline class, as long as segment’s attribute exist, program can automatically optimize it
+
+
+startPoint: dictionary of parameters for x variables to optimize. Each key string representation of a x variable corresponds to its value dictionary containing start and bound parameters for that variable. Start is the float value function begins looking at, bounds are the numeric bounds software is restricted to for that variable.
+
+
+Ex. 
+{str x variable: {“bounds”: (float lower bound, float upper bound), “start”: float algorithm start search point}}
+Say we have 2 x variables I and L. If we want software to find L values between 0-1 and start search at 0.1, and find I values between 0-10 and start search at 5, format startPoint as follows:
+
+
+startPoint = {"I": {"bounds": (0,10), "start": 5},
+           "L": {"bounds": (0, 1), "start": 0.1}}
+Example 1.7
+
+
+objectives: dictionary about statistical y objectives to optimize for at THE END of a beam segment. Each integer key corresponds to a list of dictionaries containing parameters for each statistical y objective. 
+
+
+Ex. 
+{str indice: [“measure”: [str particle variable, str method name/method object], “goal”: float y objective value, “weight”: float y objective statistical weight}
+
+
+If you want program to optimize for x alpha = 0 and y gamma = 1 at indice 5, x standard deviation = 1 and y standard deviation = 1 at indice 9, use:
+
+
+objectives = {5:[{"measure": ["x", "alpha"], "goal": 0, "weight":1},
+                {"measure": ["y", "gamma"], "goal": 1, "weight":1}],
+             9:[{"measure": ["y", "std"],"goal":1,"weight":1},
+                {"measure": ["x", "std"],"goal":1,"weight":1}]}
+Example 1.8
+
+
+For “measure” key, the method described as the second list element must be found in beamOptimizer.py’s self.OBJECTIVEMETHODS dictionary located in the constructor
+
+
+You can also add your own defined function object as long as it follows y objective function format:
+def alpha(particles, variable):
+       ebeam = beam()
+       dist_avg, dist_cov, twiss = ebeam.cal_twiss(particles, ddof=1)
+       return twiss.loc[variable].loc[r"$\alpha$"]
+
+
+objectives = {7:[{"measure": ["x", alpha], "goal": 5, "weight":1},
+                {"measure": ["y", alpha], "goal": 5, "weight":1}]}
+Example 1.9
+
+
+                NOTE: Default weight value is 1
+                
+                MSE stat is calculated as
+      
+                
+plotProgress = False: optional boolean to plot the search process of the optimization algorithm. Also displays the change of x and y parameters over the algorithm’s iteration.
+
+
+plotBeam: boolean whether to plot beamline post optimization or not.
+
+
+printResults: boolean whether to print numerical optimization data in terminal or not.
+
+
+
+
+
+
+AlgebraicOptimization
+        getDistSigmai():
+Takes 6D representation of beam particles and returns the inital beam sigma matrix (AKA beam covariance matrix) of that set of beam particles
+Ex. 
+alg = AlgebraicOpti()
+sigmai = alg.getDistSigmai(particles)
+                Example 2.1
+                
+                Parameters:
+                        particles: 2D list made of particles in their 6 dimensional representation
+Ex. 
+ebeam = beam()
+particles = ebeam.gen_6d_gaussian(0,[1,1,1,1,1,1],10000)
+                Example 2.2
+
+
+        getTwissSigmai():
+Takes manually inputted Twiss parameters and returns the initial beam sigma matrix (AKA beam covariance matrix) of those parameters. Used over getDistSigmai for specific particle shapes and/or starting twiss conditions with exact numerical precision.
+Ex.
+alg = AlgebraicOpti()
+sigi = alg.getTwissSigmai(x,y,z)
+Example 2.3
+
+
+Parameters:
+xTwiss: list of twiss parameters on the x plane
+yTwiss:  list of twiss parameters on the y plane 
+zTwiss:  list of twiss parameters on the x plane 
+
+
+Ex. 
+[epsilon, alpha, beta, gamma] for each axis
+x = [0.98, 0.02, 0.98, 0.2]
+y = [0.999,0,0.92,0.23]
+z = [0.9, 0.003, 1, 0.2]
+Example 2.4
+
+
+        getM():
+Creates transfer matrix (propagation matrix) from beamline and x value parameters of the beamline
+Ex. 
+alg = AlgebraicOpti()
+M = alg.getM(beamline, xVar)
+Example 2.5
+
+
+        Parameters:
+                        beamline: list of objects from the beamline.py classroom
+Ex. 
+sec1 = driftLattice(0.5)
+sec2 = qpfLattice(current = 2.28)
+sec3 = driftLattice(0.25)
+sec4 = qpdLattice(current = 2.28)
+sec5 = driftLattice(0.25)
+sec6 = qpfLattice(current = 2.28)
+sec7 = driftLattice(0.25)
+sec8 = qpdLattice(current = 2.28)
+sec9 = driftLattice(0.50)
+sec10 = dipole(length=0.0889, angle=1.5)
+beamline = [sec1,sec2,sec3,sec4,sec5,sec6,sec7,sec8,sec9,sec10]
+                Example 2.6
+
+
+xVar: dictionary tracking which indices of the beamline have x value parameters to optimize. Includes variable representation and relationships of different segment parameters.
+Ex. {int indice: {str beam segment parameter name: str variable representation}}
+
+
+Taking beamline from example 2.6, to get a shared current between quadruples at indice 5 and 1, and shared current between indices 3 and 7 :
+xVar = {
+        1: {"current": "I"},
+        3: {"current": "I2"},
+        5: {"current": "I"},
+        7: {"current": "I2"}
+       }
+Example 2.7
+
+
+xVar = {
+        0: {"length": "L"},
+        1: {"current": "I"},
+        2: {"length": "L"},
+        3: {"current": "I"},
+        5: {"current": "I"},
+        7: {"current": "I"}
+       }
+Example 2.8
+
+
+        getSigmaF():
+Takes an initial beam sigma matrix and a transfer matrix and returns linear equations representing the final beam sigma matrix. According to equation
+  
+
+
+
+Final sigma matrix follows format:
+  
+ 
+Ex. 
+alg = AlgebraicOpti()
+sigF = alg.getSigmaF(transferM, sigmai)
+Example 2.9
+
+
+Parameters:
+                        transferM: 6x6 Sympy matrix representing transfer matrix of the beamline
+Ex. Taking M matrix from example 2.5:
+transferM = alg.getM(beamline, xvals)
+Example 2.10
+                
+sigmaI: 6x6 Sympy matrix representing initial beam sigma matrix
+Ex. taking sigmai matrix from example 2.1:
+sigmai = alg.getDistSigmai(particles)
+Example 2.11
+
+
+findSymmetricObjective():
+Takes parameters and returns a 6x6 array of linear equations representing the final beam sigma matrix to create a symmetric beamline for each twiss parameter.
+Ex.
+finm = alg.findSymmetricObjective(beamline, xVar, startParticles = beam_dist,
+plotBeam = address)
+
+
+finm = alg.findSymmetricObjective(beamline, xVar, twiss = twissParams)
+
+
+Final sigma matrix follows format:
+  
+ 
+
+
+
+
+NOTE: use only either startParticles or objec parameter to define twiss parameters for starting sigma matrice
+
+
+Parameters:
+beamline: list of objects from the beamline.py classroom
+Ex. 
+sec1 = driftLattice(0.5)
+sec2 = qpfLattice(current = 2.28)
+sec3 = driftLattice(0.25)
+sec4 = qpdLattice(current = 2.28)
+sec5 = driftLattice(0.25)
+sec6 = qpfLattice(current = 2.28)
+sec7 = driftLattice(0.25)
+sec8 = qpdLattice(current = 2.28)
+sec9 = driftLattice(0.50)
+sec10 = dipole(length=0.0889, angle=1.5)
+beamline = [sec1,sec2,sec3,sec4,sec5,sec6,sec7,sec8,sec9,sec10]
+        
+xVar: dictionary tracking which indices of the beamline have x value parameters to optimize. Includes variable representation and relationships of different segment parameters.
+Ex. {int indice: {str beam segment parameter name: str variable representation}}
+
+
+Taking beamline from example 2.6, to get a shared current between quadruples at indice 5 and 1, and shared current between indices 3 and 7 :
+xVar = {
+        1: {"current": "I"},
+        3: {"current": "I2"},
+        5: {"current": "I"},
+        7: {"current": "I2"}
+       }
+
+
+It is also possible to optimize for any beam segment parameter
+xVar = {
+        0: {"length": "L"},
+        1: {"current": "I"},
+        2: {"length": "L"},
+        3: {"current": "I"},
+        5: {"current": "I"},
+        7: {"current": "I"}
+       }
+
+
+
+
+startParticles: 6D representation of beam particles 
+Ex.
+startParticles = ebeam.gen_6d_gaussian(0,[1,0.1,1,0.1,2.856,1],10000)
+
+
+twiss: dictionary of twiss parameters on each axis plane of a set of particles. 
+        
+Ex. {‘x’: [int epsilon, int alpha, int beta, int gamma],
+                ‘y’: [int epsilon, int alpha, int beta, int gamma]
+                ‘z’: [int epsilon, int alpha, int beta, int gamma] }
+
+
+twissParams = {
+'x': [0,0,0,0],
+'y': [0.999,0,0.02,0.23],
+'z': [0.9, 0.003, 1, 0.2]
+}
+
+
+plotBeam: indice location of linear equation root values to plot in 6x6 matrix. Represent location address as a list of 2 numbers
+
+
+Ex. [int row, int column]
+
+
+If I want -(alpha*epsilon) in the x plane, I can use:
+address = [0,1]
+
+
+Latex: boolean option to return 6x6 list of linear equations in latex form
+
+
+getRootsUni():
+        Takes complex univariate equations and finds zeros over an interval
+        Ex. 
+alg = AlgebraicOpti()
+roots = alg.getRootsUni(equation)
+        
+        Parameters:
+                equation: univariate Sympy equation.
+Ex. 
+Usually use a Sympy equation from findSymmetricObjective() function, from example ___
+xVar = {
+        1: {"current": "I"},
+        3: {"current": "I"},
+        5: {"current": "I"},
+        7: {"current": "I"}
+       }
+alg = AlgebraicOpti()
+finalM = alg.findSymmetricObjective(beamline, xVar, startParticles= beam_dist)
+equation = finalM[0,0]
+
+
+        
+        getRootsMulti():
+finds the roots of a bivariate implicit equation where it meets x = n and y = n, where n is the integer 10 from range (0-10).
+Ex. 
+alg = AlgebraicOpti()
+roots = alg.getRootsMulti(equation)
+
+
+Parameters:
+equation: Bivariate Sympy equation.
+Ex. 
+Usually use a Sympy equation from findSymmetricObjective() function, from example ___
+xVar = {
+        1: {"current": "I"},
+        3: {"current": "I2"},
+        5: {"current": "I"},
+        7: {"current": "I2"}
+       }
+alg = AlgebraicOpti()
+finalM = alg.findSymmetricObjective(beamline, xVar, startParticles= beam_dist)
+equation = finalM[0,0]

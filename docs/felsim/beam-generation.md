@@ -1,0 +1,62 @@
+# Beam Generation
+
+FELsim generates 6D Gaussian beam distributions at the linac exit for
+transport through the beamline. The beam represents a single electron bunch.
+
+## Coordinate System
+
+The 6D phase space vector is $(x, x', y, y', \Delta t, \Delta E / E)$:
+
+| Coordinate | Description | Units |
+|------------|-------------|-------|
+| $x$ | Horizontal position | m |
+| $x'$ | Horizontal divergence | rad |
+| $y$ | Vertical position | m |
+| $y'$ | Vertical divergence | rad |
+| $\Delta t$ | Time offset from bunch center | s |
+| $\Delta E / E$ | Fractional energy deviation | — |
+
+## Configurable Parameters
+
+| Parameter | Symbol | Baseline | Range |
+|-----------|--------|----------|-------|
+| Kinetic energy | $E_k$ | 40 MeV | 20–45 MeV |
+| Normalized emittance | $\varepsilon_n$ | 8 π·mm·mrad | 1–20 |
+| Bunch length | $\sigma_t$ | 2 ps | 0.5–2 ps |
+| Energy spread | $\sigma_E / E$ | 0.5% | 0.1–5% |
+| Energy chirp | $h$ | 0 | 0–$40 \times 10^9$ /s |
+| Number of particles | $N$ | 1000 | 500–2000 |
+
+## Energy Chirp
+
+The chirp parameter $h$ (units: 1/s) introduces a linear correlation
+between time offset and energy deviation:
+
+$$
+\frac{\Delta E}{E} = h \cdot \Delta t + \text{uncorrelated spread}
+$$
+
+At $h = 5 \times 10^9$ /s the chirp adds 0.25%/$\sigma_t$ to the energy
+spread (total $\sigma_E$ grows from 0.50% to 0.56%, a +12% increase).
+At $h = 20 \times 10^9$ /s (emittance-conservation scaled), the chirp
+more than doubles $\sigma_E$ to 1.12%.
+
+The chirp value $h = 5 \times 10^9$ /s originates from Niels Bidault's
+initial beam parameters. It is **not** from the arXiv paper and remains
+to be determined by injector simulations. FELsim defaults to $h = 0$.
+
+## Twiss Initialization
+
+The beam is generated with matched Twiss parameters at the linac exit.
+These are typically obtained from the first stage of the optimizer or
+set to design values. The Twiss parameters at the undulator entrance
+(the optimization targets) are:
+
+| Plane | $\beta$ (m) | $\alpha$ |
+|-------|-------------|---------|
+| $x$ | 1.4 | 0.4714 |
+| $y$ | 0.24 | 0.0 |
+
+## Random Seed
+
+All optimization scripts use `seed=42` for reproducibility.
