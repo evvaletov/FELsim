@@ -277,6 +277,20 @@ class COSYParticleSimulator(COSYSimulator):
         if plane not in ['x', 'y', 'both']:
             raise ValueError(f"plane must be 'x', 'y', or 'both'")
 
+        N = particles_felsim.shape[0]
+        if N < 2:
+            self.logger.warning(
+                f"Only {N} particle(s) — need ≥ 2 for Twiss computation, returning NaN"
+            )
+            nan_plane = {
+                'beta': np.nan, 'alpha': np.nan, 'gamma': np.nan,
+                'emittance': np.nan, 'emittance_normalized': np.nan,
+                'twiss_relation_check': np.nan
+            }
+            if plane == 'both':
+                return {'x': dict(nan_plane), 'y': dict(nan_plane)}
+            return dict(nan_plane)
+
         mean = np.mean(particles_felsim, axis=0)
         gamma, beta_rel = PhysicalConstants.relativistic_parameters(energy, self.E0)
         norm_factor = beta_rel * gamma
@@ -753,7 +767,7 @@ class COSYParticleSimulator(COSYSimulator):
             raise TypeError(f"particles_cosy must be numpy array, got {type(particles_cosy)}")
 
         if particles_cosy.size == 0:
-            raise ValueError("particles_cosy is empty - no particles to transform")
+            return np.empty((0, 6))
 
         if energy is None:
             energy = self.KE
@@ -1095,10 +1109,29 @@ class COSYParticleSimulator(COSYSimulator):
             dict mapping element_idx → particle array
         """
         checkpoints = {}
+        n_initial = None
 
         for elem_idx in element_indices:
             try:
                 particles_cosy = self.read_particle_file(elem_idx, format='auto', output_dir=output_dir)
+                n_at_checkpoint = particles_cosy.shape[0]
+
+                if n_initial is None:
+                    n_initial = n_at_checkpoint
+
+                if n_at_checkpoint == 0:
+                    self.logger.warning(
+                        f"Element {elem_idx}: 0 particles surviving (all lost to apertures)"
+                    )
+                    checkpoints[elem_idx] = np.empty((0, 6))
+                    continue
+
+                if n_initial and n_at_checkpoint < n_initial:
+                    transmission = n_at_checkpoint / n_initial
+                    self.logger.info(
+                        f"Element {elem_idx}: {n_at_checkpoint}/{n_initial} particles "
+                        f"({transmission:.1%} transmission)"
+                    )
 
                 if transform_to_felsim:
                     particles = self.transform_from_cosy_coordinates(
@@ -1144,6 +1177,10 @@ class COSYParticleSimulator(COSYSimulator):
             raise ValueError(f"Cannot parse number of rays from: {first_line}") from e
 
         self.logger.debug(f"Reading RRAY format: {n_rays} rays")
+
+        if n_rays == 0:
+            self.logger.warning(f"RRAY file {filepath} contains 0 rays — all particles lost")
+            return np.empty((0, 6))
 
         coord_data = []
         expected_labels = ['X', 'A', 'Y', 'B', 'T', 'D', 'G', 'Z']

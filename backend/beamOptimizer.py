@@ -113,7 +113,7 @@ class beamOptimizer():
 
         return difference
     
-    def calc(self, method, segmentVar, startPoint, objectives, plotProgress = False, plotBeam = False, printResults = False):
+    def calc(self, method, segmentVar, startPoint, objectives, plotProgress = False, plotBeam = False, printResults = False, **kwargs):
         '''
         optimizes beamline segment attribute values so y values are close to objective values as possible.
         Post optimization plotting supported
@@ -190,8 +190,30 @@ class beamOptimizer():
             if "bounds" in startPoint.get(var): self.bounds[index] = startPoint.get(var).get("bounds")
 
         # Time speed to minimize difference of objective function
-        startTime = time.perf_counter()  
-        result = spo.minimize(self._optiSpeed, self.variablesValues, method=method, bounds=self.bounds)
+        startTime = time.perf_counter()
+        if method == 'glyfada':
+            from glyfadaAdapter import GlyfadaOptimizer
+            try:
+                import cloudpickle as pickle
+            except ImportError:
+                import pickle
+
+            glyfada_kwargs = {
+                k: kwargs[k] for k in (
+                    'pop_size', 'max_gen', 'sigma', 'n_processes',
+                    'timeout_minutes', 'algorithm', 'debug'
+                ) if k in kwargs
+            }
+            optimizer = GlyfadaOptimizer(
+                objective_func=self._optiSpeed,
+                variable_names=self.variablesToOptimize,
+                bounds=self.bounds,
+                default_values=self.variablesValues,
+                **glyfada_kwargs
+            )
+            result = optimizer.optimize()
+        else:
+            result = spo.minimize(self._optiSpeed, self.variablesValues, method=method, bounds=self.bounds)
         endTime = time.perf_counter()
 
         # print out new values for each beam segment's attribute

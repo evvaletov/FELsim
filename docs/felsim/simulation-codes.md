@@ -49,9 +49,6 @@ Limitations:
 - Requires COSY INFINITY binary
 - Slower than first-order (~seconds per evaluation)
 - FOX code generation adds complexity
-- Aperture cuts (AP commands) not yet generated in tracking mode; all rays
-  propagate without physical aperture limits
-
 The adapter writes a complete FOX program, runs the COSY binary, and reads
 back transfer map coefficients and beam envelopes from the output files.
 
@@ -71,12 +68,20 @@ Longitudinal objectives (R56 etc.) are needed for non-zero chirp or bunch
 compression studies. For zero-chirp transverse matching, the longitudinal
 phase space decouples and transverse-only objectives suffice.
 
-**Configurable apertures:**
+**Aperture cuts:**
 
 Element apertures are set via constructor parameters `quad_aperture` (default
-0.027 m) and `dipole_aperture` (default 0.0127 m). These currently affect
-the quadrupole `B_pole` computation for the MQ command. Physical aperture
-cuts in tracking mode are planned (see I4 in PRIORITIES.md).
+0.027 m) and `dipole_aperture` (default 0.0127 m). These affect the
+quadrupole `B_pole` computation for the MQ command. In particle tracking
+mode, `enable_aperture_cuts()` generates COSY AP commands after each element
+to kill rays exceeding the physical aperture:
+
+- Quadrupoles: elliptic `AP r r 1` with `r = quad_aperture / 2`
+- Dipoles: rectangular `AP w h 2` with `h = pole_gap / 2`,
+  `w = dipole_half_width` (configurable, default 0.050 m)
+
+The pipeline handles particle loss gracefully — zero survivors, partial loss,
+and NaN coordinates all produce well-defined results with transmission logging.
 
 ## RF-Track
 

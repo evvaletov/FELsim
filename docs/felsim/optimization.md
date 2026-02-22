@@ -6,10 +6,16 @@ arXiv:2510.14061v1 Table I.
 
 ## Optimization Strategy
 
-The optimizer uses an 11-stage sequential Nelder-Mead approach
-(`beamOptimizer.py`). Each stage optimizes a small group of quadrupoles
-while holding the others fixed, progressively refining the match from
-upstream to downstream.
+The optimizer (`beamOptimizer.py`) supports two methods:
+
+- **Nelder-Mead** (default): 11-stage sequential approach. Each stage
+  optimizes a small group of quadrupoles while holding the others fixed,
+  progressively refining the match from upstream to downstream.
+- **Glyfada** (`method='glyfada'`): evolutionary optimizer
+  (`glyfadaAdapter.py`) using the glyfada C++ MPI binary. Uses
+  population-based search to explore multiple basins simultaneously,
+  useful for high-dimensional problems or when Nelder-Mead gets trapped in
+  local minima.
 
 **Objective function:** mean squared error (MSE) between computed and target
 Twiss parameters ($\beta_x$, $\alpha_x$, $\beta_y$, $\alpha_y$) at the
@@ -79,6 +85,6 @@ See `backend/test/PRIORITIES.md` for the full roadmap. Key upcoming items:
 
 - **S5** — 2D coupled parameter scans ($\sigma_E$ vs $h$, $\sigma_E$ vs
   $\varepsilon_n$, $h$ vs $\varepsilon_n$)
-- **W4** — COSY INFINITY cross-validation of the Python results
+- **W4** — COSY INFINITY cross-validation of the Python results (done)
 - **C1** — RF-Track cross-validation at key parameter points
-- **O3** — Evolutionary optimization for high-dimensional problems
+- Glyfada vs Nelder-Mead benchmarks on the emittance scan (W2)

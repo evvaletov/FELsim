@@ -197,10 +197,18 @@ class COSYAdapter(SimulatorBase):
             filter_invalid=True
         )
 
+        n_initial = particles.shape[0]
         for elem_idx, particles_at_elem in checkpoints.items():
             s_pos = s_positions_map.get(elem_idx, 0)
+            n_at = particles_at_elem.shape[0]
 
-            if particles_at_elem.shape[0] > 0:
+            if n_at < n_initial:
+                self.logger.info(
+                    f"Element {elem_idx} (s={s_pos:.4f} m): "
+                    f"{n_at}/{n_initial} particles ({n_at/n_initial:.1%} transmission)"
+                )
+
+            if n_at > 0:
                 evolution.s_positions.append(s_pos)
                 evolution.particles[s_pos] = particles_at_elem
                 evolution.twiss[s_pos] = self._calculate_twiss(particles_at_elem)
@@ -380,24 +388,40 @@ class COSYAdapter(SimulatorBase):
             reader = self._particle_sim.analyze_results()
             twiss = reader.get_twiss_from_transfer_map()
 
-            if self.debug:
+            if self.debug and final_particles_cosy is not None:
                 self._particle_sim.diagnose_particle_distribution(final_particles_cosy, 'cosy')
 
-            self.logger.debug(final_particles_cosy)
-            self.logger.debug("\n=== Attempting filtered transformation ===")
+            all_particles_lost = (final_particles_cosy is None or
+                                  final_particles_cosy.shape[0] == 0)
 
-            filtered_particles = self._particle_sim.transform_from_cosy_coordinates(
-                final_particles_cosy,
-                validate=False,
-                filter_invalid=True
-            )
+            twiss_statistical = None
+            if all_particles_lost:
+                self.logger.warning("All particles lost — returning NaN Twiss")
+            else:
+                self.logger.debug(f"\n=== Attempting filtered transformation ===")
+                filtered_particles = self._particle_sim.transform_from_cosy_coordinates(
+                    final_particles_cosy,
+                    validate=False,
+                    filter_invalid=True
+                )
 
-            if filtered_particles.shape[0] > 0:
-                self.logger.debug(f"\nFiltered to {filtered_particles.shape[0]} valid particles")
-                twiss_filtered = self._particle_sim.calculate_twiss_from_particles(filtered_particles)
-                self.logger.debug("Twiss from filtered particles:")
-                self.logger.debug(f"  βx = {twiss_filtered['x']['beta']:.6f} m")
-                self.logger.debug(f"  βy = {twiss_filtered['y']['beta']:.6f} m")
+                n_surviving = filtered_particles.shape[0]
+                if n_surviving > 0:
+                    self.logger.debug(f"Filtered to {n_surviving} valid particles")
+                    twiss_statistical = self._particle_sim.calculate_twiss_from_particles(
+                        filtered_particles
+                    )
+                    if not any(np.isnan(v) for v in [
+                        twiss_statistical['x']['beta'], twiss_statistical['y']['beta']
+                    ]):
+                        self.logger.debug(f"Twiss from filtered particles:")
+                        self.logger.debug(f"  βx = {twiss_statistical['x']['beta']:.6f} m")
+                        self.logger.debug(f"  βy = {twiss_statistical['y']['beta']:.6f} m")
+                else:
+                    self.logger.warning(
+                        f"All {particles.shape[0]} particles invalid after filtering"
+                    )
+                    all_particles_lost = True
 
             return SimulationResult(
                 simulator_name=self.name,
@@ -407,14 +431,16 @@ class COSYAdapter(SimulatorBase):
                 checkpoint_particles=checkpoint_particles,
                 metadata={
                     'num_particles': particles.shape[0],
+                    'num_surviving': 0 if all_particles_lost else filtered_particles.shape[0],
+                    'all_particles_lost': all_particles_lost,
                     'beam_energy_mev': self._particle_sim.KE,
                     'checkpoint_config': checkpoint_config
                 },
                 transfer_map=reader.read_linear_transfer_map(),
                 json_results=reader.read_json_results(),
                 twiss_parameters_statistical={
-                    'final': self._particle_sim.calculate_twiss_from_particles(final_particles_cosy)
-                },
+                    'final': twiss_statistical
+                } if twiss_statistical else None,
             )
 
         else:
@@ -567,6 +593,14 @@ class COSYAdapter(SimulatorBase):
         self._particle_sim.enable_particle_tracking(
             checkpoint_elements=checkpoint_elements
         )
+
+    def enable_aperture_cuts(self, dipole_half_width=None):
+        """Enable aperture cuts in COSY tracking mode."""
+        return self._native_sim.enable_aperture_cuts(dipole_half_width)
+
+    def disable_aperture_cuts(self):
+        """Disable aperture cuts."""
+        return self._native_sim.disable_aperture_cuts()
 
     def set_beam_energy(self, energy_mev: float):
         """Set beam energy and update COSY configuration."""

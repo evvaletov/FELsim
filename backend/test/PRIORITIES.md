@@ -169,17 +169,16 @@
 - **Design:** Bisection refinement: run coarse scan (5 points), identify where
   MSE changes rapidly, insert midpoints. Iterate to target resolution.
 
-### O3. Evolutionary Optimisation [MEDIUM PRIORITY]
-- **Motivation:** Nelder-Mead is a local optimizer; at extreme parameters, multiple
-  solution families exist (e.g., the ε_n=14–16 vs ε_n=18–20 quad patterns).
-  Evolutionary optimisation (EO) can explore multiple basins simultaneously.
-- **Options:**
-  - User has a highly effective custom EO optimizer to integrate later
-  - scipy `differential_evolution` as interim (v2 exploration showed it matches NM
-    for the 4-variable problem, but at 10× cost)
-- **Additional consideration:** optimise more quad currents simultaneously (beyond
-  the current 4 Stage-11 variables). EO handles high-dimensional problems better
-  than NM.
+### O3. Evolutionary Optimisation [DONE 2026-02-22]
+- Glyfada adapter implemented: `backend/glyfadaAdapter.py` (GlyfadaOptimizer class)
+  and `backend/glyfada_eval.py` (DH evaluator script).
+- Integrated into `beamOptimizer.py` via `method='glyfada'` in `calc()`.
+- Uses the DH evaluator protocol: pickles objective function, spawns
+  `mpirun -np N optimiser --config=parameters.json`.
+- Defaults tuned for FELsim: pop_size=50, max_gen=100, sigma=0.05, multistart mode.
+- Supports `n_processes`, `pop_size`, `max_gen`, `sigma`, `algorithm` kwargs.
+- **Next steps:** Run comparative benchmarks (glyfada vs Nelder-Mead) on the
+  emittance scan problem (W2), especially at ε_n=5 where NM gets trapped.
 
 ---
 
@@ -230,17 +229,17 @@
      run → compare Twiss with existing W4 results)
   4. Minimal documentation / README for the COSY website
 
-### I4. COSY Aperture Commands for Particle Tracking [MEDIUM PRIORITY]
-- **Status:** `quad_aperture` and `dipole_aperture` are now configurable constructor
-  parameters, but they are only used for computing `B_pole` in the MQ command.
-  No COSY aperture commands (RA, SA, EL, AP) are generated in tracking mode.
-- **Goal:** Generate AP commands after each element so that rays exceeding the
-  physical aperture are killed during particle tracking. Required for realistic
-  particle-loss studies and transmission calculations.
-- **Implementation:** After each MQ/DIL element in `_generate_elements_str()`,
-  emit `AP {half_x} {half_y} 0 ;` using the appropriate aperture value.
-  Quads use circular (half_x = half_y = quad_aperture/2), dipoles use vertical
-  gap (half_y = dipole_aperture/2, half_x from pole width or generous default).
+### I4. COSY Aperture Commands for Particle Tracking [DONE 2026-02-22]
+- AP commands generated after each element when `enable_aperture_cuts()` is called.
+  Quads: elliptic `AP r r 1` (r = quad_aperture/2).
+  Dipoles: rectangular `AP w h 2` (h = pole_gap/2, w = dipole_half_width).
+- Opt-in via `sim.enable_aperture_cuts(dipole_half_width=0.050)`.
+- Forwarded through `COSYAdapter.enable_aperture_cuts()`.
+- Particle loss robustness: 0-ray handling in `_read_rray_format()`,
+  N<2 guard in `calculate_twiss_from_particles()`, transmission logging in
+  `read_checkpoints()` and `collect_evolution()`, graceful `all_particles_lost`
+  metadata in `simulate()`.
+- **TODO:** Determine actual UH MkV dipole pole face width (currently 50 mm placeholder).
 
 ### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.

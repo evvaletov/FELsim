@@ -77,6 +77,9 @@ class COSYSimulator(BeamlineBuilder):
         self.initial_twiss_y = {'beta': 1.0, 'alpha': 0.0}
 
         # Particle tracking
+        self.aperture_cuts_enabled = False
+        self.dipole_half_width = 0.050  # m, horizontal half-aperture for dipoles (placeholder)
+        self._aperture_warning_logged = False
         self.particle_tracking_mode = False
         self.particle_input_unit = 200
         self.particle_checkpoint_base_unit = 10000
@@ -766,6 +769,35 @@ END ;
             'checkpoint_mode': 'all' if checkpoint_elements is None else 'selective'
         }
 
+    def enable_aperture_cuts(self, dipole_half_width=None):
+        """Enable AP commands after elements in particle tracking mode.
+
+        Quads: circular aperture AP r r 1 with r = quad_aperture / 2.
+        Dipoles: rectangular aperture AP w h 2 with h = pole_gap / 2 and
+        w = dipole_half_width.
+
+        Parameters
+        ----------
+        dipole_half_width : float, optional
+            Horizontal half-aperture for dipoles [m]. Default 0.050 m.
+            TODO: determine actual UH MkV dipole pole face width.
+        """
+        self.aperture_cuts_enabled = True
+        if dipole_half_width is not None:
+            self.dipole_half_width = dipole_half_width
+        if not self._aperture_warning_logged:
+            self.logger.warning(
+                f"Aperture cuts enabled. Dipole horizontal half-width = "
+                f"{self.dipole_half_width} m is a conservative placeholder — "
+                f"replace with measured UH MkV pole face width when available."
+            )
+            self._aperture_warning_logged = True
+        return {'aperture_cuts_enabled': True, 'dipole_half_width': self.dipole_half_width}
+
+    def disable_aperture_cuts(self):
+        self.aperture_cuts_enabled = False
+        return {'aperture_cuts_enabled': False}
+
     def disable_particle_tracking(self):
         old_state = self.particle_tracking_mode
         self.particle_tracking_mode = False
@@ -821,6 +853,26 @@ END ;
 
             if self.debug and self.particle_checkpoint_count <= 5:
                 self.logger.debug(f"Adding checkpoint: WRAY {unit} after element {element_idx}")
+
+        return elements_str
+
+    def _add_aperture_cut(self, elements_str, elem):
+        """Add COSY AP command after element if aperture cuts are enabled.
+
+        AP X Y I: X = horizontal half-aperture, Y = vertical half-aperture.
+        I=1: elliptic (x²/X² + y²/Y² ≤ 1).  I=2: rectangular (|x|≤X, |y|≤Y).
+        """
+        if not (self.particle_tracking_mode and self.aperture_cuts_enabled):
+            return elements_str
+
+        etype = elem['type']
+        if etype in ('QPF', 'QPD'):
+            r = self.quad_aperture / 2
+            elements_str += f"    AP {r} {r} 1 ;\n"
+        elif etype == 'DIPOLE_CONSOLIDATED':
+            h = elem.get('pole_gap', self.dipole_aperture) / 2
+            w = self.dipole_half_width
+            elements_str += f"    AP {w} {h} 2 ;\n"
 
         return elements_str
 
@@ -1250,10 +1302,8 @@ END ;
                     f"fort.{self.particle_checkpoint_base_unit}+N ({mode} elements)"
                 )
 
-        # TODO: COSY aperture commands (RA, SA, EL, AP) are not yet generated.
-        # In tracking mode, all rays propagate without physical aperture cuts.
-        # To study particle losses, generate AP commands after each element using
-        # quad_aperture / dipole_aperture. See COSY manual: AP X Y I.
+        # Aperture cuts: when enabled, AP commands are inserted after each
+        # element via _add_aperture_cut() — see enable_aperture_cuts().
         element_idx = 0
         self.particle_checkpoint_count = 0
 
@@ -1262,6 +1312,7 @@ END ;
 
             if elem['type'] == "DRIFT":
                 elements_str += f"    DL {elem['length']} ;\n"
+                elements_str = self._add_aperture_cut(elements_str, elem)
                 elements_str = self._add_particle_checkpoint(elements_str, element_idx)
                 elements_str = self._add_map_tracking_code(elements_str)
 
@@ -1279,6 +1330,7 @@ END ;
 
                 b_pole_str = self._format_cosy_value(b_pole)
                 elements_str += f"    MQ {elem['length']} {b_pole_str} {radius} ;\n"
+                elements_str = self._add_aperture_cut(elements_str, elem)
                 elements_str = self._add_particle_checkpoint(elements_str, element_idx)
                 elements_str = self._add_map_tracking_code(elements_str)
 
@@ -1348,6 +1400,7 @@ END ;
                             self.logger.debug("Resetting fringe field coefficients (FD)")
                         elements_str += "    FD ;\n"
 
+                elements_str = self._add_aperture_cut(elements_str, elem)
                 elements_str = self._add_particle_checkpoint(elements_str, element_idx)
                 elements_str = self._add_map_tracking_code(elements_str)
 
