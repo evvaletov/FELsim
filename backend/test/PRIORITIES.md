@@ -131,6 +131,26 @@
   Report: best/worst/median MSE, current spread.
 - **Key question:** Is the optimization landscape convex enough for single-start?
 
+### S9. Bunch Length Independence Study [IN PROGRESS — 2026-02-22]
+- **Motivation:** S1 (2 ps) and S3 (0.5 ps) produce identical quad currents.
+  A reviewer asks why, whether this is correct, and how to switch in practice.
+- **Root cause:** Transverse Twiss depends on ε, σ_δ, not σ_z; bunch length
+  enters only column 4 (time-of-flight), which `cal_twiss()` ignores.
+- **Part A:** Analytic estimates — R56 (FELsim + COSY vs analytic), compression
+  chirp table, CSR (Derbenev–Saldin), LSC, resistive wall wakefields.
+  Summary table classifying each effect at 2 ps and 0.5 ps.
+- **Part B1:** Pre-compressed beam: re-run optimization at 0.5 ps with varied σ_E
+  (0.5%, 2%, 3%) and h=0 to confirm transverse decoupling.
+- **Part B3:** σ_E sensitivity scan (0.1–3%) at 0.5 ps, h=0. Identify threshold
+  where matching degrades.
+- **Part B4:** Cross-validation with COSY INFINITY (transfer maps, R56, fringe
+  fields) and RF-Track (particle tracking with space charge / CSR).
+- **Part C:** Report section (LaTeX): linear decoupling explanation, compression
+  options for UH MkV, collective effects at 0.5 ps.
+- **Scripts:** `S9_bunch_length_study.py` (Parts A + B1–B3),
+  `S9_rftrack_cosy_validation.py` (Part B4)
+- **Results:** `results/S9/`
+
 ---
 
 ## Category O: Optimizer Improvements
@@ -175,6 +195,85 @@
 - **Motivation:** S1–S4 each have separate reports. A unified comparison table
   showing how the same beamline responds to different parameter regimes.
 - **Output:** Standalone comparison document or section in a master report.
+
+---
+
+## Category I: Infrastructure
+
+### I1. Propagate Element Labels Through the Pipeline [DONE 2026-02-22]
+- Added `name` attribute to `lattice` base class and all subclasses.
+- Excel path: Label column (Nomenclature fallback) propagated through
+  `excelElements.create_beamline()` and `beamlineBuilder.parse_beamline()`.
+- JSON/YAML path: `name` field propagated through `latticeLoaderBase` to both
+  beamline objects (`create_beamline()`) and dict output (`parse_beamline()`).
+- Also fixed `tracked_mapping` → `tracked_dict` import (stale module name)
+  in 4 files, resolving 6 smoke test failures.
+
+### I3. PALS / v2 Lattice → COSY INFINITY Converter [HIGH PRIORITY — due ~2026-03-08]
+- **Goal:** Standalone tool that converts a v2 (PALS-aligned) lattice file
+  (JSON or YAML) into a COSY INFINITY FOX input deck. Intended for the
+  official COSY INFINITY website as a community resource.
+- **Design considerations:**
+  - Mode switch: strict FELsim v2 (our superset with DIPOLE_WEDGE, etc.)
+    vs generic PALS (broader compatibility for general PALS-to-COSY use)
+  - Output: complete FOX procedure with element definitions, beamline
+    sequence, and initial beam parameters (energy, particle type)
+  - Element mapping: Quadrupole→MQ, SBend/RBend→DI/MC, Drift→DL,
+    Solenoid→SOLND, Sextupole→MH, RFCavity→RFC, diagnostics→DL(0)
+  - Fringe field options: FR 0/1/3 selectable; Enge coefficients carried
+    through where available
+  - Should work independently of FELsim runtime (no FastAPI dependency)
+- **Scope:**
+  1. Core converter module (reads JSON/YAML, emits FOX)
+  2. CLI entry point (`pals2cosy` or `lattice2cosy`)
+  3. Validation against our UH FEL beamline (round-trip: YAML → FOX → COSY
+     run → compare Twiss with existing W4 results)
+  4. Minimal documentation / README for the COSY website
+
+### I4. COSY Aperture Commands for Particle Tracking [MEDIUM PRIORITY]
+- **Status:** `quad_aperture` and `dipole_aperture` are now configurable constructor
+  parameters, but they are only used for computing `B_pole` in the MQ command.
+  No COSY aperture commands (RA, SA, EL, AP) are generated in tracking mode.
+- **Goal:** Generate AP commands after each element so that rays exceeding the
+  physical aperture are killed during particle tracking. Required for realistic
+  particle-loss studies and transmission calculations.
+- **Implementation:** After each MQ/DIL element in `_generate_elements_str()`,
+  emit `AP {half_x} {half_y} 0 ;` using the appropriate aperture value.
+  Quads use circular (half_x = half_y = quad_aperture/2), dipoles use vertical
+  gap (half_y = dipole_aperture/2, half_x from pole width or generous default).
+
+### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY]
+- **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
+- **Goal:** Extract T566 = (∂²l/∂δ²)/2 from the COSY DA polynomial map
+  and use it as a FIT objective. Requires `transfer_matrix_order >= 2`.
+- **Use case:** Bunch compression optimization where both R56 and T566 matter.
+
+### I2. Engage with PALS as a Real-World Use Case [HIGH PRIORITY]
+- **Context:** The PALS (Particle Accelerator Lattice Standard) group is looking
+  for ~10 real-world use cases of their evolving standard before proceeding to
+  the next stage. FELsim's v2 lattice format already uses PALS-aligned type
+  names (Quadrupole, SBend, Wiggler, Kicker, Instrument, etc.).
+- **Goal:** Register UH MkV FEL / FELsim as a PALS use case. Contribute
+  feedback on gaps (e.g., DIPOLE_WEDGE has no PALS equivalent, label/name
+  conventions, polarity handling).
+- **Actions:**
+  1. Identify the PALS working group contact and submission process
+  2. Prepare a short description of the UH FEL lattice and how FELsim uses
+     the PALS-aligned format (JSON + YAML, 118 elements, 23 quads, dipole
+     sandwiches, chromaticity sections)
+  3. Document feedback from our implementation experience (e.g., label/name
+     conventions, polarity handling). Note: DIPOLE_WEDGE is not a real gap —
+     it is an internal FELsim modeling artifact (thin-lens edge kick); in the
+     interchange format, edge angles and Enge coefficients are attributes of
+     the dipole element (SBend/RBend), which is the standard approach.
+     However, DIPOLE_WEDGE could be worth mentioning to PALS as a pattern
+     for ingesting legacy or substandard lattice specifications where dipole
+     edges are defined as separate elements. If the standard incorporates
+     this, it should be a distinct category — not deprecated in the standard
+     itself, but marked as a "legacy compatibility" or "suboptimal" element
+     type, signaling that individual lattice files using it should migrate
+     toward folding edge parameters into the parent dipole element
+  4. Submit as a use case
 
 ---
 

@@ -10,7 +10,8 @@ from loggingConfig import get_logger_with_fallback
 
 class COSYSimulator(BeamlineBuilder):
     def __init__(self, excel_path, json_config_path=None, config_dict=None, debug=None, use_enge_coeffs=True,
-                 use_mge_for_dipoles=False, transfer_matrix_order=None, fringe_field_order=0):
+                 use_mge_for_dipoles=False, transfer_matrix_order=None, fringe_field_order=0,
+                 quad_aperture=0.027, dipole_aperture=0.0127):
         """Initialize COSY simulator with beamline specification and configuration."""
         super().__init__(excel_path, json_config_path)
 
@@ -49,12 +50,23 @@ class COSYSimulator(BeamlineBuilder):
 
         # Twiss parameter mapping: (axis, param) → COSY expression
         # None values require special handling in _generate_objective_expression
+        #
+        # Transverse objectives (α, β, γ, dispersion, envelope) suffice when the
+        # transport line has no RF and chirp is zero — longitudinal phase space
+        # decouples from transverse matching (see S9 study).
+        # Longitudinal objectives (R56, T566) are needed for non-zero chirp or
+        # bunch compression studies where the optimizer must target specific
+        # longitudinal transfer matrix elements.
         self.MEASURE_MAP = {
             ("x", "alpha"): "A0(1)", ("y", "alpha"): "A0(2)",
             ("x", "beta"): "B0(1)", ("y", "beta"): "B0(2)",
             ("x", "gamma"): "G0(1)", ("y", "gamma"): "G0(2)",
             ("x", "dispersion"): "ME(1,6)", ("y", "dispersion"): "ME(3,6)",
             ("x", "envelope"): None, ("y", "envelope"): None,
+            # Longitudinal transfer matrix elements (requires dimensions=3)
+            ("l", "r51"): "ME(5,1)", ("l", "r52"): "ME(5,2)",
+            ("l", "r56"): "ME(5,6)",  # R56: path length dependence on energy
+            ("l", "t566"): None,       # T566: 2nd-order R56; requires order >= 2
         }
 
         # Geometric emittance in pi.mm.mrad — required for envelope objectives
@@ -89,8 +101,8 @@ class COSYSimulator(BeamlineBuilder):
         self.use_enge_coeffs = use_enge_coeffs
         self.use_mge_for_dipoles = use_mge_for_dipoles
         self.fringe_field_order = fringe_field_order
-        self.quad_aperture = 0.027
-        self.dipole_aperture = 0.0127
+        self.quad_aperture = quad_aperture    # m, bore radius for MQ command
+        self.dipole_aperture = dipole_aperture  # m, pole gap for DIL command
 
         # Physical constants
         self.E0 = PhysicalConstants.E0_electron
@@ -414,6 +426,12 @@ END ;
             valid = sorted(f"{a}.{p}" for a, p in self.MEASURE_MAP.keys())
             raise ValueError(f"Invalid measure ({axis}, {param}). Valid: {valid}")
 
+        if axis == "l" and self.dimensions < 3:
+            raise ValueError(
+                f"Longitudinal objective ({axis}, {param}) requires dimensions=3. "
+                f"Current dimensions={self.dimensions}."
+            )
+
         return axis, param
 
     def _generate_twiss_fox(self, indent="        "):
@@ -478,6 +496,12 @@ END ;
             if self.fit_combined_mse:
                 return f"{weight}*({expr} - {goal})*({expr} - {goal})"
             return f"{weight}*ABS(1000*SQRT({eps_si}*CONS(B0({plane}))) - {goal})"
+
+        if cosy_var is None and param == "t566":
+            raise NotImplementedError(
+                "T566 objective requires 2nd-order DA map extraction, not yet implemented. "
+                "Use transfer_matrix_order >= 2 and extract T566 from the polynomial map."
+            )
 
         if self.fit_combined_mse:
             return f"{weight}*({cosy_var} - {goal})*({cosy_var} - {goal})"
@@ -946,7 +970,10 @@ END ;
         self.initial_twiss_x = {'beta': beta_x, 'alpha': alpha_x}
         self.initial_twiss_y = {'beta': beta_y, 'alpha': alpha_y}
         if self.debug:
-            self.logger.debug(f"Geometric emittance set to {emittance} pi.mm.mrad")
+            self.logger.debug(
+                f"Initial Twiss set: βx={beta_x:.4f}, αx={alpha_x:.4f}, "
+                f"βy={beta_y:.4f}, αy={alpha_y:.4f}"
+            )
 
     def get_element_index_mapping(self):
         """Build mapping from original beamline indices to COSY consolidated indices.
@@ -1223,6 +1250,10 @@ END ;
                     f"fort.{self.particle_checkpoint_base_unit}+N ({mode} elements)"
                 )
 
+        # TODO: COSY aperture commands (RA, SA, EL, AP) are not yet generated.
+        # In tracking mode, all rays propagate without physical aperture cuts.
+        # To study particle losses, generate AP commands after each element using
+        # quad_aperture / dipole_aperture. See COSY manual: AP X Y I.
         element_idx = 0
         self.particle_checkpoint_count = 0
 

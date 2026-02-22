@@ -24,10 +24,12 @@ class COSYParticleSimulator(COSYSimulator):
 
     def __init__(self, excel_path, json_config_path=None, config_dict=None,
                  debug=None, use_enge_coeffs=True, use_mge_for_dipoles=False,
-                 transfer_matrix_order=None, fringe_field_order=0):
+                 transfer_matrix_order=None, fringe_field_order=0,
+                 quad_aperture=0.027, dipole_aperture=0.0127):
         super().__init__(excel_path, json_config_path, config_dict,
                          debug, use_enge_coeffs, use_mge_for_dipoles,
-                         transfer_matrix_order, fringe_field_order)
+                         transfer_matrix_order, fringe_field_order,
+                         quad_aperture, dipole_aperture)
 
         # Particle tracking configuration
         self.particle_tracking_enabled = False

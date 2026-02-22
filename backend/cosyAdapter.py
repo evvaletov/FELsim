@@ -34,6 +34,8 @@ class COSYAdapter(SimulatorBase):
                  config: Optional[Dict] = None,
                  transfer_matrix_order: Optional[int] = None,
                  fringe_field_order: int = 0,
+                 quad_aperture: float = 0.027,
+                 dipole_aperture: float = 0.0127,
                  debug: bool = None):
 
         if not _COSY_AVAILABLE:
@@ -61,6 +63,8 @@ class COSYAdapter(SimulatorBase):
                 config_dict=self._config,
                 transfer_matrix_order=transfer_matrix_order,
                 fringe_field_order=fringe_field_order,
+                quad_aperture=quad_aperture,
+                dipole_aperture=dipole_aperture,
                 debug=debug
             )
             self._particle_sim = None
@@ -72,6 +76,8 @@ class COSYAdapter(SimulatorBase):
                 config_dict=self._config,
                 transfer_matrix_order=transfer_matrix_order,
                 fringe_field_order=fringe_field_order,
+                quad_aperture=quad_aperture,
+                dipole_aperture=dipole_aperture,
                 debug=debug
             )
             self._native_sim = self._particle_sim

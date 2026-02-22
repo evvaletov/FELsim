@@ -43,14 +43,40 @@ Advantages:
 - Higher-order maps capture nonlinear effects (chromaticity, geometric aberrations)
 - Supports measured fringe fields via MGE (Mid-plane Generalized Enge) elements
 - DA framework provides exact derivatives
+- Internal FIT optimizer for multi-stage Twiss matching
 
 Limitations:
 - Requires COSY INFINITY binary
 - Slower than first-order (~seconds per evaluation)
 - FOX code generation adds complexity
+- Aperture cuts (AP commands) not yet generated in tracking mode; all rays
+  propagate without physical aperture limits
 
 The adapter writes a complete FOX program, runs the COSY binary, and reads
 back transfer map coefficients and beam envelopes from the output files.
+
+**FIT optimization objectives:**
+
+The COSY adapter supports both transverse and longitudinal FIT objectives:
+
+| Axis | Parameter | COSY Expression | Notes |
+|------|-----------|----------------|-------|
+| x/y | alpha, beta, gamma | A0, B0, G0 | Twiss from transfer matrix + initial conditions |
+| x/y | dispersion | ME(1,6), ME(3,6) | Chromatic dispersion |
+| x/y | envelope | sqrt(epsilon * beta) | Requires `set_geometric_emittance()` |
+| l | r56 | ME(5,6) | Path length vs energy; requires `dimensions=3` |
+| l | r51, r52 | ME(5,1), ME(5,2) | Longitudinal coupling; requires `dimensions=3` |
+
+Longitudinal objectives (R56 etc.) are needed for non-zero chirp or bunch
+compression studies. For zero-chirp transverse matching, the longitudinal
+phase space decouples and transverse-only objectives suffice.
+
+**Configurable apertures:**
+
+Element apertures are set via constructor parameters `quad_aperture` (default
+0.027 m) and `dipole_aperture` (default 0.0127 m). These currently affect
+the quadrupole `B_pole` computation for the MQ command. Physical aperture
+cuts in tracking mode are planned (see I4 in PRIORITIES.md).
 
 ## RF-Track
 
@@ -87,6 +113,7 @@ result = adapter.track(beam)
 | Quadrupole optimization | First-order |
 | Parameter sensitivity scans | First-order |
 | Chromaticity / aberration checks | COSY INFINITY |
+| R56 / bunch compression optimization | COSY INFINITY (dimensions=3) |
 | Final validation with space charge | RF-Track |
 | Cross-validation of linear results | COSY + RF-Track |
 
