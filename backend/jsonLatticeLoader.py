@@ -10,7 +10,7 @@ Author: Eremey Valetov
 import json
 from pathlib import Path
 
-from tracked_mapping import TrackedDict
+from tracked_dict import TrackedDict
 from latticeLoaderBase import LatticeLoaderBase, SUPPORTED_FORMAT_VERSIONS
 
 _SCHEMA_FILES = {

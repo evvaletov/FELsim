@@ -46,8 +46,19 @@ class BeamlineBuilder:
             if pd.notna(z_start) and pd.notna(z_end) and z_start < z_end:
                 if z_start > prev_z_end:
                     self.beamline.append({"type": "DRIFT", "length": z_start - prev_z_end})
+
+                # Element name: prefer Label, fall back to Nomenclature
+                label = row.get('Label')
+                if pd.isna(label) or (isinstance(label, str) and not label.strip()):
+                    label = row.get('Nomenclature')
+                if pd.isna(label) or (isinstance(label, str) and not label.strip()):
+                    label = None
+                else:
+                    label = str(label).strip()
+
                 element = {
                     "type": row['Element'],
+                    "name": label,
                     "length": z_end - z_start,
                     "current": row.get('Current (A)', 0),
                     "angle": row.get('Dipole Angle (deg)', 0),

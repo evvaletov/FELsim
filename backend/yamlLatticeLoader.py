@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 import yaml
-from tracked_mapping import TrackedDict
+from tracked_dict import TrackedDict
 from latticeLoaderBase import LatticeLoaderBase
 
 _SCHEMA_FILES = {

@@ -80,7 +80,16 @@ class ExcelElements:
             element = row['Element']
             z_sta = row['z_start']
             z_end = row['z_end']
-            
+
+            # Element name: prefer Label, fall back to Nomenclature
+            label = row.get('Label')
+            if pd.isna(label) or (isinstance(label, str) and not label.strip()):
+                label = row.get('Nomenclature')
+            if pd.isna(label) or (isinstance(label, str) and not label.strip()):
+                label = None
+            else:
+                label = str(label).strip()
+
             # Extract parameters
             current = float(row['Current (A)']) if pd.notna(row['Current (A)']) else 0.0
             angle = float(row['Dipole Angle (deg)']) if pd.notna(row['Dipole Angle (deg)']) else 0.0
@@ -107,19 +116,19 @@ class ExcelElements:
             
             # Add beamline element
             if element == "QPF":
-                beamline.append(qpfLattice(current=current, length=(z_end - z_sta)))
+                beamline.append(qpfLattice(current=current, length=(z_end - z_sta), name=label))
             elif element == "QPD":
-                beamline.append(qpdLattice(current=current, length=(z_end - z_sta)))
+                beamline.append(qpdLattice(current=current, length=(z_end - z_sta), name=label))
             elif element == "DPH":
-                beamline.append(dipole(length=curvature, angle=angle))
+                beamline.append(dipole(length=curvature, angle=angle, name=label))
             elif element == "DPW":
-                beamline.append(dipole_wedge(length=gap_wedge, angle=angle_wedge, 
-                                            dipole_length=curvature, dipole_angle=angle, 
-                                            pole_gap=pole_gap, enge_fct=enge_fct))
+                beamline.append(dipole_wedge(length=gap_wedge, angle=angle_wedge,
+                                            dipole_length=curvature, dipole_angle=angle,
+                                            pole_gap=pole_gap, enge_fct=enge_fct, name=label))
             else:
                 # Generic drift for undefined elements
                 if (not z_end - z_sta == 0) and (not np.isnan(z_sta)) and (not np.isnan(z_end)):
-                    beamline.append(driftLattice(z_end - z_sta))
+                    beamline.append(driftLattice(z_end - z_sta, name=label))
             
             if not np.isnan(z_end):
                 prev_z_end = z_end

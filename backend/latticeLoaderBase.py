@@ -14,7 +14,7 @@ Produces two output formats:
 Author: Eremey Valetov
 """
 
-from tracked_mapping import TrackedDict
+from tracked_dict import TrackedDict
 from beamline import driftLattice, qpfLattice, qpdLattice, dipole, dipole_wedge
 from loggingConfig import get_logger_with_fallback
 
@@ -258,11 +258,13 @@ class LatticeLoaderBase:
             params.mark_accessed("dipole_length_m")
             enge_fct = self._get_enge(elem)
 
+        name = elem.get("name")
         elem.mark_accessed("name", "aperture_m", "optimization", "fringe_fields", "metadata")
         params.mark_all_accessed()
 
         return {
             "type": internal_type,
+            "name": name,
             "length": length,
             "current": current,
             "angle": angle,
@@ -281,30 +283,31 @@ class LatticeLoaderBase:
         z_start = elem["s_start_m"]
         z_end = elem["s_end_m"]
         params = elem["parameters"]
+        name = elem.get("name")
 
         elem.mark_accessed("name", "aperture_m", "optimization", "fringe_fields", "metadata")
 
         if internal_type == "DRIFT":
             params.mark_all_accessed()
             if length > 0:
-                return driftLattice(length)
+                return driftLattice(length, name=name)
             return None
 
         elif internal_type == "QPF":
             current = params.get("current_a", 0) or 0
             params.mark_all_accessed()
-            return qpfLattice(current=current, length=length)
+            return qpfLattice(current=current, length=length, name=name)
 
         elif internal_type == "QPD":
             current = params.get("current_a", 0) or 0
             params.mark_all_accessed()
-            return qpdLattice(current=current, length=length)
+            return qpdLattice(current=current, length=length, name=name)
 
         elif internal_type == "DPH":
             angle = params.get("bending_angle_deg", 0) or 0
             dipole_length = params.get("dipole_length_m", length) or length
             params.mark_all_accessed()
-            return dipole(length=dipole_length, angle=angle)
+            return dipole(length=dipole_length, angle=angle, name=name)
 
         elif internal_type == "DPW":
             wedge_angle = params.get("wedge_angle_deg", 0) or 0
@@ -316,14 +319,14 @@ class LatticeLoaderBase:
             return dipole_wedge(
                 length=length, angle=wedge_angle,
                 dipole_length=dipole_length, dipole_angle=dipole_angle,
-                pole_gap=pole_gap, enge_fct=enge_fct,
+                pole_gap=pole_gap, enge_fct=enge_fct, name=name,
             )
 
         else:
             # Diagnostic / passive elements
             params.mark_all_accessed()
             if length > 0:
-                return driftLattice(length)
+                return driftLattice(length, name=name)
             return None
 
     def _get_enge(self, elem):

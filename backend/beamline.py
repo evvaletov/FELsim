@@ -15,7 +15,7 @@ import math
 #  getSymbolicMatrice() must use all sympy methods and functions, NOT numpy
 
 class lattice:
-    def __init__(self, length, fringeType=None):
+    def __init__(self, length, fringeType=None, name=None):
         '''
         parent class for accelerator beamline segment object
 
@@ -24,7 +24,10 @@ class lattice:
         length : float
             Sets the physical length of the beamline element in meters.
         fringeType :
+        name : str, optional
+            Element label (e.g. 'LQ2', 'F1QA').
         '''
+        self.name = name
         self.E = 45  # Kinetic energy (MeV/c^2)
         self.E0 = 0.51099  # Electron rest energy (MeV/c^2)
         self.Q = 1.60217663e-19  # (C)
@@ -200,7 +203,7 @@ class lattice:
 
 
 class driftLattice(lattice):
-    def __init__(self, length: float):
+    def __init__(self, length: float, name=None):
         '''
         Represents a drift space (empty section) in the beamline.
 
@@ -209,7 +212,7 @@ class driftLattice(lattice):
         length : float
             The length of the drift segment in meters.
         '''
-        super().__init__(length)
+        super().__init__(length, name=name)
         self.color = "white"
 
     def _compute_numeric_matrix(self, length=None, **kwargs):
@@ -276,7 +279,7 @@ class driftLattice(lattice):
 
 
 class qpfLattice(lattice):
-    def __init__(self, current: float, length: float = 0.0889, fringeType='decay'):
+    def __init__(self, current: float, length: float = 0.0889, fringeType='decay', name=None):
         '''
         Represents a quadrupole focusing magnet. This magnet focuses in the x plane
         and defocuses in the y plane
@@ -289,7 +292,7 @@ class qpfLattice(lattice):
             The effective length of the quadrupole magnet in meters.
         fringeType :
         '''
-        super().__init__(length, fringeType)
+        super().__init__(length, fringeType, name=name)
         self.current = current
         self.color = "cornflowerblue"
         self.G = 2.694  # Quadrupole focusing strength (T/A/m)
@@ -397,7 +400,7 @@ class qpfLattice(lattice):
 
 
 class qpdLattice(lattice):
-    def __init__(self, current: float, length: float = 0.0889, fringeType='decay'):
+    def __init__(self, current: float, length: float = 0.0889, fringeType='decay', name=None):
         '''
         Represents a quadrupole defocusing magnet. This magnet defocuses in the x plane
         and focuses in the y plane
@@ -410,7 +413,7 @@ class qpdLattice(lattice):
             The effective length of the quadrupole magnet in meters.
         fringeType :
         '''
-        super().__init__(length, fringeType)
+        super().__init__(length, fringeType, name=name)
         self.current = current
         self.G = 2.694  # Quadrupole focusing strength (T/A/m)
         self.color = "lightcoral"
@@ -518,7 +521,7 @@ class qpdLattice(lattice):
 
 
 class dipole(lattice):
-    def __init__(self, length: float = 0.0889, angle: float = 1.5, fringeType='decay'):
+    def __init__(self, length: float = 0.0889, angle: float = 1.5, fringeType='decay', name=None):
         '''
         Represents a dipole bending magnet, which bends the beam horizontally.
 
@@ -530,7 +533,7 @@ class dipole(lattice):
             The bending angle of the dipole magnet in degrees.
         fringeType :
         '''
-        super().__init__(length, fringeType)
+        super().__init__(length, fringeType, name=name)
         self.color = "forestgreen"
         self.angle = angle
 
@@ -628,7 +631,7 @@ class dipole(lattice):
 
 class dipole_wedge(lattice):
     def __init__(self, length, angle: float = 1, dipole_length: float = 0.0889, dipole_angle: float = 1.5,
-                 pole_gap=0.014478, enge_fct=0, fringeType='decay'):
+                 pole_gap=0.014478, enge_fct=0, fringeType='decay', name=None):
         '''
         Represents a dipole magnet with wedge-shaped pole faces at its entrance and/or exit,
         which introduces a vertical focusing or defocusing effect. This class models the
@@ -653,7 +656,7 @@ class dipole_wedge(lattice):
             Placeholder for Enge function parameter, related to fringe field modeling.
         fringeType :
         '''
-        super().__init__(length, fringeType)
+        super().__init__(length, fringeType, name=name)
         self.color = "lightgreen"
         self.angle = angle
         self.dipole_length = dipole_length

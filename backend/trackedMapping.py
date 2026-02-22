@@ -6,6 +6,6 @@ Install:  pip install -e ~/Python/TrackedDict
 Author: Eremey Valetov
 """
 
-from tracked_mapping import TrackedDict, TrackedList
+from tracked_dict import TrackedDict, TrackedList
 
 __all__ = ["TrackedDict", "TrackedList"]
