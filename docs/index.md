@@ -16,7 +16,7 @@ undulator, with three main simulation domains:
 | Domain | Codes | Maturity |
 |--------|-------|----------|
 | Transport line | FELsim (1st order), COSY INFINITY, RF-Track | Production — optimization studies ongoing |
-| FEL oscillator | Genesis4 + Fourier-optics | Active — reproducing published results |
+| FEL oscillator | Genesis4 + Fourier-optics | Active — superradiance achieved (SAMPLE=1), quantitative comparison ongoing |
 | Injector | RF-Track (gun only) | Early — gun cavity simulation by Niels Bidault |
 
 ## Repository
