@@ -61,7 +61,8 @@ def compute_twiss_targets():
 def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
                      epsilon_n=8, x_std=0.8, y_std=0.8,
                      nb_particles=500, seed=42,
-                     chrom_upper_bound=10, n_restarts=1):
+                     chrom_upper_bound=10, n_restarts=1,
+                     stage11_method='Nelder-Mead', stage11_kwargs=None):
     """Run 11-stage beamline optimization, return results dict.
 
     Parameters
@@ -72,9 +73,14 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         Non-chromaticity quads always use 10 A.
     n_restarts : int
         Number of random restarts for Stage 11. Best result is kept.
+        Ignored when stage11_method='glyfada'.
+    stage11_method : str
+        Optimization method for Stage 11: 'Nelder-Mead' or 'glyfada'.
+    stage11_kwargs : dict or None
+        Extra kwargs for glyfada (pop_size, max_gen, sigma, etc.).
 
     Returns dict with keys: mse, alpha_x, alpha_y, beta_x, beta_y,
-    disp_resid, quad_currents (dict of index->current), time_s, converged.
+    disp_resid, quad_currents (dict of index->current), time_s, nfev, converged.
     """
     beta_xm, alpha_xm, beta_ym, alpha_ym, relat = compute_twiss_targets()
     norm = relat.gamma * relat.beta
@@ -270,45 +276,55 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         ]
     }
 
-    # Default starting point
-    default_starts = [
-        {"Ic": 4, "I": 2, "I2": 2, "I3": 2},
-    ]
-    # Additional random starting points for multi-start
-    rng = np.random.RandomState(seed + 999)
-    for _ in range(n_restarts - 1):
-        default_starts.append({
-            "Ic": rng.uniform(0, cb),
-            "I": rng.uniform(0, qb),
-            "I2": rng.uniform(0, qb),
-            "I3": rng.uniform(0, qb),
-        })
-
-    # Save pre-Stage-11 quad currents so we can restore between restarts
-    pre_s11_currents = {idx: line[idx].current for idx in [87, 93, 95, 97]}
-    best_result = None
-
-    for attempt, starts in enumerate(default_starts):
-        # Restore pre-Stage-11 state
-        for idx, cur in pre_s11_currents.items():
-            line[idx].current = cur
-
+    if stage11_method == 'glyfada':
+        s11_kw = {'pop_size': 30, 'max_gen': 20, 'sigma': 0.05}
+        if stage11_kwargs:
+            s11_kw.update(stage11_kwargs)
         startPoint = {
-            "Ic": {"bounds": (0, cb), "start": starts["Ic"]},
-            "I": {"bounds": (0, qb), "start": starts["I"]},
-            "I2": {"bounds": (0, qb), "start": starts["I2"]},
-            "I3": {"bounds": (0, qb), "start": starts["I3"]},
+            "Ic": {"bounds": (0, cb), "start": 4},
+            "I": {"bounds": (0, qb), "start": 2},
+            "I2": {"bounds": (0, qb), "start": 2},
+            "I3": {"bounds": (0, qb), "start": 2},
         }
-        result = opti.calc("Nelder-Mead", variables, startPoint, objectives,
-                            plotBeam=False, printResults=False, plotProgress=False)
-        if best_result is None or result.fun < best_result.fun:
-            best_result = result
-            best_s11_currents = {idx: line[idx].current for idx in [87, 93, 95, 97]}
+        result = opti.calc("glyfada", variables, startPoint, objectives,
+                           plotBeam=False, printResults=False,
+                           plotProgress=False, **s11_kw)
+    else:
+        # NM multi-start for Stage 11
+        default_starts = [
+            {"Ic": 4, "I": 2, "I2": 2, "I3": 2},
+        ]
+        rng = np.random.RandomState(seed + 999)
+        for _ in range(n_restarts - 1):
+            default_starts.append({
+                "Ic": rng.uniform(0, cb),
+                "I": rng.uniform(0, qb),
+                "I2": rng.uniform(0, qb),
+                "I3": rng.uniform(0, qb),
+            })
 
-    # Restore best Stage-11 result
-    for idx, cur in best_s11_currents.items():
-        line[idx].current = cur
-    result = best_result
+        pre_s11_currents = {idx: line[idx].current for idx in [87, 93, 95, 97]}
+        best_result = None
+
+        for attempt, starts in enumerate(default_starts):
+            for idx, cur in pre_s11_currents.items():
+                line[idx].current = cur
+
+            startPoint = {
+                "Ic": {"bounds": (0, cb), "start": starts["Ic"]},
+                "I": {"bounds": (0, qb), "start": starts["I"]},
+                "I2": {"bounds": (0, qb), "start": starts["I2"]},
+                "I3": {"bounds": (0, qb), "start": starts["I3"]},
+            }
+            result = opti.calc("Nelder-Mead", variables, startPoint, objectives,
+                                plotBeam=False, printResults=False, plotProgress=False)
+            if best_result is None or result.fun < best_result.fun:
+                best_result = result
+                best_s11_currents = {idx: line[idx].current for idx in [87, 93, 95, 97]}
+
+        for idx, cur in best_s11_currents.items():
+            line[idx].current = cur
+        result = best_result
 
     elapsed = time.perf_counter() - t0
 
@@ -343,6 +359,7 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         'disp_resid': disp_resid,
         'quad_currents': quad_currents,
         'time_s': elapsed,
+        'nfev': getattr(result, 'nfev', None),
         'converged': result.success,
     }
 
@@ -738,6 +755,130 @@ def run_w2(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
         print(f"  Saved {outdir / 'mse_vs_emittance_w2_comparison.eps'}")
 
 
+def run_w6(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5,
+           glyfada_kwargs=None):
+    """W6: Glyfada vs Nelder-Mead benchmark on emittance scan.
+
+    Stages 1–10 always use Nelder-Mead. Only Stage 11 is substituted.
+    """
+    print("\n" + "=" * 70)
+    print("W6: Glyfada vs Nelder-Mead Benchmark (Stage 11)")
+    print("=" * 70)
+
+    emittance_points = [5, 8, 14]
+    g_kw = {'pop_size': 30, 'max_gen': 20, 'sigma': 0.05}
+    if glyfada_kwargs:
+        g_kw.update(glyfada_kwargs)
+
+    w6dir = outdir / 'W6'
+    w6dir.mkdir(parents=True, exist_ok=True)
+
+    # CSV setup
+    header = ['epsilon_n', 'method', 'mse', 'alpha_x', 'alpha_y',
+              'beta_x', 'beta_y', 'disp_resid',
+              'quad_87', 'quad_93', 'quad_95', 'quad_97',
+              'time_s', 'nfev']
+    rows = []
+
+    for i, en in enumerate(emittance_points):
+        for method_label, method_name, extra_kw in [
+            ('NM', 'Nelder-Mead', dict(chrom_upper_bound=chrom_upper_bound,
+                                        n_restarts=n_restarts)),
+            ('glyfada', 'glyfada', dict(chrom_upper_bound=chrom_upper_bound,
+                                         stage11_kwargs=g_kw)),
+        ]:
+            print(f"  [{i+1}/{len(emittance_points)}] ε_n={en}, method={method_label}")
+            try:
+                res = run_optimization(
+                    epsilon_n=en, nb_particles=nb_particles, seed=42,
+                    stage11_method=method_name, **extra_kw)
+                row = [en, method_label, res['mse'],
+                       res['alpha_x'], res['alpha_y'],
+                       res['beta_x'], res['beta_y'], res['disp_resid'],
+                       res['quad_currents'][87], res['quad_currents'][93],
+                       res['quad_currents'][95], res['quad_currents'][97],
+                       res['time_s'], res['nfev']]
+                quality = 'FAILED'
+                for qlabel, thresh in sorted(MSE_THRESHOLDS.items(),
+                                              key=lambda x: x[1]):
+                    if res['mse'] < thresh:
+                        quality = qlabel.upper()
+                        break
+                print(f"    MSE = {res['mse']:.4e}  [{quality}]  "
+                      f"β_x={res['beta_x']:.4f}  β_y={res['beta_y']:.4f}  "
+                      f"({res['time_s']:.1f} s, nfev={res['nfev']})")
+            except Exception as e:
+                print(f"    FAILED: {e}")
+                row = [en, method_label] + [float('nan')] * (len(header) - 2)
+            rows.append(row)
+
+    csv_path = w6dir / 'benchmark_results.csv'
+    write_csv(csv_path, header, rows)
+    print(f"\nSaved {csv_path}")
+
+    # Parse results for plotting
+    nm_rows = [r for r in rows if r[1] == 'NM']
+    gl_rows = [r for r in rows if r[1] == 'glyfada']
+    eps_nm = [r[0] for r in nm_rows]
+    eps_gl = [r[0] for r in gl_rows]
+    mse_nm = [r[2] for r in nm_rows]
+    mse_gl = [r[2] for r in gl_rows]
+    time_nm = [r[12] for r in nm_rows]
+    time_gl = [r[12] for r in gl_rows]
+
+    # MSE bar chart
+    x = np.arange(len(emittance_points))
+    width = 0.35
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.bar(x - width/2, mse_nm, width, label='Nelder-Mead (5 restarts)', color='#4477AA')
+    ax.bar(x + width/2, mse_gl, width, label='Glyfada', color='#EE6677')
+    ax.set_yscale('log')
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(int(e)) for e in emittance_points])
+    ax.set_xlabel(r'Normalised emittance $\varepsilon_n$ ($\pi\cdot$mm$\cdot$mrad)')
+    ax.set_ylabel('MSE')
+    ax.set_title('W6: Stage 11 MSE — Nelder-Mead vs Glyfada')
+    for thresh_label, thresh in MSE_THRESHOLDS.items():
+        colors = {'Excellent': 'green', 'Acceptable': 'orange', 'Marginal': 'red'}
+        ax.axhline(thresh, color=colors[thresh_label], linestyle='--', alpha=0.6,
+                    label=f'{thresh_label} ({thresh})')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3, axis='y')
+    fig.tight_layout()
+    fig.savefig(w6dir / 'mse_comparison.eps', format='eps')
+    plt.close(fig)
+    print(f"  Saved {w6dir / 'mse_comparison.eps'}")
+
+    # Time bar chart
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.bar(x - width/2, time_nm, width, label='Nelder-Mead (5 restarts)', color='#4477AA')
+    ax.bar(x + width/2, time_gl, width, label='Glyfada', color='#EE6677')
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(int(e)) for e in emittance_points])
+    ax.set_xlabel(r'Normalised emittance $\varepsilon_n$ ($\pi\cdot$mm$\cdot$mrad)')
+    ax.set_ylabel('Wall-clock time (s)')
+    ax.set_title('W6: Stage 11 Wall-Clock Time — Nelder-Mead vs Glyfada')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3, axis='y')
+    fig.tight_layout()
+    fig.savefig(w6dir / 'time_comparison.eps', format='eps')
+    plt.close(fig)
+    print(f"  Saved {w6dir / 'time_comparison.eps'}")
+
+    # Summary table
+    beta_xm, alpha_xm, beta_ym, alpha_ym, _ = compute_twiss_targets()
+    print(f"\n{'─' * 95}")
+    print(f"{'ε_n':>5} {'Method':>10} {'MSE':>12} {'β_x':>8} {'β_y':>8} "
+          f"{'α_x':>8} {'α_y':>10} {'Time(s)':>8} {'nfev':>8}")
+    print(f"{'':>5} {'Target':>10} {'':>12} {beta_xm:>8.4f} {beta_ym:>8.4f} "
+          f"{alpha_xm:>8.4f} {alpha_ym:>10.6f}")
+    print(f"{'─' * 95}")
+    for r in rows:
+        print(f"{r[0]:>5.0f} {r[1]:>10} {r[2]:>12.4e} {r[5]:>8.4f} {r[6]:>8.4f} "
+              f"{r[3]:>8.4f} {r[4]:>10.6f} {r[12]:>8.1f} {r[13]:>8}")
+    print(f"{'─' * 95}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='0.5 ps parameter sensitivity study')
@@ -753,10 +894,12 @@ def main():
                         help='W1: chirp vs no-chirp comparison (1000 particles)')
     parser.add_argument('--w2', action='store_true',
                         help='W2: emittance scan with multi-start + raised bounds')
+    parser.add_argument('--w6', action='store_true',
+                        help='W6: Glyfada vs NM benchmark on emittance scan')
     parser.add_argument('--chrom-bound', type=float, default=15,
-                        help='Upper chromaticity quad bound for W2 (default: 15 A)')
+                        help='Upper chromaticity quad bound for W2/W6 (default: 15 A)')
     parser.add_argument('--multi-start', type=int, default=5,
-                        help='Number of Stage-11 restarts for W2 (default: 5)')
+                        help='Number of Stage-11 restarts for W2/W6 (default: 5)')
     args = parser.parse_args()
 
     outdir = Path(__file__).resolve().parent / 'results' / 'params_05ps'
@@ -768,6 +911,12 @@ def main():
 
     if args.w2:
         run_w2(outdir, nb_particles=args.particles or 500,
+               chrom_upper_bound=args.chrom_bound,
+               n_restarts=args.multi_start)
+        return
+
+    if args.w6:
+        run_w6(outdir, nb_particles=args.particles or 500,
                chrom_upper_bound=args.chrom_bound,
                n_restarts=args.multi_start)
         return

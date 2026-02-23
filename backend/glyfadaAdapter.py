@@ -80,13 +80,24 @@ class GlyfadaOptimizer:
                 "default_value": default
             })
 
+        # Make subprocess Python match the running interpreter
+        import sys
+        python_bin_dir = os.path.dirname(sys.executable)
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        source_cmd = (
+            f"export PATH={python_bin_dir}:$PATH && "
+            f"export PYTHONPATH={backend_dir}"
+        )
+
         config = {
             "mode": "multistart",
             "evaluator": "dh",
             "algorithm": self.algorithm,
             "n_objectives": 1,
             "program_file": "model.py",
+            "config_file": "parameters.json",
             "program_directory": work_dir,
+            "source_command": source_cmd,
             "timeout_minutes": self.timeout_minutes,
             "pop_size": self.pop_size,
             "max_gen": self.max_gen,
@@ -98,6 +109,9 @@ class GlyfadaOptimizer:
             "eta_c": 30.0,
             "mut_epsilon": 0.01,
             "print_all_results": True,
+            "timein_seconds": 0,
+            "omp_num_threads": os.cpu_count() or 4,
+            "tournament_size": min(15, self.pop_size),
             "parameters": parameters,
         }
         return config

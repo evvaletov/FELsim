@@ -48,11 +48,16 @@ def main():
     # Build variable values in the correct order
     variable_vals = [float(params[name]) for name in variable_names]
 
+    import math
     try:
         mse = float(objective_func(variable_vals))
     except Exception as e:
         print(f"F evaluation failed: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Replace NaN/inf with large penalty (glyfada can't handle non-finite JSON)
+    if not math.isfinite(mse):
+        mse = 1e6
 
     # Glyfada maximizes — negate MSE
     print(json.dumps({"objective_1": -mse}))

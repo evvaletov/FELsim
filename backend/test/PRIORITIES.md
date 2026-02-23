@@ -1,6 +1,6 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-02-12)
+**Date:** 2026-02-11 (updated 2026-02-23)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
 
 ---
@@ -47,6 +47,24 @@
 - **Plots:** `results/w5_chirp/chirp_phase_space_comparison.eps`,
   `chirp_energy_spread_growth.eps`, `chirp_context_comparison.eps`
 - **Script:** `w5_chirp_assessment.py`
+
+### W6. Glyfada vs Nelder-Mead Benchmark [DONE 2026-02-23]
+- Benchmarked glyfada evolutionary optimizer against NM for Stage 11 at
+  ε_n = 5, 8, 14.
+- **Result:** Glyfada fails at all three points. NM outperforms by 3–6
+  orders of magnitude in MSE. At ε_n=5, all 600 glyfada evaluations hit
+  the penalty value (unstable optics).
+- **Root cause:** Uniform random initialization over wide bounds wastes
+  evaluations in infeasible regions; 600 evals insufficient for a 4D
+  landscape with large singular regions.
+- **Conclusion:** DH evaluator protocol not suitable for FELsim's
+  fast-evaluation Stage 11. An in-process global optimizer
+  (`scipy.optimize.differential_evolution`) with warm-starting is the
+  recommended path forward.
+- Report: `W6_glyfada_benchmark_report.tex`
+- Results: `results/params_05ps/W6/benchmark_results.csv`,
+  `mse_comparison.eps`, `time_comparison.eps`
+- Implementation: `--w6` flag in `UHM_beamline_opt_05ps_params.py`
 
 ### W4. COSY INFINITY Cross-Validation [DONE 2026-02-15]
 - COSY's internal FIT reproduces the 11-stage optimisation in a single run.
@@ -177,8 +195,9 @@
   `mpirun -np N optimiser --config=parameters.json`.
 - Defaults tuned for FELsim: pop_size=50, max_gen=100, sigma=0.05, multistart mode.
 - Supports `n_processes`, `pop_size`, `max_gen`, `sigma`, `algorithm` kwargs.
-- **Next steps:** Run comparative benchmarks (glyfada vs Nelder-Mead) on the
-  emittance scan problem (W2), especially at ε_n=5 where NM gets trapped.
+- **Benchmark (W6):** Glyfada underperforms NM at all tested emittance points
+  (see W6). Next: add `scipy.optimize.differential_evolution` as in-process
+  global optimizer with warm-starting.
 
 ---
 
