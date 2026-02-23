@@ -131,7 +131,7 @@
   Report: best/worst/median MSE, current spread.
 - **Key question:** Is the optimization landscape convex enough for single-start?
 
-### S9. Bunch Length Independence Study [IN PROGRESS — 2026-02-22]
+### S9. Bunch Length Independence Study [DONE 2026-02-22]
 - **Motivation:** S1 (2 ps) and S3 (0.5 ps) produce identical quad currents.
   A reviewer asks why, whether this is correct, and how to switch in practice.
 - **Root cause:** Transverse Twiss depends on ε, σ_δ, not σ_z; bunch length

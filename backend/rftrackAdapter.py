@@ -153,6 +153,7 @@ class RFTrackAdapter(SimulatorBase):
         # Space charge configuration
         self.space_charge_enabled = space_charge
         self.sc_mesh = sc_mesh or (32, 32, 64)
+        self.sc_nsteps = 1  # SC kicks per element (Lattice mode)
         self._space_charge_effect = None
 
         # RF-Track native objects
@@ -569,13 +570,21 @@ class RFTrackAdapter(SimulatorBase):
             self._setup_space_charge()
         else:
             self._space_charge_effect = None
+            if self._lattice is not None:
+                for i in range(self._lattice.size()):
+                    self._lattice[i].set_sc_nsteps(0)
 
         self.logger.info(
             f"Space charge: {enabled}, method={method}, mesh={self.sc_mesh}"
         )
 
     def _setup_space_charge(self):
-        """Attach space charge effect to lattice elements."""
+        """Configure space charge via the global SC engine and per-element kicks.
+
+        RF-Track 2.5.x handles space charge through:
+        1. A global SC engine set via ``rft.cvars.SC_engine``
+        2. Per-element activation via ``elem.set_sc_nsteps(N)``
+        """
         nx, ny, nz = self.sc_mesh
         method = getattr(self, '_sc_method', 'PIC')
 
@@ -584,11 +593,11 @@ class RFTrackAdapter(SimulatorBase):
         else:
             self._space_charge_effect = rft.SpaceCharge_PIC_FreeSpace(nx, ny, nz)
 
+        rft.cvar.SC_engine = self._space_charge_effect
+
         if self._lattice is not None:
             for i in range(self._lattice.size()):
-                elem = self._lattice[i]
-                if hasattr(elem, 'add_collective_effect'):
-                    elem.add_collective_effect(self._space_charge_effect)
+                self._lattice[i].set_sc_nsteps(self.sc_nsteps)
 
     def collect_evolution(self,
                           particles: np.ndarray,
