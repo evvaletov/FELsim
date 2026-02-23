@@ -286,16 +286,17 @@
   final Twiss at undulator entrance.
 - **Prerequisite:** RF-Track adapter (`rftrackAdapter.py`) with lattice_path support
 
-### C3. Field Map Scaling for MGE Dipoles [HIGH PRIORITY — BLOCKED on user input]
-- **Status:** The chicane dipole fieldmap (`fields/chicane_dipole_fieldmap.dat`) has
-  DELTAS=0.0 and field values (~5 mT) that are ~50× too small for the expected
-  dipole fields (~250 mT). The `mge_scaling = P/P_45` only applies momentum
-  scaling (~0.89), not the missing absolute scaling factor.
-- **Action needed:** User to provide the scripts/files used to generate the field map
-  so the correct scaling coefficient can be recovered. Once the fieldmap is fixed,
-  re-run COSY optimization with MGE + FR 3 for the most physically accurate model.
-- **Files:** `fields/chicane_dipole_fieldmap.dat`, `cosySimulator.py:113-117`
-  (MGE parameters), `cosySimulator.py:1254-1279` (MGE FOX generation)
+### C3. Field Map Scaling for MGE Dipoles [FIX APPLIED 2026-02-22]
+- **Root cause:** The Mathematica notebook (`fields/calculation/UH_chicane_fringe.nb`)
+  applied an erroneous 0.835× momentum scaling (P/P_45) during fieldmap generation,
+  and set DELTAS=0.0 instead of 0.001 m.
+- **Fix:** DELTAS corrected to 0.001 m; all 201 field values multiplied by
+  1/0.8351818473537908. Peak field now 0.5307 T, matching the source CSV
+  (`fields/calculation/UH_chicane_fringe.csv`). Fieldmap length = 200 × 0.001 = 0.2 m.
+- **TODO:** Re-run COSY optimization with MGE (FR 3) using the corrected fieldmap.
+  This is the most physically accurate dipole model and was previously blocked.
+- **Files:** `fields/chicane_dipole_fieldmap.dat`, `fields/calculation/chicane_dipole_fieldmap.dat`,
+  `cosySimulator.py:113-117` (MGE parameters), `cosySimulator.py:1254-1279` (MGE FOX generation)
 
 ### C2. COSY INFINITY Cross-Validation [DONE — see W4]
 - **Motivation:** Independent DA-based simulation. Particularly valuable for
