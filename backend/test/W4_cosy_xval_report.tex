@@ -273,34 +273,34 @@ all three converged runs: FELsim, COSY FR\,0, and COSY FR\,1.
 \caption{Optimised quadrupole currents: FELsim, COSY FR\,0, and
 COSY FR\,1 (warm-started from FR\,0).}
 \label{tab:currents_fr1}
-\sisetup{table-format=2.4}
-\begin{tabular}{@{} c l SSS c @{}}
+\sisetup{table-format=+1.3}
+\begin{tabular}{@{} c l l c SSS c @{}}
 \toprule
-{Elem} & {Section} & {FELsim (A)} & {COSY FR\,0 (A)} & {COSY FR\,1 (A)} & {Stage} \\
+{Elem} & {Label} & {Section} & {F/D} & {FELsim (A)} & {COSY FR\,0 (A)} & {COSY FR\,1 (A)} & {Stage} \\
 \midrule
-1   & First doublet     & 0.822  & 0.839  & 0.842  & 1 \\
-3   & First doublet     & 1.043  & 1.052  & 1.057  & 1 \\
-10  & Chromaticity 1    & 3.883  & 3.957  & 3.979  & 2 \\
-16  & Triplet 1         & 2.240  & 1.993  & 1.994  & 3 \\
-18  & Triplet 1         & 4.953  & 4.859  & 4.955  & 3 \\
-20  & Triplet 1         & 3.426  & 3.499  & 3.599  & 3 \\
-27  & Chromaticity 2    & 4.666  & 4.685  & 4.711  & 4 \\
-33  & Double triplet    & 2.694  & 0.357  & 0.518  & 5 \\
-35  & Double triplet    & 2.652  & $-$1.975 & $-$1.849 & 5 \\
-37  & Double triplet    & 0.277  & $-$1.995 & $-$1.985 & 5 \\
-50  & Chromaticity 3    & 4.674  & 4.685  & 4.696  & 6 \\
-56  & IP doublet        & 3.122  & 3.168  & 3.218  & 7 \\
-58  & IP doublet        & 3.313  & 3.321  & 3.361  & 7 \\
-61  & Post-IP doublet   & 5.178  & 5.166  & 5.252  & 8 \\
-63  & Post-IP doublet   & 4.043  & 4.011  & 4.080  & 8 \\
-70  & Chromaticity 4    & 4.682  & 4.662  & 4.811  & 9 \\
-76  & Triplet 2         & 3.934  & 3.869  & 3.953  & 10 \\
-78  & Triplet 2         & 4.079  & 4.452  & 4.506  & 10 \\
-80  & Triplet 2         & 0.014  & 0.608  & 0.592  & 10 \\
-87  & Chromaticity 5    & 1.362  & 1.259  & 1.610  & 11 \\
-93  & Final triplet     & 0.945  & 2.348  & 2.473  & 11 \\
-95  & Final triplet     & 2.885  & 3.802  & 3.602  & 11 \\
-97  & Final triplet     & 2.192  & 4.747  & 3.995  & 11 \\
+1   & LQ1   & First doublet     & F &  0.822 &  0.839 &  0.842 & 1 \\
+3   & LQ2   & First doublet     & D &  1.043 &  1.052 &  1.057 & 1 \\
+10  & DPHQ  & Chromaticity 1    & F &  3.883 &  3.957 &  3.979 & 2 \\
+16  & F1QA  & Triplet 1         & D &  2.240 &  1.993 &  1.994 & 3 \\
+18  & F1QB  & Triplet 1         & F &  4.953 &  4.859 &  4.955 & 3 \\
+20  & F1QC  & Triplet 1         & D &  3.426 &  3.499 &  3.599 & 3 \\
+27  & DPHQ  & Chromaticity 2    & F &  4.666 &  4.685 &  4.711 & 4 \\
+33  & F2QA  & Double triplet    & D &  2.694 &  0.357 &  0.518 & 5 \\
+35  & F2QB  & Double triplet    & F &  2.652 & -1.975 & -1.849 & 5 \\
+37  & F2QC  & Double triplet    & D &  0.277 & -1.995 & -1.985 & 5 \\
+50  & DPHQ  & Chromaticity 3    & F &  4.674 &  4.685 &  4.696 & 6 \\
+56  & F3QA  & IP doublet        & D &  3.122 &  3.168 &  3.218 & 7 \\
+58  & F3QB  & IP doublet        & F &  3.313 &  3.321 &  3.361 & 7 \\
+61  & F3QC  & Post-IP doublet   & F &  5.178 &  5.166 &  5.252 & 8 \\
+63  & F3QD  & Post-IP doublet   & D &  4.043 &  4.011 &  4.080 & 8 \\
+70  & DPHQ  & Chromaticity 4    & F &  4.682 &  4.662 &  4.811 & 9 \\
+76  & F4QA  & Triplet 2         & D &  3.934 &  3.869 &  3.953 & 10 \\
+78  & F4QB  & Triplet 2         & F &  4.079 &  4.452 &  4.506 & 10 \\
+80  & F4QC  & Triplet 2         & D &  0.014 &  0.608 &  0.592 & 10 \\
+87  & DPHQ  & Chromaticity 5    & F &  1.362 &  1.259 &  1.610 & 11 \\
+93  & UBQ1  & Final triplet     & D &  0.945 &  2.348 &  2.473 & 11 \\
+95  & UBQ2  & Final triplet     & F &  2.885 &  3.802 &  3.602 & 11 \\
+97  & UBQ3  & Final triplet     & D &  2.192 &  4.747 &  3.995 & 11 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -387,6 +387,47 @@ FELsim's bounded optimiser. Both solutions satisfy the Stage~5 objectives.
     instability). The codes agree on final Twiss when each optimises
     within its own model.
   \item S1 and S3 produce identical transverse optimisation results.
+\end{enumerate}
+
+\paragraph{Key enablers for successful optimisation.}
+Several design choices were critical for making the 11-stage optimisation
+converge reliably:
+\begin{enumerate}
+  \item \textbf{Sequential decomposition into physically motivated stages.}
+    The 23-quadrupole problem is decomposed into 11 stages, each
+    corresponding to a distinct optical section (doublet, triplet,
+    chromaticity section).  Each stage optimises 1--4 variables against
+    local objectives, avoiding the curse of dimensionality that would
+    afflict a monolithic 23-variable optimisation.
+
+  \item \textbf{Joint 4-variable final stage.}
+    With the asymmetric undulator Twiss targets from the paper ($\beta_x
+    \neq \beta_y$, $\alpha_x \neq 0$), the final triplet alone (3~variables)
+    is overconstrained against 4~Twiss objectives.  Promoting chromaticity
+    quad~5 (element~87) to a 4th joint variable resolves this: MSE drops
+    from $8.6 \times 10^{-2}$ (3-var) to $4.3 \times 10^{-9}$ (4-var).
+    A differential-evolution global search confirms this is the global
+    optimum.
+
+  \item \textbf{Correct initial Twiss from the beam distribution.}
+    The initial beta function must be computed from the beam statistics,
+    $\beta_0 = \sigma_x^2 / \varepsilon \approx \SI{6.34}{m}$, not the
+    common default $\beta_0 = \SI{1}{m}$.  Using the wrong initial Twiss
+    propagates through the entire lattice and produces completely incorrect
+    transport (e.g., $\alpha_x = -2.8$ instead of $\approx 0$ after
+    Stage~1).
+
+  \item \textbf{Combined MSE objective for gradient-based optimisation.}
+    COSY's FIT with individual objectives resets all variables when
+    \emph{any} objective fails to converge.  A single combined MSE
+    objective, preserving DA derivatives (no \texttt{CONS()} calls),
+    allows the gradient-based algorithm to converge monotonically.
+
+  \item \textbf{Warm-starting across physics models.}
+    Running FR\,1 cold from default initial guesses fails
+    (MSE~$\sim 0.2$); warm-starting from the converged FR\,0 solution
+    reduces this to MSE~$\sim 8 \times 10^{-8}$ with only minor current
+    adjustments ($\Delta I_\mathrm{max} = \SI{0.76}{A}$).
 \end{enumerate}
 
 \paragraph{Next steps.}
