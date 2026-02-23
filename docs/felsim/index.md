@@ -50,4 +50,5 @@ simulation-codes
 lattice-formats
 optimization
 beam-generation
+fieldmap
 ```
