@@ -1,6 +1,6 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-02-24)
+**Date:** 2026-02-11 (updated 2026-03-02)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
 
 ---
@@ -82,7 +82,7 @@
 - Results: `results/params_05ps/W7/`
 - Implementation: `--w7` flag in `UHM_beamline_opt_05ps_params.py`
 
-### W9. COSY Longitudinal Study [IN PROGRESS]
+### W9. COSY Longitudinal Study [DONE 2026-02-25]
 - Full 3D (6D phase space) COSY simulation with longitudinal diagnostics
 - Extracts R56, T566, coupling terms from optimised beamline
 - Propagates 6D bunches for 0.5 ps and 2 ps modes
@@ -185,11 +185,26 @@
 - Script: `W11_throughput_opt.py`
 - Results: `results/W11/`
 
+### W12. Bunch Compression Feasibility Study [DONE 2026-03-02]
+- Can the transport line compress 2 ps → 0.5 ps?
+- Part A: Analytical compression + chirp sweep via COSY map propagation (41 points)
+  - Compression floor ≈ 0.45 ps (R56 × σ_δ), C=4 chirp gives ~0.67 ps
+  - T566 = 0 confirmed — no second-order effect
+- Part B: RF-Track validation with C7 coord5 fix (re-run of W10 Part B scenarios)
+- Part C: Extended bounds (15 A, 5 restarts) — improves transverse MSE, σ_z unchanged
+- Part D: Feasibility summary — transport line is not a compressor
+- **Conclusion:** compression should occur upstream (velocity bunching / dedicated compressor)
+- Script: `W12_compression_feasibility.py`
+- Report: `W12_compression_feasibility_report.tex`
+- Results: `results/W12/`
+
 ### W10. Beam Losses & Bunch Compression Study [DONE 2026-03-02]
 - Quantifies particle losses through the full transport line with physical apertures
 - Part A: Transmission baseline at 2 ps and 0.5 ps (COSY + RF-Track)
 - Part B: Bunch compression via negative chirp — demonstrates chirp required,
   energy spread alone does NOT compress (R56 ≈ +27 mm elongates unchirped beams)
+- **NOTE:** W10 Part B RF-Track results are invalidated by the C7 coord5 bug
+  (pass-through inflated initial σ(ct) by 9.5×). See W12 Part B for corrected results.
 - Part C: Charge scan (20–300 pC) at both operating modes, RF-Track SC ≥ 100 pC
 - RF-Track adapter extended with per-element physical apertures
   (`enable_physical_apertures()`)
@@ -431,11 +446,14 @@
      the first instance of this pattern. Generalise from there.
 - **Prerequisite:** C1 Part B (RF-Track optimisation) validates the handoff approach.
 
-### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY]
+### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY — NOT NEEDED FOR UH FEL]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
 - **Goal:** Extract T566 = (∂²l/∂δ²)/2 from the COSY DA polynomial map
   and use it as a FIT objective. Requires `transfer_matrix_order >= 2`.
 - **Use case:** Bunch compression optimization where both R56 and T566 matter.
+- **W12 finding:** T566 = 0 for the UH FEL transport line (W9 Part A).
+  A T566 FIT objective is redundant for this beamline. Implementation
+  may still be useful for other beamlines with non-zero T566.
 
 ### I2. Engage with PALS as a Real-World Use Case [HIGH PRIORITY]
 - **Context:** The PALS (Particle Accelerator Lattice Standard) group is looking

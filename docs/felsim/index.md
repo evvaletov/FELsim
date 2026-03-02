@@ -49,6 +49,7 @@ Beamline data is maintained in three formats (see
 simulation-codes
 lattice-formats
 optimization
+longitudinal
 beam-generation
 fieldmap
 bugs/index

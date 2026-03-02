@@ -79,6 +79,19 @@ Re-ran emittance scan ($\varepsilon_n = 1$–$20$, 20 points) with multi-start
 fallback. Resolved dips at $\varepsilon_n = 14$–$16$; all now excellent
 (MSE ~ $10^{-6}$–$10^{-9}$).
 
+### W12 — Bunch Compression Feasibility
+
+Can the transport line compress 2 ps bunches to 0.5 ps?  Chirp sweep
+(analytical + COSY map propagation), RF-Track validation (post-C7 fix),
+extended current bounds (15 A), $T_{566}$ assessment.
+
+- $R_{56} = 27.09$ mm (geometry-locked), $T_{566} = 0$
+- Compression floor $\approx 0.45$ ps ($R_{56} \times \sigma_\delta$)
+- Transport line is not a compressor; compression should occur upstream
+- Script: `W12_compression_feasibility.py`
+- Report: `W12_compression_feasibility_report.tex`
+- Results: `results/W12/`
+
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap. Key upcoming items:
