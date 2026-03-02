@@ -1,0 +1,167 @@
+{
+  "2ps": [
+    {
+      "label": "20pC 2ps",
+      "n_initial": 5000,
+      "n_final": 5000,
+      "transmission": 1.0,
+      "sigma_z_ps": 14.240266862807246,
+      "Q_pC": 20,
+      "Q_C": 2e-11,
+      "sigma_t_initial": 2.0,
+      "I_peak_A": 0.560301691316461
+    },
+    {
+      "label": "40pC 2ps",
+      "n_initial": 5000,
+      "n_final": 5000,
+      "transmission": 1.0,
+      "sigma_z_ps": 14.240266862807246,
+      "Q_pC": 40,
+      "Q_C": 4e-11,
+      "sigma_t_initial": 2.0,
+      "I_peak_A": 1.120603382632922
+    },
+    {
+      "label": "60pC 2ps",
+      "n_initial": 5000,
+      "n_final": 5000,
+      "transmission": 1.0,
+      "sigma_z_ps": 14.240266862807246,
+      "Q_pC": 60,
+      "Q_C": 6e-11,
+      "sigma_t_initial": 2.0,
+      "I_peak_A": 1.6809050739493832
+    },
+    {
+      "label": "100pC 2ps SC",
+      "n_initial": 5000,
+      "n_final": 4189,
+      "transmission": 0.8378,
+      "sigma_z_ps": 2.040682580579835,
+      "Q_pC": 100,
+      "Q_C": 1e-10,
+      "sigma_t_initial": 2.0,
+      "I_peak_A": 16.37853165901734
+    },
+    {
+      "label": "150pC 2ps SC",
+      "n_initial": 5000,
+      "n_final": 4189,
+      "transmission": 0.8378,
+      "sigma_z_ps": 2.040682580579835,
+      "Q_pC": 150,
+      "Q_C": 1.5e-10,
+      "sigma_t_initial": 2.0,
+      "I_peak_A": 24.567797488526008
+    },
+    {
+      "label": "200pC 2ps SC",
+      "n_initial": 5000,
+      "n_final": 4189,
+      "transmission": 0.8378,
+      "sigma_z_ps": 2.040682580579835,
+      "Q_pC": 200,
+      "Q_C": 2e-10,
+      "sigma_t_initial": 2.0,
+      "I_peak_A": 32.75706331803468
+    },
+    {
+      "label": "300pC 2ps SC",
+      "n_initial": 5000,
+      "n_final": 4189,
+      "transmission": 0.8378,
+      "sigma_z_ps": 2.040682580579835,
+      "Q_pC": 300,
+      "Q_C": 3e-10,
+      "sigma_t_initial": 2.0,
+      "I_peak_A": 49.135594977052016
+    }
+  ],
+  "0.5ps": [
+    {
+      "label": "20pC 0.5ps",
+      "n_initial": 5000,
+      "n_final": 4786,
+      "transmission": 0.9572,
+      "sigma_z_ps": 510.7546464812935,
+      "Q_pC": 20,
+      "Q_C": 2e-11,
+      "sigma_t_initial": 2.0,
+      "h_chirp": -8300000000.0,
+      "I_peak_A": 0.014953072025130854
+    },
+    {
+      "label": "40pC 0.5ps",
+      "n_initial": 5000,
+      "n_final": 4786,
+      "transmission": 0.9572,
+      "sigma_z_ps": 510.7546464812935,
+      "Q_pC": 40,
+      "Q_C": 4e-11,
+      "sigma_t_initial": 2.0,
+      "h_chirp": -8300000000.0,
+      "I_peak_A": 0.029906144050261707
+    },
+    {
+      "label": "60pC 0.5ps",
+      "n_initial": 5000,
+      "n_final": 4786,
+      "transmission": 0.9572,
+      "sigma_z_ps": 510.7546464812935,
+      "Q_pC": 60,
+      "Q_C": 6e-11,
+      "sigma_t_initial": 2.0,
+      "h_chirp": -8300000000.0,
+      "I_peak_A": 0.04485921607539256
+    },
+    {
+      "label": "100pC 0.5ps SC",
+      "n_initial": 5000,
+      "n_final": 2931,
+      "transmission": 0.5862,
+      "sigma_z_ps": 1.462853248216377,
+      "Q_pC": 100,
+      "Q_C": 1e-10,
+      "sigma_t_initial": 2.0,
+      "h_chirp": -8300000000.0,
+      "I_peak_A": 15.986563591150375
+    },
+    {
+      "label": "150pC 0.5ps SC",
+      "n_initial": 5000,
+      "n_final": 2931,
+      "transmission": 0.5862,
+      "sigma_z_ps": 1.462853248216377,
+      "Q_pC": 150,
+      "Q_C": 1.5e-10,
+      "sigma_t_initial": 2.0,
+      "h_chirp": -8300000000.0,
+      "I_peak_A": 23.97984538672556
+    },
+    {
+      "label": "200pC 0.5ps SC",
+      "n_initial": 5000,
+      "n_final": 2931,
+      "transmission": 0.5862,
+      "sigma_z_ps": 1.462853248216377,
+      "Q_pC": 200,
+      "Q_C": 2e-10,
+      "sigma_t_initial": 2.0,
+      "h_chirp": -8300000000.0,
+      "I_peak_A": 31.97312718230075
+    },
+    {
+      "label": "300pC 0.5ps SC",
+      "n_initial": 5000,
+      "n_final": 2931,
+      "transmission": 0.5862,
+      "sigma_z_ps": 1.462853248216377,
+      "Q_pC": 300,
+      "Q_C": 3e-10,
+      "sigma_t_initial": 2.0,
+      "h_chirp": -8300000000.0,
+      "I_peak_A": 47.95969077345112
+    }
+  ]
+}

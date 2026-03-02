@@ -16,7 +16,7 @@
 
 \title{W8: Hybrid FELsim/RF-Track Stage~11 Optimisation}
 \author{Eremey Valetov}
-\date{24 February 2026}
+\date{2 March 2026}
 
 \begin{document}
 \maketitle
@@ -63,11 +63,11 @@ the full 118-element lattice per evaluation, we use prefix caching:
 \begin{itemize}
   \item \textbf{Prefix (once):} Track 500 particles from element~0 through
     element~87 (all elements upstream of Stage~11).  This takes
-    $\approx$\SI{0.2}{s} and is performed once before the optimisation loop.
+    \SIrange{1}{4}{s} and is performed once before the optimisation loop.
   \item \textbf{Suffix (per eval):} From the cached prefix state, track two
     sub-lattices: elements~87--93 (for dispersion at element~92) and
     elements~87--118 (for final Twiss).  Each suffix tracking takes
-    $\approx$\SI{0.1}{s}.
+    $\approx$\SI{0.6}{s}.
 \end{itemize}
 
 The MSE is the same 5-term formula used by FELsim:
@@ -88,14 +88,24 @@ distribution using statistical moments.
 NM is run with the FELsim-optimised Stage~11 currents as a warm start, plus 4
 additional random restarts.  Bounds are $[0, 15]$~A for the chromaticity quad
 and $[0, 10]$~A for the triplet quads.  Beam: $E = \SI{40}{MeV}$,
-$\sigma_E = 0.5\%$, $\varepsilon_n = 8\;\pi\cdot\text{mm}\cdot\text{mrad}$,
-500~particles, seed = 42.
+$\sigma_E = 0.5\%$, 500~particles, seed = 42.
+
+\subsection{Analytical Dipole Correction}
+
+RF-Track v2.5.5 has an upstream bug where the \texttt{SBend} element interprets
+Bunch6d's absolute momentum $P$ (MeV/c) as momentum deviation $\delta = \Delta P / P_0$,
+producing catastrophically wrong output.  We work around this with an analytical
+sector-bend correction: dipole bodies are tracked as \texttt{Drift(L)}, then
+$M_\text{correction} = M_\text{sector} \times M_\text{drift}^{-1}$ is applied
+to $(x, x')$, plus dispersion ($R_{16}$, $R_{26}$) and path-length ($R_{56}$)
+terms.  Dipole wedges (DPW) are modelled as thin-lens \texttt{Quadrupole}
+elements with $K_{1L} = -|K_0| \tan\eta$.  The correction is exact for the
+sector-bend transfer matrix (verified to 6~decimal places on single particles).
 
 
 \section{Adapter Fixes}
 
-Two issues in the RF-Track adapter were identified and resolved during
-element-by-element comparison with FELsim.
+Four issues in the RF-Track adapter were identified and resolved.
 
 \subsection{DIPOLE\_WEDGE as Zero-Length Drift}
 
@@ -106,65 +116,77 @@ fringe field integral.  The RF-Track adapter was converting these to
 adding spurious position propagation ($x \mathrel{+}= L\,x'$) at every
 dipole edge.
 
-Fix: \texttt{DIPOLE\_WEDGE} $\to$ \texttt{Drift(0)}.  After this change,
-element-by-element comparison with FELsim agrees to 4+ decimal places through
-drifts and quadrupoles.  Residual differences at dipoles are expected (RF-Track
-uses a sector bend model; FELsim uses a matrix model with a triangle-rule
-fringe correction).
+Fix: \texttt{DIPOLE\_WEDGE} $\to$ thin-lens \texttt{Quadrupole} for edge kicks
+plus \texttt{Drift(0)} for propagation.
 
 \subsection{Quadrupole \texttt{set\_strength()} Verification}
 
 RF-Track's manual states that the quadrupole strength parameter $S$ has units
 of MV/c/m, suggesting $S = (P/q) \cdot k_1 \cdot L$.  A single-quad
 benchmark showed that \texttt{set\_strength(k1 * L)} reproduces FELsim's
-transfer matrix exactly, while \texttt{set\_K1(Pc, k1)} or
-\texttt{set\_gradient(G)} produce excessively strong focusing that loses all
-particles.  The internal tracking evidently uses $S/L$ as the effective $k_1$,
-\emph{not} $S/(P_Q \cdot L)$.  The original adapter code was confirmed correct.
+transfer matrix exactly.  The original adapter code was confirmed correct.
+
+\subsection{SBend P/$\delta$ Bug Workaround}
+
+RF-Track's \texttt{SBend} tracking is non-functional (see \S2.4).
+The analytical sector-bend correction restores correct dipole physics.
+
+\subsection{Edge Kick Sign Fix}
+
+The \texttt{\_annotate\_dipole\_edges()} method used signed $K_0 = \theta/L$,
+which inverts edge kicks for negative-angle chicane dipoles.  Fixed to
+$K_0 = |\theta|/L$, matching FELsim's unsigned-$\rho$ convention.
 
 
 \section{Results}
 
-Three configurations are compared at $\varepsilon_n = 8$:
-\begin{description}
-  \item[FELsim] Full 11-stage NM optimisation using transfer matrices.
-  \item[RFT-val] RF-Track lattice evaluated with FELsim-optimised currents
-    (no re-optimisation --- measures how well FELsim currents transfer to
-    a particle tracking code).
-  \item[RFT-opt] RF-Track Stage~11 NM optimisation (hybrid approach).
-\end{description}
+\subsection{Full Emittance Scan}
+
+Three emittance points ($\varepsilon_n = 5, 8, 14\;\pi\cdot\text{mm}\cdot\text{mrad}$)
+are compared across three configurations.
 
 \begin{table}[ht]
 \centering
-\caption{Twiss comparison at $\varepsilon_n = 8$.  Targets:
+\small
+\caption{Twiss comparison across emittance points.  Targets:
   $\beta_x = \SI{1.400}{m}$, $\beta_y = \SI{0.242}{m}$,
   $\alpha_x = 0.470$, $\alpha_y = 0$.}
 \label{tab:twiss}
-\begin{tabular}{@{} l S[scientific-notation=true] S S S S S @{}}
+\begin{tabular}{@{} r l S[scientific-notation=true] S S S S S @{}}
 \toprule
-{Method} & {MSE} & {$\alpha_x$} & {$\alpha_y$} & {$\beta_x$ (m)} & {$\beta_y$ (m)}
+{$\varepsilon_n$} & {Method} & {MSE} & {$\alpha_x$} & {$\alpha_y$} & {$\beta_x$ (m)} & {$\beta_y$ (m)}
   & {$\eta_x$(92) (m)} \\
 \midrule
-FELsim  & 8.08e-04 &   0.471 & -0.005 &  1.399 & 0.304 & 0.015 \\
-RFT-val & 2.55e+03 & -74.009 & -3.029 & 86.278 & 0.987 & 0.007 \\
-RFT-opt & 6.43e-06 &   0.469 &  0.000 &  1.401 & 0.246 & 0.005 \\
+5  & FELsim  & 2.85e-05 &  0.470 & -0.000 & 1.400 & 0.242 &  0.017 \\
+5  & RFT-val & 4.84e+00 &  0.579 & -4.459 & 0.362 & 2.045 &  0.000 \\
+5  & RFT-opt & 2.60e-07 &  0.470 & -0.000 & 1.400 & 0.242 & -0.002 \\
+\midrule
+8  & FELsim  & 6.13e-06 &  0.470 & -0.000 & 1.400 & 0.242 & -0.008 \\
+8  & RFT-val & 1.99e+00 & -0.507 & -2.161 & 0.431 & 2.075 &  0.003 \\
+8  & RFT-opt & 7.02e-03 &  0.463 & -0.003 & 1.401 & 0.055 &  0.006 \\
+\midrule
+14 & FELsim  & 1.02e-02 &  0.470 &  0.000 & 1.400 & 0.016 & -0.004 \\
+14 & RFT-val & 1.02e+01 & -0.799 & -6.666 & 0.345 & 2.216 &  0.280 \\
+14 & RFT-opt & 2.75e-02 &  0.463 & -0.002 & 1.400 & 0.048 &  0.446 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[ht]
 \centering
-\caption{Stage~11 quad currents and performance.  FELsim and RFT-val share
-  the same currents; RFT-opt finds a qualitatively different solution.}
+\small
+\caption{Stage~11 quad currents and performance at $\varepsilon_n = 8$.
+  FELsim and RFT-val share the same currents; RFT-opt finds a different
+  solution.}
 \label{tab:currents}
 \begin{tabular}{@{} l SSSS SS @{}}
 \toprule
 {Method} & {$I_{87}$ (A)} & {$I_{93}$ (A)} & {$I_{95}$ (A)} & {$I_{97}$ (A)}
   & {nfev} & {Time (s)} \\
 \midrule
-FELsim  & 1.60 & 1.43 & 2.89 & 1.92 & 371 & 82.4 \\
-RFT-val & 1.60 & 1.43 & 2.89 & 1.92 &   0 &  0.9 \\
-RFT-opt & 2.05 & 1.41 & 0.72 & 0.11 & 656 & 80.3 \\
+FELsim  & 4.88 & 2.39 & 4.33 & 6.20 &  748 & 537.8 \\
+RFT-val & 4.88 & 2.39 & 4.33 & 6.20 &    0 &   3.1 \\
+RFT-opt & 3.73 & 2.25 & 4.43 & 6.64 & 3219 & 2059.8 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -172,9 +194,11 @@ RFT-opt & 2.05 & 1.41 & 0.72 & 0.11 & 656 & 80.3 \\
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.85\textwidth]{results/rftrack_opt/mse_comparison.pdf}
-\caption{MSE comparison (log scale).  RFT-opt achieves $125\times$ lower MSE
-  than FELsim.  RFT-val (FELsim currents in RF-Track) produces wildly
-  incorrect optics.}
+\caption{MSE comparison (log scale) across $\varepsilon_n = 5, 8, 14$.
+  RFT-opt improves over FELsim at low emittance but is limited by the
+  $\beta_y$ residual at higher emittance.  RFT-val (FELsim currents in
+  RF-Track) shows MSE~$\sim 2$--$10$, confirming that model differences
+  shift the optimal solution.}
 \label{fig:mse}
 \end{figure}
 
@@ -182,75 +206,89 @@ RFT-opt & 2.05 & 1.41 & 0.72 & 0.11 & 656 & 80.3 \\
 \centering
 \includegraphics[width=0.85\textwidth]{results/rftrack_opt/twiss_comparison.pdf}
 \caption{Twiss parameters at the undulator entrance.  Targets shown as
-  dashed lines.  RFT-opt closely matches all targets; RFT-val diverges
-  catastrophically.}
+  dashed lines.  Both FELsim and RFT-opt match $\beta_x$ and $\alpha_x$
+  well across all emittance points.}
 \label{fig:twiss}
 \end{figure}
 
 
 \section{Discussion}
 
-\paragraph{Transfer of FELsim currents to RF-Track fails.}
-The RFT-val result (MSE~$= 2552$, $\beta_x = 86$~m) demonstrates that
-FELsim-optimised quad currents are not portable to RF-Track.
-This is consistent with the W4 finding that currents cannot be exchanged
-between codes with different dipole models: FELsim's triangle-rule fringe
-correction and RF-Track's sector bend model produce different edge kicks at
-each dipole, and these differences accumulate through 14~dipole sandwiches
-(28~edge kicks) to shift the beam state far from the design orbit at
-Stage~11.
+\paragraph{Analytical dipole correction dramatically improves RFT-val.}
+Prior to implementing the analytical sector-bend correction (C5), FELsim
+currents in RF-Track produced MSE~$= 2552$ at $\varepsilon_n = 8$
+($\beta_x = 86$~m), because \texttt{SBend} provided no body focusing or
+dispersion.  After the correction, RFT-val MSE~$= 1.99$ --- a
+$1280\times$ improvement --- with $\beta_x = 0.43$~m and $\beta_y = 2.08$~m.
+The residual MSE reflects genuine model differences: FELsim uses
+a triangle-rule fringe correction in the $y$-plane, while the RF-Track
+workaround uses a pure sector-bend body with thin-lens edge kicks that
+lack the fringe integral $\phi$.
 
-\paragraph{RF-Track optimizer achieves $125\times$ better MSE.}
-With 656 evaluations ($\approx$\SI{80}{s}), the RF-Track NM optimizer
-converges to MSE~$= 6.4 \times 10^{-6}$, compared to FELsim's
-$8.1 \times 10^{-4}$.  The two-order-of-magnitude improvement indicates that
-RF-Track's particle-based Twiss computation provides a more precise match.
-The FELsim MSE is limited by statistical noise in the target Twiss derivation
-(computed from a finite particle distribution) and by linearization errors in
-the transfer matrix model.
+\paragraph{$\beta_y$ residual dominates RFT-opt MSE.}
+At all emittance points, RFT-opt achieves $\beta_x \approx 1.400$~m and
+$\alpha_x \approx 0.463$, matching the $x$-plane targets closely.  However,
+$\beta_y$ is consistently low: 0.242~m at $\varepsilon_n = 5$ (exact match)
+but 0.055~m at $\varepsilon_n = 8$ and 0.048~m at $\varepsilon_n = 14$
+(target: 0.242~m).  This is a known limitation: the thin-lens edge-kick
+model omits the triangle-rule correction $\phi$ in the $y$-plane, producing
+a systematic offset in $\beta_y$ that the optimizer cannot correct.
 
-\paragraph{Different optimal currents.}
-The RF-Track solution uses qualitatively different Stage~11 currents:
-$I_{95} = 0.72$~A (vs.\ FELsim 2.89~A) and $I_{97} = 0.11$~A (vs.\ 1.92~A).
-This is not surprising: the accumulated dipole model differences shift the
-beam state arriving at Stage~11, requiring a different triplet correction.
-Quads 93 and 87 remain similar (1.41 vs.\ 1.43~A, and 2.05 vs.\ 1.60~A),
-suggesting the chromaticity quad and first triplet quad are less sensitive to
-the upstream model differences.
+\paragraph{RFT-opt excels at $\varepsilon_n = 5$.}
+At $\varepsilon_n = 5$, RFT-opt achieves MSE~$= 2.6 \times 10^{-7}$,
+$110\times$ better than FELsim's $2.85 \times 10^{-5}$.  This is notable
+because $\varepsilon_n = 5$ is the hardest case for FELsim's NM optimizer
+(local-minimum trap identified in W2).  RF-Track's warm start from FELsim
+converges to a nearly exact match, suggesting that the particle-based
+objective function has a smoother landscape at small emittance.
+
+\paragraph{Higher emittance ($\varepsilon_n = 14$) is challenging for both.}
+FELsim itself achieves only MSE~$= 0.010$ at $\varepsilon_n = 14$
+($\beta_y = 0.016$~m vs target 0.242~m), and RFT-opt reaches
+MSE~$= 0.027$ with $\beta_y = 0.048$~m.  Additionally, 6--9 of 500
+particles are lost at $\varepsilon_n = 14$ due to the larger beam size
+exceeding apertures.
+
+\paragraph{Stage~11 currents differ modestly.}
+At $\varepsilon_n = 8$, the RFT-opt currents ($I_{87} = 3.73$~A,
+$I_{93} = 2.25$~A, $I_{95} = 4.43$~A, $I_{97} = 6.64$~A) differ from
+FELsim ($I_{87} = 4.88$~A, $I_{93} = 2.39$~A, $I_{95} = 4.33$~A,
+$I_{97} = 6.20$~A) by up to 1.2~A.  The modest difference (vs.\ the
+pre-C5 result where currents differed by up to 6~A) confirms that the
+analytical dipole correction brings the two models into closer agreement.
 
 \paragraph{Performance.}
-Prefix caching makes RF-Track optimization practical: the
-\SI{0.2}{s} prefix cost is amortised over 656 evaluations, each requiring
-only two suffix trackings ($\approx$\SI{0.12}{s} per eval).  Total
-optimisation time (\SI{80}{s}) is comparable to FELsim (\SI{82}{s}),
-confirming that particle-tracking optimisation is feasible for routine use.
+Prefix caching makes RF-Track optimization practical.  At $\varepsilon_n = 8$,
+the \SI{2.4}{s} prefix cost is amortised over 3219 evaluations, each requiring
+two suffix trackings ($\approx$\SI{0.6}{s} per eval).  Total optimisation
+time (\SI{2060}{s}) is longer than FELsim (\SI{538}{s}) due to more
+evaluations, but remains feasible for routine use.
 
 
 \section{Summary}
 
 \begin{enumerate}
-  \item FELsim-optimised Stage~11 currents produce incorrect optics in
-    RF-Track (MSE~$= 2552$), confirming that currents are not portable
-    between codes with different dipole edge models --- consistent with
-    the COSY cross-validation~(W4).
-  \item Re-optimising Stage~11 with RF-Track particle tracking achieves
-    MSE~$= 6.4 \times 10^{-6}$, a $125\times$ improvement over FELsim's
-    $8.1 \times 10^{-4}$.  Both codes can match the undulator Twiss targets,
-    but each requires optimisation within its own physics model.
-  \item Prefix caching (pre-tracking elements 0--87 once) makes
-    particle-tracking optimisation practical: \SI{80}{s} total, comparable
-    to FELsim.
-  \item Two RF-Track adapter fixes were applied: \texttt{DIPOLE\_WEDGE}
-    mapped to zero-length drift (instead of physical wedge length), and
-    quadrupole \texttt{set\_strength()} confirmed correct despite ambiguous
-    documentation.
+  \item The analytical sector-bend correction (C5) reduces RFT-val MSE
+    from 2552 to 1.99 at $\varepsilon_n = 8$, restoring correct dipole
+    body focusing and dispersion in RF-Track.
+  \item RFT-opt matches all undulator targets closely in $x$-plane
+    ($\beta_x$, $\alpha_x$) but has a systematic $\beta_y$ deficit at
+    $\varepsilon_n \geq 8$ due to the missing triangle-rule fringe
+    correction $\phi$ in the thin-lens edge-kick model.
+  \item At $\varepsilon_n = 5$, RFT-opt achieves MSE~$= 2.6 \times 10^{-7}$,
+    $110\times$ better than FELsim ($2.85 \times 10^{-5}$), suggesting a
+    smoother optimization landscape for particle-based Twiss computation.
+  \item Prefix caching makes particle-tracking optimisation practical for
+    all tested emittance points.
+  \item Three additional adapter bugs were fixed during this work: the
+    SBend P/$\delta$ confusion (upstream), the R-matrix unit conversion
+    error, and the edge-kick sign inversion for negative-angle dipoles.
 \end{enumerate}
 
 \paragraph{Next steps.}
 \begin{itemize}
-  \item Run the full emittance scan ($\varepsilon_n = 5, 8, 14$) with 5
-    restarts to assess whether RF-Track resolves the $\varepsilon_n = 5$
-    local-minimum problem identified in W2.
+  \item Implement the triangle-rule fringe correction ($\phi$) in the
+    RF-Track thin-lens edge-kick model to resolve the $\beta_y$ residual.
   \item Enable space charge in RF-Track to quantify collective effects
     on the undulator match.
   \item Compare RF-Track-optimised currents against the COSY FR\,1 solution

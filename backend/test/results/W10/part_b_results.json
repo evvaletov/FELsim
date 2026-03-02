@@ -1,0 +1,90 @@
+[
+  {
+    "label": "B1: baseline",
+    "sigma_E_pct": 0.5,
+    "h_chirp": 0.0,
+    "sigma_delta_eff": 0.005,
+    "transmission": 1.0,
+    "n_final": 5000,
+    "sigma_z_ps": 14.240266862807246,
+    "compression_ratio": 0.1404468061777412,
+    "I_peak_A": 1.6809050739493832
+  },
+  {
+    "label": "B1 RFT: baseline",
+    "sigma_E_pct": 0.5,
+    "h_chirp": 0.0,
+    "sigma_delta_eff": 0.005,
+    "transmission": 0.8378,
+    "n_final": 4189,
+    "sigma_z_ps": 2.040682580579835,
+    "compression_ratio": 0.9800642290148448,
+    "I_peak_A": 9.827118995410403
+  },
+  {
+    "label": "B2: C=2 chirp",
+    "sigma_E_pct": 0.5,
+    "h_chirp": -4200000000.0,
+    "sigma_delta_eff": 0.009775479527879948,
+    "transmission": 0.9948,
+    "n_final": 4974,
+    "sigma_z_ps": 53.06163311741448,
+    "compression_ratio": 0.03769201742385899,
+    "I_peak_A": 0.44876241897624053
+  },
+  {
+    "label": "B3: C=4 chirp",
+    "sigma_E_pct": 0.5,
+    "h_chirp": -8300000000.0,
+    "sigma_delta_eff": 0.01733666634621547,
+    "transmission": 0.9572,
+    "n_final": 4786,
+    "sigma_z_ps": 510.7546464812935,
+    "compression_ratio": 0.003915774459965193,
+    "I_peak_A": 0.04485921607539256
+  },
+  {
+    "label": "B3 RFT: C=4 chirp",
+    "sigma_E_pct": 0.5,
+    "h_chirp": -8300000000.0,
+    "sigma_delta_eff": 0.01733666634621547,
+    "transmission": 0.5862,
+    "n_final": 2931,
+    "sigma_z_ps": 1.462853248216377,
+    "compression_ratio": 1.3671911399441834,
+    "I_peak_A": 9.591938154690224
+  },
+  {
+    "label": "B4: C=6 chirp",
+    "sigma_E_pct": 0.5,
+    "h_chirp": -12500000000.0,
+    "sigma_delta_eff": 0.02549509756796392,
+    "transmission": 0.8904,
+    "n_final": 4452,
+    "sigma_z_ps": 645.7943202013722,
+    "compression_ratio": 0.0030969612730201127,
+    "I_peak_A": 0.03300291086722514
+  },
+  {
+    "label": "B5: \u03c3_E=2% only",
+    "sigma_E_pct": 2.0,
+    "h_chirp": 0.0,
+    "sigma_delta_eff": 0.02,
+    "transmission": 0.931,
+    "n_final": 4655,
+    "sigma_z_ps": 433.40801106007086,
+    "compression_ratio": 0.0046145893683603315,
+    "I_peak_A": 0.05141786772403549
+  },
+  {
+    "label": "B6: \u03c3_E=3% only",
+    "sigma_E_pct": 3.0,
+    "h_chirp": 0.0,
+    "sigma_delta_eff": 0.03,
+    "transmission": 0.85,
+    "n_final": 4250,
+    "sigma_z_ps": 470.41079733382514,
+    "compression_ratio": 0.004251603091033449,
+    "I_peak_A": 0.04325167792871593
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "label": "A1: 2ps COSY",
+    "transmission": 1.0,
+    "n_initial": 5000,
+    "n_final": 5000,
+    "sigma_z_ps": 14.240266862807246,
+    "I_peak_A": 1.6809050739493832,
+    "sigma_t_ps_initial": 2.0
+  },
+  {
+    "label": "A2: 2ps RF-Track",
+    "transmission": 0.8378,
+    "n_initial": 5000,
+    "n_final": 4189,
+    "sigma_z_ps": 2.040682580579835,
+    "I_peak_A": 9.827118995410403,
+    "sigma_t_ps_initial": 2.0
+  },
+  {
+    "label": "A3: 0.5ps COSY",
+    "transmission": 1.0,
+    "n_initial": 5000,
+    "n_final": 5000,
+    "sigma_z_ps": 14.121810413161574,
+    "I_peak_A": 1.6950048275522118,
+    "sigma_t_ps_initial": 0.5
+  },
+  {
+    "label": "A4: 0.5ps RF-Track",
+    "transmission": 0.8378,
+    "n_initial": 5000,
+    "n_final": 4189,
+    "sigma_z_ps": 0.5230754249290311,
+    "I_peak_A": 38.338697624611356,
+    "sigma_t_ps_initial": 0.5
+  }
+]
