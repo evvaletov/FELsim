@@ -13,7 +13,7 @@ class COSYParticleSimulator(COSYSimulator):
     particle generation, and statistical analysis at arbitrary beamline positions.
 
     Coordinate conventions:
-        FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF(10^-3), δW/W(10^-3)]
+        FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF(10^-3), ΔK/K₀(10^-3)]
         COSY:   [x(m), a=px/p0, y(m), b=py/p0, l(m), δK=(K-K0)/K]
 
     Notes:
@@ -65,7 +65,7 @@ class COSYParticleSimulator(COSYSimulator):
 
         Parameters:
             mean: distribution center
-            std_dev: [σx(mm), σx'(mrad), σy(mm), σy'(mrad), σΔt/T(10^-3), σδW/W(10^-3)]
+            std_dev: [σx(mm), σx'(mrad), σy(mm), σy'(mrad), σΔt/T(10^-3), σΔK/K₀(10^-3)]
             num_particles: particle count
 
             Beam physics interface (alternative to std_dev):
@@ -148,7 +148,7 @@ class COSYParticleSimulator(COSYSimulator):
             self.logger.debug(f"              σy={np.std(particles[:, 2]):.3f} mm, "
                               f"σy'={np.std(particles[:, 3]):.3f} mrad")
             self.logger.debug(f"              σΔt/T={np.std(particles[:, 4]):.3f}×10⁻³, "
-                              f"σδW/W={np.std(particles[:, 5]):.3f}×10⁻³")
+                              f"σΔK/K₀={np.std(particles[:, 5]):.3f}×10⁻³")
 
         return particles
 
@@ -241,7 +241,7 @@ class COSYParticleSimulator(COSYSimulator):
             self.logger.debug(f"  σy     = {rms[2]:9.3f} mm")
             self.logger.debug(f"  σy'    = {rms[3]:9.3f} mrad")
             self.logger.debug(f"  σΔt/T  = {rms[4]:9.3f} ×10⁻³")
-            self.logger.debug(f"  σδW/W  = {rms[5]:9.3f} ×10⁻³")
+            self.logger.debug(f"  σΔK/K₀ = {rms[5]:9.3f} ×10⁻³")
             self.logger.debug(f"\nEmittances (geometric):")
             self.logger.debug(f"  εx = {epsilon_x:.3f} π·mm·mrad")
             self.logger.debug(f"  εy = {epsilon_y:.3f} π·mm·mrad")
@@ -465,7 +465,7 @@ class COSYParticleSimulator(COSYSimulator):
             valid = particles[~(has_nan | has_inf)]
 
             coord_names = {
-                'felsim': ['x(mm)', "x'(mrad)", 'y(mm)', "y'(mrad)", 'Δt/T(10^-3)', 'δW/W(10^-3)'],
+                'felsim': ['x(mm)', "x'(mrad)", 'y(mm)', "y'(mrad)", 'Δt/T(10^-3)', 'ΔK/K₀(10^-3)'],
                 'cosy': ['x(m)', 'a', 'y(m)', 'b', 'l(m)', 'δK']
             }
             names = coord_names.get(coordinate_system, [f'coord_{i}' for i in range(6)])
@@ -552,8 +552,8 @@ class COSYParticleSimulator(COSYSimulator):
                 self.logger.debug(f"\n{'=' * 70}")
                 self.logger.debug(f"Correlation Matrix")
                 self.logger.debug(f"{'=' * 70}")
-                self.logger.debug("        x      x'      y      y'    Δt/T   δW/W")
-                coord_names = ['x   ', "x'  ", 'y   ', "y'  ", 'Δt/T', 'δW/W']
+                self.logger.debug("        x      x'      y      y'    Δt/T  ΔK/K₀")
+                coord_names = ['x   ', "x'  ", 'y   ', "y'  ", 'Δt/T', 'ΔK/K₀']
                 for i, name in enumerate(coord_names):
                     row_str = f"{name}  " + "".join(f"{corr[i, j]:6.3f} " for j in range(6))
                     self.logger.debug(row_str)
@@ -588,13 +588,13 @@ class COSYParticleSimulator(COSYSimulator):
         - Angles → momentum ratios: exact 3D momentum decomposition
           tan(θ) = p_perp/p_z, normalized by p0
         - Longitudinal: ΔToF/T_RF → l = -(t-t0)*v0*γ/(1+γ)
-        - Energy: δW/W → δK = (KE-KE0)/KE0
+        - Energy: ΔK/K₀ → δK = (KE-KE0)/KE0
 
         See Dragt et al., "Lie Methods for Nonlinear Dynamics with Applications
         to Accelerator Physics" for coordinate system details.
 
         Parameters:
-            particles_felsim: (N, 6) array [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF, δW/W]
+            particles_felsim: (N, 6) array [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF, ΔK/K₀]
             energy: beam kinetic energy [MeV]
 
         Returns:
@@ -675,7 +675,7 @@ class COSYParticleSimulator(COSYSimulator):
                     self.logger.debug(f"    FELsim coordinates:")
                     self.logger.debug(f"      x'  = {xp_mrad[idx]:12.6f} mrad")
                     self.logger.debug(f"      y'  = {yp_mrad[idx]:12.6f} mrad")
-                    self.logger.debug(f"      δW/W = {zp_energy[idx]:12.6f} ×10⁻³")
+                    self.logger.debug(f"      ΔK/K₀ = {zp_energy[idx]:12.6f} ×10⁻³")
                     self.logger.debug(f"    Intermediate calculations:")
                     self.logger.debug(f"      tan(x') = {tan_xp[idx]:12.6e}")
                     self.logger.debug(f"      tan(y') = {tan_yp[idx]:12.6e}")
@@ -706,7 +706,7 @@ class COSYParticleSimulator(COSYSimulator):
                 if np.any(neg_KE_mask):
                     n_neg = np.sum(neg_KE_mask)
                     self.logger.warning(f"    {n_neg} particles have negative KE!")
-                    self.logger.warning(f"    This occurs when δW/W < "
+                    self.logger.warning(f"    This occurs when ΔK/K₀ < "
                                         f"{-KE0 * 1000 / (KE0 + E0):.1f}×10⁻³")
 
         if self.debug:
@@ -918,7 +918,7 @@ class COSYParticleSimulator(COSYSimulator):
                 self.logger.debug(f"  y     = {np.std(particles_felsim[:, 2]):9.3f} mm")
                 self.logger.debug(f"  y'    = {np.std(particles_felsim[:, 3]):9.3f} mrad")
                 self.logger.debug(f"  Δt/T  = {np.std(particles_felsim[:, 4]):9.3f} ×10⁻³")
-                self.logger.debug(f"  δW/W  = {np.std(particles_felsim[:, 5]):9.3f} ×10⁻³")
+                self.logger.debug(f"  ΔK/K₀ = {np.std(particles_felsim[:, 5]):9.3f} ×10⁻³")
                 self.logger.debug(f"{'=' * 70}\n")
 
         if filter_invalid:
@@ -1261,7 +1261,7 @@ class COSYParticleSimulator(COSYSimulator):
         max_abs = np.max(abs_errors, axis=0)
         max_rel = np.max(rel_errors, axis=0)
 
-        coord_names = ['x(mm)', "x'(mrad)", 'y(mm)', "y'(mrad)", 'Δt/T(10^-3)', 'δW/W(10^-3)']
+        coord_names = ['x(mm)', "x'(mrad)", 'y(mm)', "y'(mrad)", 'Δt/T(10^-3)', 'ΔK/K₀(10^-3)']
 
         results = {
             'passed': np.all(max_abs < tolerance),
