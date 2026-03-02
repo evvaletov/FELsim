@@ -15,10 +15,10 @@ import numpy as np
 
 class CoordinateSystem(Enum):
     """Supported coordinate systems for particle distributions."""
-    FELSIM = "felsim"  # [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T(10^-3), δW/W(10^-3)]
+    FELSIM = "felsim"  # [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF×10³, ΔK/K₀×10³]
     COSY = "cosy"  # [x(m), a, y(m), b, l(m), δK]
     ELEGANT = "elegant"  # [x(m), x'(rad), y(m), y'(rad), t(s), δ]
-    RFTRACK = "rftrack"  # [x(m), x'(rad), y(m), y'(rad), z(m), δ]
+    RFTRACK = "rftrack"  # [x(mm), x'(mrad), y(mm), y'(mrad), ct(mm/c), P(MeV/c)]
 
 
 class SimulationMode(Enum):

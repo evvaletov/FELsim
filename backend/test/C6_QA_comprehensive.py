@@ -40,7 +40,9 @@ def _relativistic(KE, E0):
 # =========================================================================
 
 def _felsim_to_rftrack(p, KE, m):
+    t_scale = PC.C / PC.f_RF_default  # c/f [m] ≈ 0.105
     r = p.copy()
+    r[:, 4] = p[:, 4] * t_scale
     K = KE * (1.0 + p[:, 5] * 1e-3)
     E = K + m
     r[:, 5] = np.sqrt(E**2 - m**2)
@@ -48,7 +50,9 @@ def _felsim_to_rftrack(p, KE, m):
 
 
 def _rftrack_to_felsim(p, KE, m):
+    t_scale = PC.C / PC.f_RF_default
     r = p.copy()
+    r[:, 4] = p[:, 4] / t_scale
     K = np.sqrt(p[:, 5]**2 + m**2) - m
     r[:, 5] = (K / KE - 1.0) * 1e3
     return r

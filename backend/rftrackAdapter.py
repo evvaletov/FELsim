@@ -44,7 +44,7 @@ class RFTrackAdapter(SimulatorBase):
         [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
 
     This adapter transforms to/from FELsim coordinates:
-        [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T(10^-3), δW/W(10^-3)]
+        [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF×10³, ΔK/K₀×10³]
 
     Examples
     --------
@@ -99,6 +99,7 @@ class RFTrackAdapter(SimulatorBase):
                  aperture: float = 0.05,
                  G_quad: Optional[float] = None,
                  dipole_slices: int = 20,
+                 rf_frequency: float = None,
                  debug: bool = None):
         """
         Initialise RF-Track adapter.
@@ -133,6 +134,9 @@ class RFTrackAdapter(SimulatorBase):
             tracked as Drifts with post-tracking analytical correction
             (body focusing + dispersion + R₅₆). Set to 0 to disable.
             Default: 20
+        rf_frequency : float, optional
+            RF frequency in Hz for FELsim ↔ RF-Track coord5 conversion.
+            Default: 2856 MHz (UH FEL S-band linac)
         debug : bool, optional
             Enable debug logging
         """
@@ -177,6 +181,10 @@ class RFTrackAdapter(SimulatorBase):
         self.sc_mesh = sc_mesh or (32, 32, 64)
         self.sc_nsteps = 1  # SC kicks per element (Lattice mode)
         self._space_charge_effect = None
+
+        # RF frequency for FELsim ↔ RF-Track coord5 conversion
+        self._rf_frequency = rf_frequency if rf_frequency is not None else PhysicalConstants.f_RF_default
+        self._t_scale = PhysicalConstants.C / self._rf_frequency  # c/f [m] ≈ 0.105
 
         # Physical aperture mode
         self._physical_apertures = False
@@ -227,7 +235,7 @@ class RFTrackAdapter(SimulatorBase):
         ----------
         particles : ndarray (N, 6)
             Initial distribution in FELsim coordinates:
-            [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T(10^-3), δW/W(10^-3)]
+            [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF×10³, ΔK/K₀×10³]
         mode : SimulationMode, optional
             Ignored (RF-Track only supports particle tracking)
 
@@ -510,9 +518,10 @@ class RFTrackAdapter(SimulatorBase):
         Transform particle coordinates between systems.
 
         Coordinate systems:
-        - FELSIM: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T(10^-3), δW/W(10^-3)]
-        - RFTRACK: [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
+        - FELSIM: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF×10³, ΔK/K₀×10³]
+        - RFTRACK: [x(mm), x'(mrad), y(mm), y'(mrad), ct(mm/c), P(MeV/c)]
 
+        Coord5 conversion: ct_mm = coord5 × c/f_RF (the ×10³ and m→mm cancel).
         Note: RF-Track Bunch6d uses mm, mrad, mm/c, and MeV/c units.
         Column 5 is momentum P, not energy E.
 
@@ -540,12 +549,9 @@ class RFTrackAdapter(SimulatorBase):
             # RF-Track: [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
             # Transverse coordinates: same units, no conversion needed
             result[:, 0:4] = particles[:, 0:4]
-            # Longitudinal: pass-through. FELsim coord5 (ΔToF/T×10³) and RF-Track
-            # coord5 (ct in mm) use different units. The pass-through is valid because
-            # (a) the round-trip is self-consistent, (b) R56 corrections are applied
-            # in RF-Track's native mm/c, and (c) only relative timing matters.
-            # For absolute longitudinal analysis, the adapter would need rf_frequency.
-            result[:, 4] = particles[:, 4]
+            # Longitudinal: FELsim ΔToF/T_RF×10³ → RF-Track ct [mm]
+            # ct_mm = coord5 × c/f_RF (the ×10³ and m→mm cancel)
+            result[:, 4] = particles[:, 4] * self._t_scale
             # FELsim coord6 = ΔK/K₀ × 10³ → RF-Track P [MeV/c] (exact)
             K = self.beam_energy * (1.0 + particles[:, 5] * 1e-3)
             E = K + self.particle_mass
@@ -556,8 +562,8 @@ class RFTrackAdapter(SimulatorBase):
             # FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T×10³, ΔK/K₀×10³]
             # Transverse coordinates: same units
             result[:, 0:4] = particles[:, 0:4]
-            # Longitudinal: pass-through (see FELSIM→RFTRACK comment above)
-            result[:, 4] = particles[:, 4]
+            # Longitudinal: RF-Track ct [mm] → FELsim ΔToF/T_RF×10³
+            result[:, 4] = particles[:, 4] / self._t_scale
             # RF-Track P [MeV/c] → FELsim coord6 = ΔK/K₀ × 10³ (exact)
             K = np.sqrt(particles[:, 5]**2 + self.particle_mass**2) - self.particle_mass
             result[:, 5] = (K / self.beam_energy - 1.0) * 1e3
