@@ -178,16 +178,14 @@
 - Two scenarios: 2 ps → 2 ps (transport) and 2 ps → 0.5 ps (compression)
 - RF-Track particle tracking with physical apertures for Stage 11 NM optimization
 - Objective: w_t × MSE_Twiss + w_T × (1-T)² + w_σ × (σ_t/σ_target - 1)²
-- **Results (pre-C5 fix, with missing edge angles):**
+- **Results (post-C5 re-run with analytical dipole correction):**
   - 2ps transport: MSE=0.175, T=42.8%, σ_t=1.83 ps, I_peak=5.6 A
   - 0.5ps compress: MSE=0.071, T=28.4%, σ_t=1.31 ps (target 0.5), I_peak=5.2 A
   - Compression scenario failed — σ_t target unreachable with Stage 11 quads alone
-- **Note:** C5 workaround now implemented (analytical dipole correction). Re-run
-  to get updated results with correct dipole physics.
 - Script: `W11_throughput_opt.py`
 - Results: `results/W11/`
 
-### W10. Beam Losses & Bunch Compression Study [IN PROGRESS]
+### W10. Beam Losses & Bunch Compression Study [DONE 2026-03-02]
 - Quantifies particle losses through the full transport line with physical apertures
 - Part A: Transmission baseline at 2 ps and 0.5 ps (COSY + RF-Track)
 - Part B: Bunch compression via negative chirp — demonstrates chirp required,

@@ -40,8 +40,8 @@ class RFTrackAdapter(SimulatorBase):
     - Synchrotron radiation and wakefields
     - Mixed particle species
 
-    Coordinate System (RF-Track native):
-        [x(m), x'(rad), y(m), y'(rad), t(s), δ]
+    Coordinate System (RF-Track Bunch6d):
+        [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
 
     This adapter transforms to/from FELsim coordinates:
         [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T(10^-3), δW/W(10^-3)]
@@ -80,6 +80,9 @@ class RFTrackAdapter(SimulatorBase):
     DIPOLE_HALF_GAP = 0.00724          # 14.48 mm gap / 2
     DIPOLE_HALF_WIDTH = 0.025          # 50 mm placeholder / 2
     BEAM_PIPE_RADIUS = 0.0127          # 1" beam pipe
+
+    # Near-zero length for DPW thin-lens quadrupoles — true zero segfaults in RF-Track
+    DPW_THIN_LENS_LENGTH = 1e-10
 
     def __init__(self,
                  lattice_path: Optional[str] = None,
@@ -445,7 +448,7 @@ class RFTrackAdapter(SimulatorBase):
             if wedge_angle != 0 and K0 != 0:
                 K1L = -K0 * np.tan(wedge_angle)
                 elem = rft.Quadrupole()
-                elem.set_length(1e-10)  # near-zero; true zero segfaults
+                elem.set_length(self.DPW_THIN_LENS_LENGTH)
                 elem.set_strength(K1L)
             else:
                 elem = rft.Drift(0)
@@ -615,6 +618,8 @@ class RFTrackAdapter(SimulatorBase):
             self.logger.info(
                 f"Annotated {n_annotated} DPW-DPH-DPW triplets for edge kick conversion"
             )
+        else:
+            self.logger.debug("No DPW-DPH-DPW triplets found")
 
     def _build_sliced_dipole(self, length, angle_rad, ap_x, ap_y):
         """Build a sector bend from N Corrector+Drift slices (split-operator).
@@ -669,7 +674,9 @@ class RFTrackAdapter(SimulatorBase):
 
         Also applies:
         - Dispersion: R₁₆ = ρ(1-cos θ), R₂₆ = sin θ (via δ = ΔP/P₀)
-        - Path length: R₅₆ correction (TODO: implement if needed)
+        - Path length: R₅₆ = -(ρ sin θ - L) (ultra-relativistic approximation,
+          omits 1/γ² velocity term; error ~1/(θ²γ²) per dipole, negligible for
+          40 MeV electrons where γ ≈ 79)
 
         Parameters
         ----------
@@ -684,6 +691,10 @@ class RFTrackAdapter(SimulatorBase):
             Reference momentum [MeV/c]
         """
         if ps.ndim != 2 or ps.shape[0] == 0:
+            return ps
+        if abs(angle_rad) < 1e-12:
+            logger = get_logger_with_fallback(__name__)
+            logger.warning("_apply_sector_bend_correction: near-zero angle (%.2e), skipping", angle_rad)
             return ps
 
         theta = angle_rad

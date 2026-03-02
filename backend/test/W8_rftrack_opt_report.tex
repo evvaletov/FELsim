@@ -246,8 +246,9 @@ objective function has a smoother landscape at small emittance.
 FELsim itself achieves only MSE~$= 0.010$ at $\varepsilon_n = 14$
 ($\beta_y = 0.016$~m vs target 0.242~m), and RFT-opt reaches
 MSE~$= 0.027$ with $\beta_y = 0.048$~m.  Additionally, 6--9 of 500
-particles are lost at $\varepsilon_n = 14$ due to the larger beam size
-exceeding apertures.
+particles are lost \emph{in RF-Track} at $\varepsilon_n = 14$ due to the
+larger beam size exceeding apertures (FELsim uses transfer matrices
+without aperture cuts and reports no losses).
 
 \paragraph{Stage~11 currents differ modestly.}
 At $\varepsilon_n = 8$, the RFT-opt currents ($I_{87} = 3.73$~A,
