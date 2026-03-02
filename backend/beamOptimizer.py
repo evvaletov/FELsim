@@ -192,18 +192,22 @@ class beamOptimizer():
         # Time speed to minimize difference of objective function
         startTime = time.perf_counter()
         if method == 'glyfada':
-            from glyfadaAdapter import GlyfadaOptimizer
+            from glyfadaAdapter import GlyfadaOptimizer, OPTIONAL_CONFIG_KEYS
             try:
                 import cloudpickle as pickle
             except ImportError:
                 import pickle
 
-            glyfada_kwargs = {
-                k: kwargs[k] for k in (
-                    'pop_size', 'max_gen', 'sigma', 'n_processes',
-                    'timeout_minutes', 'algorithm', 'debug'
-                ) if k in kwargs
-            }
+            CORE_KEYS = (
+                'pop_size', 'max_gen', 'sigma', 'n_processes',
+                'timeout_minutes', 'algorithm', 'debug'
+            )
+            glyfada_kwargs = {k: kwargs[k] for k in CORE_KEYS if k in kwargs}
+
+            extra_config = {k: kwargs[k] for k in OPTIONAL_CONFIG_KEYS if k in kwargs}
+            if extra_config:
+                glyfada_kwargs['extra_config'] = extra_config
+
             optimizer = GlyfadaOptimizer(
                 objective_func=self._optiSpeed,
                 variable_names=self.variablesToOptimize,

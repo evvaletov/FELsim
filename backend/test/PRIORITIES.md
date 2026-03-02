@@ -1,6 +1,6 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-02-23)
+**Date:** 2026-02-11 (updated 2026-02-24)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
 
 ---
@@ -65,6 +65,139 @@
 - Results: `results/params_05ps/W6/benchmark_results.csv`,
   `mse_comparison.eps`, `time_comparison.eps`
 - Implementation: `--w6` flag in `UHM_beamline_opt_05ps_params.py`
+
+### W7. Glyfada Config Optimization & Re-Benchmark [IN PROGRESS]
+- Re-benchmarks Glyfada against NM with optimized configurations leveraging
+  CMA-ES, constraint handling (feasibility_rules), warm-starting from NM
+  solution, and tighter bounds (±3A around NM result).
+- **Config A (CMA-ES):** pop_size=20, max_gen=150, initial_sigma=0.3,
+  feasibility_rules constraint handling. 3000 evals.
+- **Config B (NSGA-II Phased):** pop_size=30, max_gen=100, two phases
+  (σ=0.05 → σ=0.01 at gen 50). 3000 evals.
+- **Key improvements over W6:** warm-starting, CMA-ES algorithm, constraint
+  handling replaces blunt 1e6 penalty, informed bounds, 5× more evals.
+- glyfadaAdapter updated with extra_config pass-through for new Glyfada
+  features (CMA-ES, phased optimization, constraints).
+- glyfada_eval updated with stability constraint output.
+- Results: `results/params_05ps/W7/`
+- Implementation: `--w7` flag in `UHM_beamline_opt_05ps_params.py`
+
+### W9. COSY Longitudinal Study [IN PROGRESS]
+- Full 3D (6D phase space) COSY simulation with longitudinal diagnostics
+- Extracts R56, T566, coupling terms from optimised beamline
+- Propagates 6D bunches for 0.5 ps and 2 ps modes
+- Tests adding R56=0 as an optimisation objective
+- Reviewer verdict on what changes when switching bunch length
+- Script: `W9_cosy_longitudinal_study.py`
+- Results: `results/W9/`
+
+### I6. COSY σ_z Blowup Investigation [HIGH PRIORITY — MANUAL]
+- COSY particle tracking shows σ_z ≈ 92–233 ps (60–100× blowup) for 2 ps input.
+  RF-Track gives correct σ_z ≈ 2 ps for the same currents.
+- Both 2 ps and 0.5 ps inputs produce identical output σ_z, confirming the output
+  is dominated by energy-spread × R56 coupling, not initial bunch length.
+- **Not a coordinate conversion bug:** verified FELsim ↔ COSY round-trip is exact.
+  The FELsim col 4 std genuinely grows 60× during COSY tracking.
+- **Possible causes:** (a) COSY higher-order tracking amplifies dispersion errors
+  from the poorly matched optics (MSE = 7.1e-3); (b) COSY's l₀ coordinate picks
+  up path-length errors in the chicane that FELsim transfer matrices miss;
+  (c) the COSY FOX RP procedure may define the 5th coordinate differently than
+  assumed in `cosyParticleSimulator.transform_from_cosy_coordinates()`.
+- **Action:** Manually inspect COSY RRAY checkpoint files, trace l₀ evolution
+  element-by-element through the chicane, compare with FELsim prediction.
+  Check RP settings for coordinate convention.
+- **Expected resolution:** Either fix a unit convention mismatch or confirm that
+  better optics (lower MSE from glyfada) eliminate the blowup.
+
+### C5. RF-Track SBend Bug & Analytical Workaround [DONE]
+- **Root cause:** RF-Track v2.5.5 SBend body tracking interprets Bunch6d's
+  absolute momentum P [MeV/c] (6th column) as momentum deviation δ = ΔP/P₀.
+  Constructor `SBend(L, angle, P_Q)` produces ~910 mm displacement. Setter-only
+  `set_K0` gives identity (= Drift). `RBend` has the same issue.
+- **Workaround implemented (2026-03-02):**
+  1. **Analytical sector-bend correction (DPH):** Track dipole body as Drift
+     (preserves y-plane and path length), then apply M_correction = M_sector × M_drift⁻¹
+     to (x, x') plus dispersion (R₁₆, R₂₆) and R₅₆ corrections. Exact to 6 decimal
+     places vs analytical sector-bend matrix. Implemented in `_apply_sector_bend_correction()`,
+     `_track_segmented()`, `track_elements()`, and `collect_evolution()`.
+  2. **Edge kicks (DPW):** Thin-lens `Quadrupole(L=1e-10)` with
+     `K1L = -|K0| * tan(wedge_angle)`. Uses unsigned |K0| to match FELsim's
+     `R = L/|θ|` convention — signed K0 inverts chicane edge kicks.
+  3. **DPW-DPH-DPW triplet detection:** `_annotate_dipole_edges()` scans
+     the beamline and writes `dipole_K0` into DPW parameters.
+  4. **Corrector normalization:** `Kx = BdL/P₀` (same as Quadrupole set_strength).
+- **Key implementation bugs found and fixed:**
+  - R-matrix unit conversion: R12/R21 do NOT need ×1000/÷1000 scaling in (mm,mrad)
+    coordinates — both x and x' scale by same factor, so R-matrix is invariant.
+  - Edge kick sign: must use `abs(K0)` for DPW, matching FELsim's `R = L/|θ|`.
+    Signed K0 inverted chicane edge kicks → β_y blew up (MSE=1583).
+- **Validation results (ε_n=8, 3 restarts):**
+  - FELsim MSE = 6.13e-6 (baseline)
+  - RFT-val (FELsim currents → RF-Track): MSE = 1.985 (model differences shift optimum)
+  - **RFT-opt (RF-Track optimized): MSE = 7.0e-3** (matches FELsim quality)
+  - RF-Track can now independently optimize to good Twiss match
+- **Remaining discrepancy:** DPW thin-quad doesn't include triangle-model fringe
+  correction φ → β_y slightly off (0.055 vs target 0.2418)
+- **Bug report:** File with RF-Track maintainer. See C5-BUG below.
+- **Files:** `rftrackAdapter.py`, `test/rftrack_sbend_bug_mwe.py`
+
+### C5-BUG. RF-Track SBend Bug Report [TODO]
+- **Prepare a minimal working example demonstrating that `SBend` has no
+  transverse tracking effect in RF-Track v2.5.5.**
+- **MWE structure:**
+  1. Create SBend via constructor `SBend(L=0.2, angle=0.393, P_Q=40.5)`
+  2. Track on-axis and 1mm off-axis particles (Bunch6d)
+  3. Show output = input (identity), compare with expected cos θ / sin θ
+  4. Show constructor gives ~910 mm displacement (P/δ confusion)
+  5. Show `set_E1`/`set_E2` has no effect
+  6. Show RF-Track version, platform, compilation info
+- **Context:** SBend is documented in the RF-Track reference manual §4.6
+  with constructor `SBend(L, angle, P_Q, E1, E2, K1)`. The API methods
+  (`set_K0`, `set_h`, `set_Bfield`, etc.) all accept values silently
+  but none affect the tracking output.
+- **File with:** GitLab issue on https://gitlab.cern.ch/rf-track or email
+
+### O4. Glyfada 26D Feasibility [FINDING — 2026-03-02]
+- Ran glyfada on Koa with 26 quad currents and FELsim transfer-matrix
+  objective. Both wide bounds [0, 10 A] and tight bounds [NM ± 2 A] tried.
+- **Result:** ~27,000 evaluations, ~99% returned penalty (unstable optics).
+  Best solution = NM starting point itself. The FELsim MSE landscape has an
+  extremely narrow feasibility basin in 26D — evolutionary search cannot
+  navigate it.
+- **Auto-algorithm selected SA** (Simulated Annealing) over CMA-ES, SHADE,
+  NSGA-II. Landscape characterised as rugged=1.0 with 7 modes.
+- **Conclusion:** Glyfada cannot improve on FELsim NM with the same objective.
+  Value of glyfada requires either: (a) RF-Track particle-tracking objective
+  (install RF-Track on Koa), or (b) softer penalty function providing gradient
+  info for unstable solutions.
+- **Config:** `parameters_tight.json`, `parameters_wide.json` on Koa scratch
+
+### W11. Throughput Optimization — Maximize Peak Current [DONE 2026-03-02]
+- Extends Twiss-only Stage 11 optimization to include transmission and bunch
+  length objectives via weighted scalar cost function
+- Two scenarios: 2 ps → 2 ps (transport) and 2 ps → 0.5 ps (compression)
+- RF-Track particle tracking with physical apertures for Stage 11 NM optimization
+- Objective: w_t × MSE_Twiss + w_T × (1-T)² + w_σ × (σ_t/σ_target - 1)²
+- **Results (pre-C5 fix, with missing edge angles):**
+  - 2ps transport: MSE=0.175, T=42.8%, σ_t=1.83 ps, I_peak=5.6 A
+  - 0.5ps compress: MSE=0.071, T=28.4%, σ_t=1.31 ps (target 0.5), I_peak=5.2 A
+  - Compression scenario failed — σ_t target unreachable with Stage 11 quads alone
+- **Note:** C5 workaround now implemented (analytical dipole correction). Re-run
+  to get updated results with correct dipole physics.
+- Script: `W11_throughput_opt.py`
+- Results: `results/W11/`
+
+### W10. Beam Losses & Bunch Compression Study [IN PROGRESS]
+- Quantifies particle losses through the full transport line with physical apertures
+- Part A: Transmission baseline at 2 ps and 0.5 ps (COSY + RF-Track)
+- Part B: Bunch compression via negative chirp — demonstrates chirp required,
+  energy spread alone does NOT compress (R56 ≈ +27 mm elongates unchirped beams)
+- Part C: Charge scan (20–300 pC) at both operating modes, RF-Track SC ≥ 100 pC
+- RF-Track adapter extended with per-element physical apertures
+  (`enable_physical_apertures()`)
+- Apertures: quad bore 27 mm, dipole gap 14.5 mm, dipole width 50 mm (placeholder)
+- Script: `W10_beam_losses_compression.py`
+- Results: `results/W10/`
 
 ### W4. COSY INFINITY Cross-Validation [DONE 2026-02-15]
 - COSY's internal FIT reproduces the 11-stage optimisation in a single run.
@@ -196,8 +329,10 @@
 - Defaults tuned for FELsim: pop_size=50, max_gen=100, sigma=0.05, multistart mode.
 - Supports `n_processes`, `pop_size`, `max_gen`, `sigma`, `algorithm` kwargs.
 - **Benchmark (W6):** Glyfada underperforms NM at all tested emittance points
-  (see W6). Next: add `scipy.optimize.differential_evolution` as in-process
-  global optimizer with warm-starting.
+  (see W6). Root causes: insufficient eval budget, no warm-starting, wide bounds.
+- **Re-benchmark (W7):** Optimized configs with CMA-ES, warm-starting from NM,
+  ±3A bounds, constraint handling. Tests whether Glyfada can match NM with
+  proper configuration.
 
 ---
 
@@ -260,6 +395,44 @@
   metadata in `simulate()`.
 - **TODO:** Determine actual UH MkV dipole pole face width (currently 50 mm placeholder).
 
+### I6. MCNP-Style Robustness & Foolproofness [HIGH PRIORITY]
+- **Motivation:** MCNP is a gold standard for production code robustness: every
+  input is validated, edge cases are caught with clear diagnostics, defaults are
+  sensible, and the code never silently produces wrong results. FELsim should
+  adopt this level of rigour.
+- **Actions:**
+  1. Input validation at system boundaries: lattice files, API payloads,
+     CLI arguments, Excel data. Fail loudly with descriptive errors.
+  2. Guard against silent numerical failures: NaN/Inf propagation,
+     singular matrices, zero-length elements, particle loss without warning.
+  3. Consistent error handling: no bare `except:`, no swallowed exceptions.
+     Every failure path either recovers correctly or raises with context.
+  4. Default values must be physically sensible (not 0 or 1 by convenience).
+  5. Audit all `setattr`/`getattr` patterns for typo-resilience (consider
+     `__slots__` or property validation on beamline element classes).
+  6. Configuration validation: warn on unused/unknown keys, reject
+     contradictory settings.
+
+### I7. Multi-Code Simulation Framework [HIGH PRIORITY]
+- **Motivation:** Different simulation codes have different strengths: RF-Track
+  excels at 3D space charge, COSY INFINITY excels at high-order DA maps and
+  fringe fields. A production beamline study should be able to use RF-Track
+  for one section and COSY for another — seamlessly and configurably.
+- **Design goals:**
+  1. Per-section code assignment: lattice file or config specifies which
+     simulator handles each beamline segment (e.g., elements 0–86 with COSY,
+     87–117 with RF-Track).
+  2. Beam state handoff: well-defined coordinate transforms between codes
+     at junction points. Currently `transform_coordinates()` handles
+     FELsim↔RF-Track; extend to include COSY particle format.
+  3. Unified result format: `SimulationResult` already provides this;
+     ensure all adapters populate it consistently.
+  4. Configuration: YAML/JSON config with per-section `simulator` key
+     (e.g., `{simulator: rftrack, elements: [87, 117], space_charge: true}`).
+  5. Prototype: the hybrid FELsim→RF-Track Stage 11 optimisation (C1/W8) is
+     the first instance of this pattern. Generalise from there.
+- **Prerequisite:** C1 Part B (RF-Track optimisation) validates the handoff approach.
+
 ### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
 - **Goal:** Extract T566 = (∂²l/∂δ²)/2 from the COSY DA polynomial map
@@ -297,13 +470,33 @@
 
 ## Category C: Cross-Validation
 
-### C1. RF-Track Cross-Validation [HIGH PRIORITY]
+### C1. RF-Track Cross-Validation & Optimisation [DONE 2026-02-24]
 - **Motivation:** The FELsim optimizer uses transfer matrices; RF-Track uses
   full particle tracking. Comparing at key parameter points validates the
   transfer matrix model.
-- **Design:** Run RF-Track at baseline + 3–4 extreme S4 points. Compare
-  final Twiss at undulator entrance.
-- **Prerequisite:** RF-Track adapter (`rftrackAdapter.py`) with lattice_path support
+- **Part A (S9):** RF-Track validation with FELsim-optimised currents. DONE.
+- **Part B (W8):** Hybrid FELsim→RF-Track Stage 11 optimisation. DONE.
+  - FELsim runs stages 1–10 (fast transfer matrices), then RF-Track
+    particle tracking optimises Stage 11 (4 quads → undulator Twiss match).
+  - Prefix caching: elements 0:87 pre-tracked once (~0.2 s), suffix trackings
+    (87:118 + 87:93) per NM eval. Full optimisation ~80 s per emittance point.
+  - **Key findings (ε_n=8 smoke test):**
+    - FELsim currents in RF-Track give MSE=2552 (β_x=86 vs target 1.4).
+      Root cause: accumulated dipole edge-kick model differences through 118
+      elements shift the beam state enough that FELsim-optimal currents are
+      far from RF-Track-optimal.
+    - RF-Track optimiser finds its own solution with MSE=6.4e-6 (125× better
+      than FELsim's 8.1e-4), but with very different Stage 11 currents.
+    - This validates that RF-Track particle tracking can match the undulator
+      Twiss targets more precisely than FELsim's transfer matrices.
+  - **Adapter fixes applied:**
+    - `DIPOLE_WEDGE → Drift(0)`: FELsim models wedges as thin-lens edge kicks
+      (no drift propagation); RF-Track was adding spurious 10 mm drifts.
+    - `Quadrupole.set_strength(k1*L)`: Verified correct — `set_strength(S)`
+      is internally used as k1*L, not the manual's nominal P/q·k1·L formula.
+  - Script: `UHM_rftrack_opt.py` (`--smoke`, `--emittance`, `--space-charge`)
+  - Results: `results/rftrack_opt/`
+  - TODO: Run full comparison at ε_n = 5, 8, 14 with 5 restarts.
 
 ### C3. Field Map Scaling for MGE Dipoles [FIX APPLIED 2026-02-22]
 - **Root cause:** The Mathematica notebook (`fields/calculation/UH_chicane_fringe.nb`)
@@ -316,6 +509,27 @@
   This is the most physically accurate dipole model and was previously blocked.
 - **Files:** `fields/chicane_dipole_fieldmap.dat`, `fields/calculation/chicane_dipole_fieldmap.dat`,
   `cosySimulator.py:113-117` (MGE parameters), `cosySimulator.py:1254-1279` (MGE FOX generation)
+
+### C4. Systematic Testing, Validation & Verification [HIGH PRIORITY]
+- **Motivation:** FELsim currently relies on ad-hoc cross-validation studies.
+  A systematic V&V programme is needed for production confidence.
+- **Actions:**
+  1. **Unit tests:** Core physics routines (transfer matrices, Twiss
+     computation, dispersion, coordinate transforms) need pytest coverage
+     with known analytic results (e.g., thin-lens quad, drift, FODO).
+  2. **Regression tests:** Each optimization study should produce a frozen
+     reference result. CI runs confirm that code changes don't alter results
+     beyond numerical noise.
+  3. **Cross-code benchmarks:** Extend S9/C1/C2 pattern — for each major
+     beamline section, compare FELsim, RF-Track, and COSY Twiss functions
+     element-by-element. Automate as a benchmark suite.
+  4. **Edge case testing:** ε_n → 0, σ_E → 0, single particle, 10⁵ particles,
+     zero-length elements, degenerate optics (β → ∞).
+  5. **Adapter round-trip tests:** Load lattice in all three formats
+     (Excel/JSON/YAML), verify identical beamline objects.
+  6. **CI pipeline:** Automated test runs on commit (at minimum: unit tests
+     + adapter round-trip + one optimization smoke test).
+- **Output:** `backend/test/test_*.py` files, CI config, benchmark report.
 
 ### C2. COSY INFINITY Cross-Validation [DONE — see W4]
 - **Motivation:** Independent DA-based simulation. Particularly valuable for

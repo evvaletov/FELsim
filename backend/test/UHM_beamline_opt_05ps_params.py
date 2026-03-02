@@ -62,7 +62,8 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
                      epsilon_n=8, x_std=0.8, y_std=0.8,
                      nb_particles=500, seed=42,
                      chrom_upper_bound=10, n_restarts=1,
-                     stage11_method='Nelder-Mead', stage11_kwargs=None):
+                     stage11_method='Nelder-Mead', stage11_kwargs=None,
+                     stage11_startPoint=None):
     """Run 11-stage beamline optimization, return results dict.
 
     Parameters
@@ -78,6 +79,9 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         Optimization method for Stage 11: 'Nelder-Mead' or 'glyfada'.
     stage11_kwargs : dict or None
         Extra kwargs for glyfada (pop_size, max_gen, sigma, etc.).
+    stage11_startPoint : dict or None
+        Custom start point / bounds for Stage 11. Overrides defaults.
+        Format: {"Ic": {"bounds": (lo, hi), "start": val}, ...}
 
     Returns dict with keys: mse, alpha_x, alpha_y, beta_x, beta_y,
     disp_resid, quad_currents (dict of index->current), time_s, nfev, converged.
@@ -280,12 +284,15 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         s11_kw = {'pop_size': 30, 'max_gen': 20, 'sigma': 0.05}
         if stage11_kwargs:
             s11_kw.update(stage11_kwargs)
-        startPoint = {
-            "Ic": {"bounds": (0, cb), "start": 4},
-            "I": {"bounds": (0, qb), "start": 2},
-            "I2": {"bounds": (0, qb), "start": 2},
-            "I3": {"bounds": (0, qb), "start": 2},
-        }
+        if stage11_startPoint is not None:
+            startPoint = stage11_startPoint
+        else:
+            startPoint = {
+                "Ic": {"bounds": (0, cb), "start": 4},
+                "I": {"bounds": (0, qb), "start": 2},
+                "I2": {"bounds": (0, qb), "start": 2},
+                "I3": {"bounds": (0, qb), "start": 2},
+            }
         result = opti.calc("glyfada", variables, startPoint, objectives,
                            plotBeam=False, printResults=False,
                            plotProgress=False, **s11_kw)
@@ -879,6 +886,296 @@ def run_w6(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5,
     print(f"{'─' * 95}")
 
 
+def _import_cosy_module():
+    """Import the COSY optimization module from the same directory."""
+    import importlib.util
+    cosy_path = Path(__file__).resolve().parent / "UHM_beamline_opt_cosy.py"
+    spec = importlib.util.spec_from_file_location("cosy_opt", str(cosy_path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _run_cosy_for_emittance(cosy_mod, en, file_path):
+    """Run COSY FIT optimization at a given emittance, return result dict.
+
+    COSY optimizes all 11 stages simultaneously using DA transfer maps.
+    Returns dict with mse, twiss, currents, time_s, or None on failure.
+    """
+    original_en = cosy_mod.epsilon_n
+    try:
+        cosy_mod.epsilon_n = en
+        targets = cosy_mod.compute_targets()
+        stages = cosy_mod.build_stages(targets)
+
+        t0 = time.perf_counter()
+        result = cosy_mod.run_cosy_optimization(
+            file_path, stages, targets,
+            nmax=1000, nalg=1, fringe_field_order=0, order=3)
+        elapsed = time.perf_counter() - t0
+
+        if not result.get('success'):
+            return None
+
+        twiss = result['twiss']
+        mse = cosy_mod.compute_mse(twiss, targets)
+        currents = result['currents']
+
+        return {
+            'mse': mse,
+            'alpha_x': twiss.get('alpha_x', float('nan')),
+            'alpha_y': twiss.get('alpha_y', float('nan')),
+            'beta_x': twiss.get('beta_x', float('nan')),
+            'beta_y': twiss.get('beta_y', float('nan')),
+            'quad_87': currents.get(87, float('nan')),
+            'quad_93': currents.get(93, float('nan')),
+            'quad_95': currents.get(95, float('nan')),
+            'quad_97': currents.get(97, float('nan')),
+            'time_s': elapsed,
+        }
+    finally:
+        cosy_mod.epsilon_n = original_en
+
+
+def run_w7(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
+    """W7: Glyfada config optimization & re-benchmark with COSY comparison.
+
+    Three-way comparison at ε_n = 5, 8, 14:
+      1. COSY FIT (FR 0, all 11 stages, DA transfer maps) — reference
+      2. FELsim Nelder-Mead (5 restarts, sequential stages) — baseline
+      3. FELsim Glyfada CMA-ES (warm-started from NM, ±3A bounds) — test
+
+    CMA-ES hyperparameters optimized for 4D warm-started problem:
+      - pop_size=10 (near-default λ=8 for d=4, slight margin)
+      - max_gen=60 (conservative; theory predicts 20-40 for warm-started)
+      - initial_sigma=0.1 (exploit warm-start proximity; 0.6A step in 6A range)
+      - feasibility_rules constraint handling (replaces blunt 1e6 penalty)
+    Total: 600 evals × ~2.3 s/eval ≈ 23 min per emittance point.
+    """
+    print("\n" + "=" * 70)
+    print("W7: Glyfada Config Optimization & Re-Benchmark")
+    print("    COSY FIT (reference) vs NM vs Glyfada CMA-ES")
+    print("=" * 70)
+
+    emittance_points = [5, 8, 14]
+    qb = 10
+    cb = chrom_upper_bound
+
+    # Optimal CMA-ES config for 4D warm-started problem
+    g_kw_cmaes = {
+        'pop_size': 10,
+        'max_gen': 60,
+        'algorithm': 'CMA_ES',
+        'cma_es': {'initial_sigma': 0.1},
+        'constraint_handling': 'feasibility_rules',
+        'constraints': [{'name': 'stable', 'type': '<=', 'limit': 0.5}],
+        'checkpoint_interval': 10,
+        'config_version': 1,
+        'use_default_values': True,
+    }
+    print(f"  CMA-ES config: pop={g_kw_cmaes['pop_size']}, "
+          f"gen={g_kw_cmaes['max_gen']}, "
+          f"σ₀={g_kw_cmaes['cma_es']['initial_sigma']}, "
+          f"evals={g_kw_cmaes['pop_size'] * g_kw_cmaes['max_gen']}")
+
+    # Try to import COSY module
+    cosy_mod = None
+    try:
+        cosy_mod = _import_cosy_module()
+        print("  COSY INFINITY: available (FR 0, DA order 3)")
+    except Exception as e:
+        print(f"  COSY INFINITY: not available ({e})")
+
+    file_path = (Path(__file__).resolve().parent.parent.parent
+                 / 'beam_excel' / 'Beamline_elements.xlsx')
+
+    w7dir = outdir / 'W7'
+    w7dir.mkdir(parents=True, exist_ok=True)
+
+    header = ['epsilon_n', 'method', 'mse', 'alpha_x', 'alpha_y',
+              'beta_x', 'beta_y', 'disp_resid',
+              'quad_87', 'quad_93', 'quad_95', 'quad_97',
+              'time_s', 'nfev']
+    rows = []
+
+    for i, en in enumerate(emittance_points):
+        print(f"\n  [{i+1}/{len(emittance_points)}] ε_n = {en}")
+
+        # ── COSY FIT (reference — all stages, DA maps) ───────────────────
+        if cosy_mod is not None:
+            print(f"    Running COSY FIT (FR 0, all stages)...")
+            try:
+                cosy_res = _run_cosy_for_emittance(cosy_mod, en, file_path)
+                if cosy_res is not None:
+                    cosy_row = [en, 'COSY', cosy_res['mse'],
+                                cosy_res['alpha_x'], cosy_res['alpha_y'],
+                                cosy_res['beta_x'], cosy_res['beta_y'],
+                                float('nan'),  # no disp_resid from COSY
+                                cosy_res['quad_87'], cosy_res['quad_93'],
+                                cosy_res['quad_95'], cosy_res['quad_97'],
+                                cosy_res['time_s'], float('nan')]
+                    print(f"    COSY:   MSE = {cosy_res['mse']:.4e}  "
+                          f"({cosy_res['time_s']:.1f} s)")
+                else:
+                    print(f"    COSY:   FAILED (optimization did not converge)")
+                    cosy_row = [en, 'COSY'] + [float('nan')] * (len(header) - 2)
+            except Exception as e:
+                print(f"    COSY FAILED: {e}")
+                cosy_row = [en, 'COSY'] + [float('nan')] * (len(header) - 2)
+            rows.append(cosy_row)
+
+        # ── NM baseline (5 restarts) — also provides warm-start seed ─────
+        print(f"    Running NM ({n_restarts} restarts)...")
+        try:
+            nm_res = run_optimization(
+                epsilon_n=en, nb_particles=nb_particles, seed=42,
+                chrom_upper_bound=chrom_upper_bound, n_restarts=n_restarts)
+            nm_row = [en, 'NM', nm_res['mse'],
+                      nm_res['alpha_x'], nm_res['alpha_y'],
+                      nm_res['beta_x'], nm_res['beta_y'], nm_res['disp_resid'],
+                      nm_res['quad_currents'][87], nm_res['quad_currents'][93],
+                      nm_res['quad_currents'][95], nm_res['quad_currents'][97],
+                      nm_res['time_s'], nm_res['nfev']]
+            print(f"    NM:     MSE = {nm_res['mse']:.4e}  "
+                  f"({nm_res['time_s']:.1f} s, nfev={nm_res['nfev']})")
+        except Exception as e:
+            print(f"    NM FAILED: {e}")
+            nm_res = None
+            nm_row = [en, 'NM'] + [float('nan')] * (len(header) - 2)
+        rows.append(nm_row)
+
+        # ── Glyfada CMA-ES — warm-started from NM ────────────────────────
+        if nm_res is not None:
+            nm_c = nm_res['quad_currents']
+            ws_startPoint = {
+                "Ic": {"bounds": (max(0, nm_c[87] - 3), min(cb, nm_c[87] + 3)),
+                        "start": nm_c[87]},
+                "I":  {"bounds": (max(0, nm_c[93] - 3), min(qb, nm_c[93] + 3)),
+                        "start": nm_c[93]},
+                "I2": {"bounds": (max(0, nm_c[95] - 3), min(qb, nm_c[95] + 3)),
+                        "start": nm_c[95]},
+                "I3": {"bounds": (max(0, nm_c[97] - 3), min(qb, nm_c[97] + 3)),
+                        "start": nm_c[97]},
+            }
+        else:
+            ws_startPoint = {
+                "Ic": {"bounds": (0, cb), "start": 4},
+                "I":  {"bounds": (0, qb), "start": 2},
+                "I2": {"bounds": (0, qb), "start": 2},
+                "I3": {"bounds": (0, qb), "start": 2},
+            }
+
+        print(f"    Running Glyfada CMA-ES (warm-started, ±3A bounds)...")
+        try:
+            gly_res = run_optimization(
+                epsilon_n=en, nb_particles=nb_particles, seed=42,
+                chrom_upper_bound=chrom_upper_bound,
+                stage11_method='glyfada', stage11_kwargs=g_kw_cmaes,
+                stage11_startPoint=ws_startPoint)
+            gly_row = [en, 'G-CMA-ES', gly_res['mse'],
+                       gly_res['alpha_x'], gly_res['alpha_y'],
+                       gly_res['beta_x'], gly_res['beta_y'], gly_res['disp_resid'],
+                       gly_res['quad_currents'][87], gly_res['quad_currents'][93],
+                       gly_res['quad_currents'][95], gly_res['quad_currents'][97],
+                       gly_res['time_s'], gly_res['nfev']]
+            quality = 'FAILED'
+            for qlabel, thresh in sorted(MSE_THRESHOLDS.items(), key=lambda x: x[1]):
+                if gly_res['mse'] < thresh:
+                    quality = qlabel.upper()
+                    break
+            print(f"    CMA-ES: MSE = {gly_res['mse']:.4e}  [{quality}]  "
+                  f"({gly_res['time_s']:.1f} s, nfev={gly_res['nfev']})")
+        except Exception as e:
+            print(f"    CMA-ES FAILED: {e}")
+            gly_row = [en, 'G-CMA-ES'] + [float('nan')] * (len(header) - 2)
+        rows.append(gly_row)
+
+    csv_path = w7dir / 'benchmark_results.csv'
+    write_csv(csv_path, header, rows)
+    print(f"\nSaved {csv_path}")
+
+    # ── Plotting ──────────────────────────────────────────────────────────
+    methods_present = sorted(set(r[1] for r in rows))
+    colors_map = {'COSY': '#66CCEE', 'NM': '#4477AA', 'G-CMA-ES': '#228833'}
+    labels_map = {'COSY': 'COSY FIT (FR 0, global)',
+                  'NM': f'Nelder-Mead ({n_restarts} restarts)',
+                  'G-CMA-ES': 'Glyfada CMA-ES (warm-started)'}
+
+    method_data = {}
+    for m in methods_present:
+        m_rows = [r for r in rows if r[1] == m]
+        method_data[m] = {
+            'eps': [r[0] for r in m_rows],
+            'mse': [r[2] for r in m_rows],
+            'time': [r[12] for r in m_rows],
+            'nfev': [r[13] for r in m_rows],
+        }
+
+    n_methods = len(methods_present)
+    x = np.arange(len(emittance_points))
+    width = 0.8 / n_methods
+
+    # MSE bar chart
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for j, m in enumerate(methods_present):
+        offset = (j - (n_methods - 1) / 2) * width
+        ax.bar(x + offset, method_data[m]['mse'], width,
+               label=labels_map.get(m, m), color=colors_map.get(m, '#999999'))
+    ax.set_yscale('log')
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(int(e)) for e in emittance_points])
+    ax.set_xlabel(r'Normalised emittance $\varepsilon_n$ ($\pi\cdot$mm$\cdot$mrad)')
+    ax.set_ylabel('MSE')
+    ax.set_title('W7: Stage 11 MSE — COSY FIT vs NM vs Glyfada CMA-ES')
+    for thresh_label, thresh in MSE_THRESHOLDS.items():
+        clr = {'Excellent': 'green', 'Acceptable': 'orange', 'Marginal': 'red'}
+        ax.axhline(thresh, color=clr[thresh_label], linestyle='--', alpha=0.6,
+                    label=f'{thresh_label} ({thresh})')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3, axis='y')
+    fig.tight_layout()
+    fig.savefig(w7dir / 'mse_comparison.eps', format='eps')
+    fig.savefig(w7dir / 'mse_comparison.pdf')
+    plt.close(fig)
+    print(f"  Saved {w7dir / 'mse_comparison.eps'}")
+
+    # Time bar chart
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for j, m in enumerate(methods_present):
+        offset = (j - (n_methods - 1) / 2) * width
+        ax.bar(x + offset, method_data[m]['time'], width,
+               label=labels_map.get(m, m), color=colors_map.get(m, '#999999'))
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(int(e)) for e in emittance_points])
+    ax.set_xlabel(r'Normalised emittance $\varepsilon_n$ ($\pi\cdot$mm$\cdot$mrad)')
+    ax.set_ylabel('Wall-clock time (s)')
+    ax.set_title('W7: Wall-Clock Time — COSY FIT vs NM vs Glyfada CMA-ES')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3, axis='y')
+    fig.tight_layout()
+    fig.savefig(w7dir / 'time_comparison.eps', format='eps')
+    fig.savefig(w7dir / 'time_comparison.pdf')
+    plt.close(fig)
+    print(f"  Saved {w7dir / 'time_comparison.eps'}")
+
+    # Summary table
+    beta_xm, alpha_xm, beta_ym, alpha_ym, _ = compute_twiss_targets()
+    print(f"\n{'─' * 105}")
+    print(f"{'ε_n':>5} {'Method':>12} {'MSE':>12} {'β_x':>8} {'β_y':>8} "
+          f"{'α_x':>8} {'α_y':>10} {'Time(s)':>8} {'nfev':>8}")
+    print(f"{'':>5} {'Target':>12} {'':>12} {beta_xm:>8.4f} {beta_ym:>8.4f} "
+          f"{alpha_xm:>8.4f} {alpha_ym:>10.6f}")
+    print(f"{'─' * 105}")
+    for r in rows:
+        nfev_val = r[13]
+        nfev_str = "—" if (isinstance(nfev_val, float) and np.isnan(nfev_val)) else f"{nfev_val}"
+        mse_val = r[2]
+        mse_str = f"{mse_val:12.4e}" if not (isinstance(mse_val, float) and np.isnan(mse_val)) else "         N/A"
+        print(f"{r[0]:>5.0f} {r[1]:>12} {mse_str} {r[5]:>8.4f} {r[6]:>8.4f} "
+              f"{r[3]:>8.4f} {r[4]:>10.6f} {r[12]:>8.1f} {nfev_str:>8}")
+    print(f"{'─' * 105}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='0.5 ps parameter sensitivity study')
@@ -896,6 +1193,8 @@ def main():
                         help='W2: emittance scan with multi-start + raised bounds')
     parser.add_argument('--w6', action='store_true',
                         help='W6: Glyfada vs NM benchmark on emittance scan')
+    parser.add_argument('--w7', action='store_true',
+                        help='W7: Glyfada config optimization & re-benchmark')
     parser.add_argument('--chrom-bound', type=float, default=15,
                         help='Upper chromaticity quad bound for W2/W6 (default: 15 A)')
     parser.add_argument('--multi-start', type=int, default=5,
@@ -917,6 +1216,12 @@ def main():
 
     if args.w6:
         run_w6(outdir, nb_particles=args.particles or 500,
+               chrom_upper_bound=args.chrom_bound,
+               n_restarts=args.multi_start)
+        return
+
+    if args.w7:
+        run_w7(outdir, nb_particles=args.particles or 500,
                chrom_upper_bound=args.chrom_bound,
                n_restarts=args.multi_start)
         return

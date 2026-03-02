@@ -51,4 +51,5 @@ lattice-formats
 optimization
 beam-generation
 fieldmap
+bugs/index
 ```

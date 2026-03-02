@@ -1,9 +1,9 @@
 """Adapter for the glyfada evolutionary optimizer.
 
 Wraps the glyfada C++ MPI binary (~/ML/paradiseo/glyfada/build/optimiser)
-using its DH (generic) evaluator protocol.  For each fitness evaluation,
-glyfada spawns ``python model.py --timeout T '<json_params>'`` and reads
-the result from stdout.
+using its DH evaluator protocol.  By default uses the persistent worker
+mode (glyfada_worker.py) which loads the model once and calls evaluate()
+directly via pipes, eliminating subprocess-per-evaluation overhead.
 
 Author: Eremey Valetov
 """
@@ -17,9 +17,17 @@ import glob as globmod
 import numpy as np
 from loggingConfig import get_logger_with_fallback
 
-GLYFADA_BINARY = os.path.expanduser(
-    "~/ML/paradiseo/glyfada/build/optimiser"
+GLYFADA_BINARY = os.environ.get(
+    'GLYFADA_BINARY',
+    os.path.expanduser("~/ML/paradiseo/glyfada/build/optimiser")
 )
+
+
+OPTIONAL_CONFIG_KEYS = [
+    'algorithm', 'cma_es', 'phased_optimization', 'constraints',
+    'constraint_handling', 'checkpoint_interval', 'config_version',
+    'use_default_values', 'generation_stats', 'persistent_worker',
+]
 
 
 class GlyfadaOptimizer:
@@ -49,11 +57,15 @@ class GlyfadaOptimizer:
         Glyfada algorithm: ``"auto"`` selects ULS for single-objective.
     debug : bool or None
         Debug flag.
+    extra_config : dict or None
+        Additional glyfada config keys (algorithm, cma_es, constraints, etc.)
+        merged into the JSON config. Keys in OPTIONAL_CONFIG_KEYS are forwarded.
     """
 
     def __init__(self, objective_func, variable_names, bounds, default_values,
                  pop_size=50, max_gen=100, sigma=0.05, n_processes=1,
-                 timeout_minutes=2, algorithm="auto", debug=None):
+                 timeout_minutes=2, algorithm="auto", debug=None,
+                 extra_config=None):
         self.objective_func = objective_func
         self.variable_names = variable_names
         self.bounds = bounds
@@ -64,6 +76,7 @@ class GlyfadaOptimizer:
         self.n_processes = n_processes
         self.timeout_minutes = timeout_minutes
         self.algorithm = algorithm
+        self.extra_config = extra_config or {}
         self.logger, self.debug = get_logger_with_fallback(__name__, debug)
 
     def _build_config(self, work_dir):
@@ -86,13 +99,17 @@ class GlyfadaOptimizer:
         backend_dir = os.path.dirname(os.path.abspath(__file__))
         source_cmd = (
             f"export PATH={python_bin_dir}:$PATH && "
-            f"export PYTHONPATH={backend_dir}"
+            f"export PYTHONPATH={backend_dir}:$PYTHONPATH"
         )
+
+        # Determine algorithm: extra_config overrides constructor default
+        algorithm = self.extra_config.get('algorithm', self.algorithm)
 
         config = {
             "mode": "multistart",
             "evaluator": "dh",
-            "algorithm": self.algorithm,
+            "persistent_worker": True,
+            "algorithm": algorithm,
             "n_objectives": 1,
             "program_file": "model.py",
             "config_file": "parameters.json",
@@ -112,8 +129,20 @@ class GlyfadaOptimizer:
             "timein_seconds": 0,
             "omp_num_threads": os.cpu_count() or 4,
             "tournament_size": min(15, self.pop_size),
+            "config_version": 1,
             "parameters": parameters,
         }
+
+        # Merge optional config keys from extra_config
+        for key in OPTIONAL_CONFIG_KEYS:
+            if key in self.extra_config and key != 'algorithm':
+                config[key] = self.extra_config[key]
+
+        # Auto-set CMA-ES initial_mean from default_values if not explicit
+        if algorithm == 'CMA_ES' and 'cma_es' in config:
+            if 'initial_mean' not in config['cma_es']:
+                config['cma_es']['initial_mean'] = list(self.default_values)
+
         return config
 
     def _pickle_objective(self, work_dir):
@@ -162,7 +191,7 @@ class GlyfadaOptimizer:
                     line = line.strip()
                     if not line or line.startswith('#'):
                         continue
-                    values = [float(v) for v in line.split(',')]
+                    values = [float(v) for v in line.split(',') if v]
                     # Format: objective_1, param_1, param_2, ...
                     obj_val = values[0]
                     param_vals = values[1:]
@@ -212,6 +241,12 @@ class GlyfadaOptimizer:
             config_path = os.path.join(work_dir, "parameters.json")
             with open(config_path, 'w') as f:
                 json.dump(config, f, indent=2)
+
+            # Tell the evaluator to emit constraint values if constraints configured
+            if 'constraints' in config:
+                env_flag = os.path.join(work_dir, ".emit_constraints")
+                with open(env_flag, 'w') as f:
+                    f.write("1")
 
             if self.debug:
                 self.logger.debug(f"Glyfada config: {json.dumps(config, indent=2)}")

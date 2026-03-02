@@ -136,7 +136,8 @@ class COSYAdapter(SimulatorBase):
 
     def collect_evolution(self,
                           particles: np.ndarray,
-                          checkpoint_elements: Union[str, List[int]] = 'all'
+                          checkpoint_elements: Union[str, List[int]] = 'all',
+                          filter_invalid: bool = True
                           ) -> BeamEvolution:
         """Collect beam evolution data at element boundaries."""
         self._ensure_beamline_parsed()
@@ -194,7 +195,7 @@ class COSYAdapter(SimulatorBase):
             checkpoint_list,
             transform_to_felsim=True,
             validate=False,
-            filter_invalid=True
+            filter_invalid=filter_invalid
         )
 
         n_initial = particles.shape[0]

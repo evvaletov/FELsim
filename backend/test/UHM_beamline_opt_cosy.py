@@ -226,14 +226,19 @@ def apply_warm_start(stages, warm_currents):
 
 def run_cosy_optimization(file_path, stages, targets, max_stage=None,
                           nmax=1000, nalg=1, generate_only=False,
-                          fringe_field_order=0, order=3):
+                          fringe_field_order=0, order=3,
+                          transfer_matrix_order=None):
     """Run COSY FIT optimization for specified stages."""
     if max_stage is not None:
         stages = stages[:max_stage]
 
+    config = {'simulation': {'KE': Energy, 'order': order, 'dimensions': 3}}
+    if transfer_matrix_order is not None:
+        config['simulation']['transfer_matrix_order'] = transfer_matrix_order
+
     adapter = COSYAdapter(
         lattice_path=str(file_path), mode='transfer_matrix',
-        config={'simulation': {'KE': Energy, 'order': order, 'dimensions': 3}},
+        config=config,
         fringe_field_order=fringe_field_order,
         debug=False
     )

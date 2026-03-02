@@ -66,7 +66,7 @@ class COSYSimulator(BeamlineBuilder):
             # Longitudinal transfer matrix elements (requires dimensions=3)
             ("l", "r51"): "ME(5,1)", ("l", "r52"): "ME(5,2)",
             ("l", "r56"): "ME(5,6)",  # R56: path length dependence on energy
-            ("l", "t566"): None,       # T566: 2nd-order R56; requires order >= 2
+            ("l", "t566"): "ME(5,66)",  # T566: 2nd-order R56; requires order >= 2
         }
 
         # Geometric emittance in pi.mm.mrad — required for envelope objectives
@@ -500,11 +500,16 @@ END ;
                 return f"{weight}*({expr} - {goal})*({expr} - {goal})"
             return f"{weight}*ABS(1000*SQRT({eps_si}*CONS(B0({plane}))) - {goal})"
 
-        if cosy_var is None and param == "t566":
-            raise NotImplementedError(
-                "T566 objective requires 2nd-order DA map extraction, not yet implemented. "
-                "Use transfer_matrix_order >= 2 and extract T566 from the polynomial map."
-            )
+        if param == "t566":
+            if self.order < 2:
+                raise ValueError(
+                    "T566 objective requires computation order >= 2 "
+                    f"(current order={self.order})"
+                )
+            cosy_var = "ME(5,66)"
+            if self.fit_combined_mse:
+                return f"{weight}*({cosy_var} - {goal})*({cosy_var} - {goal})"
+            return f"{weight}*ABS(CONS({cosy_var}) - {goal})"
 
         if self.fit_combined_mse:
             return f"{weight}*({cosy_var} - {goal})*({cosy_var} - {goal})"

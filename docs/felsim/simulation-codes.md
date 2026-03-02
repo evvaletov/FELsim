@@ -88,8 +88,7 @@ and NaN coordinates all produce well-defined results with transmission logging.
 **Adapter:** `rftrackAdapter.py`
 
 RF-Track (A. Latina, CERN) performs full 6D particle tracking with optional
-space charge. The adapter uses COMSOL field maps for dipoles and measured
-gradient data for quadrupoles.
+space charge.
 
 Advantages:
 - Full particle tracking — captures all nonlinear effects
@@ -99,7 +98,7 @@ Advantages:
 Limitations:
 - Slowest of the three codes (~minutes per evaluation)
 - Requires RF-Track installation and field map files
-- Not practical for optimization loops
+- Not practical for optimization loops (but see prefix caching below)
 
 **Usage:**
 
@@ -110,6 +109,45 @@ adapter = RFTrackAdapter(lattice_path="var/UH_FEL_beamline.yaml")
 adapter.create_beamline()
 result = adapter.track(beam)
 ```
+
+### SBend P/δ bug and analytical correction
+
+RF-Track v2.5.5 has an upstream bug where `SBend` interprets Bunch6d's
+absolute momentum (MeV/c) as momentum deviation δ = ΔP/P₀, producing
+catastrophically wrong tracking output (~900 mm displacement for a 1 mm
+off-axis particle).  See [SBend P/δ bug report](bugs/rftrack-sbend-p-delta.md).
+
+**Workaround:** The adapter tracks dipole bodies as `Drift(L)` and applies an
+analytical correction $M_\text{sector} \times M_\text{drift}^{-1}$ to the
+$(x, x')$ coordinates, plus dispersion ($R_{16}$, $R_{26}$) and path-length
+($R_{56}$) terms.  This is exact for a sector-bend transfer matrix.
+
+### Segmented tracking architecture
+
+`track_elements(beam, start, end)` tracks a sub-lattice with analytical dipole
+corrections.  Internally, `_track_segmented()` groups consecutive non-dipole
+elements into RF-Track `Lattice` objects for native tracking, and applies the
+analytical correction at each DPH (dipole body) element.  DPW (wedge) elements
+are treated as thin-lens edge kicks via `Quadrupole(L=1e-10, K1L)`.
+
+This enables prefix caching: the static upstream portion of the beamline
+(elements 0–86) is tracked once, and only the suffix (elements 87–117) is
+re-tracked per optimizer evaluation.
+
+### DPW edge kick workaround
+
+FELsim models dipole wedges as thin-lens edge kicks with no physical drift
+propagation.  The RF-Track adapter maps each DPW to a thin `Quadrupole`
+with $K_{1L} = -|K_0| \tan\eta$, where $K_0 = |\theta|/L$ uses the unsigned
+curvature.  See [edge kick sign bug report](bugs/rftrack-edge-kick-sign.md)
+for why `abs()` is required.
+
+### Known limitation
+
+The thin-quad DPW model does not include the triangle-model fringe correction
+$\phi$ in the y-plane edge kick formula $-\tan(\eta - \phi)/\rho$.  This
+produces a small residual in $\beta_y$ compared to FELsim (which includes
+$\phi$ analytically).
 
 ## When to Use Each Code
 

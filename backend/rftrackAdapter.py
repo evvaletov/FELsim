@@ -75,6 +75,12 @@ class RFTrackAdapter(SimulatorBase):
     # Default aperture for elements (5 cm) - prevents tracking hangs
     DEFAULT_APERTURE = 0.05
 
+    # Physical apertures for UH MkV FEL beamline [m]
+    QUAD_HALF_APERTURE = 0.0135        # 27 mm bore / 2
+    DIPOLE_HALF_GAP = 0.00724          # 14.48 mm gap / 2
+    DIPOLE_HALF_WIDTH = 0.025          # 50 mm placeholder / 2
+    BEAM_PIPE_RADIUS = 0.0127          # 1" beam pipe
+
     def __init__(self,
                  lattice_path: Optional[str] = None,
                  excel_path: Optional[str] = None,
@@ -86,6 +92,7 @@ class RFTrackAdapter(SimulatorBase):
                  particle_charge: float = -1.0,
                  aperture: float = 0.05,
                  G_quad: Optional[float] = None,
+                 dipole_slices: int = 20,
                  debug: bool = None):
         """
         Initialise RF-Track adapter.
@@ -114,6 +121,12 @@ class RFTrackAdapter(SimulatorBase):
             Quadrupole gradient calibration constant in T/A/m.
             Converts current to field gradient: gradient = G_quad × current.
             Default: 2.694 T/A/m (UH FEL quadrupoles)
+        dipole_slices : int
+            Non-zero enables analytical sector-bend correction for dipoles.
+            RF-Track v2.5.5 SBend is broken (P/δ confusion); dipoles are
+            tracked as Drifts with post-tracking analytical correction
+            (body focusing + dispersion + R₅₆). Set to 0 to disable.
+            Default: 20
         debug : bool, optional
             Enable debug logging
         """
@@ -150,11 +163,17 @@ class RFTrackAdapter(SimulatorBase):
         # Default is for UH FEL quadrupoles (2.694 T/A/m)
         self.G_quad = G_quad if G_quad is not None else PhysicalConstants.G_quad_default
 
+        # Dipole slicing (workaround for broken SBend in RF-Track v2.5.5)
+        self.dipole_slices = dipole_slices
+
         # Space charge configuration
         self.space_charge_enabled = space_charge
         self.sc_mesh = sc_mesh or (32, 32, 64)
         self.sc_nsteps = 1  # SC kicks per element (Lattice mode)
         self._space_charge_effect = None
+
+        # Physical aperture mode
+        self._physical_apertures = False
 
         # RF-Track native objects
         self._lattice: Optional[rft.Lattice] = None
@@ -248,17 +267,28 @@ class RFTrackAdapter(SimulatorBase):
             f"{self._lattice.size()} elements (L={self._lattice.get_length():.3f} m)"
         )
 
-        # Track returns the tracked bunch (original is not modified in place)
-        tracked_bunch = self._lattice.track(self._bunch)
-
-        final_rftrack = tracked_bunch.get_phase_space()
-        final_particles = self.transform_coordinates(
-            final_rftrack, CoordinateSystem.RFTRACK, CoordinateSystem.FELSIM
+        # Use segmented tracking if any dipoles need analytical correction
+        has_analytical = any(
+            e.parameters.get('_analytical_dipole', False) for e in self.beamline
         )
-        twiss = self._calculate_twiss(final_particles)
 
-        n_good = tracked_bunch.get_ngood()
-        n_lost = tracked_bunch.get_nlost()
+        if has_analytical:
+            final_rftrack = self._track_segmented(particles_rftrack)
+            n_good = final_rftrack.shape[0] if final_rftrack.ndim == 2 else 0
+            n_lost = particles.shape[0] - n_good
+        else:
+            tracked_bunch = self._lattice.track(self._bunch)
+            final_rftrack = tracked_bunch.get_phase_space()
+            n_good = tracked_bunch.get_ngood()
+            n_lost = tracked_bunch.get_nlost()
+
+        if isinstance(final_rftrack, np.ndarray) and final_rftrack.ndim == 2 and final_rftrack.shape[0] > 0:
+            final_particles = self.transform_coordinates(
+                final_rftrack, CoordinateSystem.RFTRACK, CoordinateSystem.FELSIM
+            )
+        else:
+            final_particles = np.empty((0, 6))
+        twiss = self._calculate_twiss(final_particles) if final_particles.shape[0] > 0 else {}
 
         self.logger.info(
             f"Tracking complete: {n_good} good, {n_lost} lost particles"
@@ -383,32 +413,59 @@ class RFTrackAdapter(SimulatorBase):
         elem_type = element.element_type.upper()
         params = element.parameters
         length = element.length
-        aperture = self.default_aperture
 
         if elem_type == 'DRIFT':
             elem = rft.Drift(length)
+            ap_x = ap_y = self.BEAM_PIPE_RADIUS if self._physical_apertures else self.default_aperture
 
         elif elem_type in ['QUAD_F', 'QPF']:
             elem = rft.Quadrupole()
             elem.set_length(length)
             k1 = self._current_to_k1(params.get('current', 0.0), length, focusing=True)
             elem.set_strength(k1 * length)  # integrated strength
+            r = self.QUAD_HALF_APERTURE if self._physical_apertures else self.default_aperture
+            ap_x = ap_y = r
 
         elif elem_type in ['QUAD_D', 'QPD']:
             elem = rft.Quadrupole()
             elem.set_length(length)
             k1 = self._current_to_k1(params.get('current', 0.0), length, focusing=False)
             elem.set_strength(k1 * length)
+            r = self.QUAD_HALF_APERTURE if self._physical_apertures else self.default_aperture
+            ap_x = ap_y = r
 
-        elif elem_type in ['DIPOLE', 'DPH', 'DIPOLE_WEDGE', 'DPW']:
+        elif elem_type in ['DIPOLE_WEDGE', 'DPW']:
+            # FELsim models edge kicks as thin-lens matrices. RF-Track's SBend
+            # set_E1/set_E2 is informational only, so we use a thin-lens
+            # Quadrupole with K1L = -K0 * tan(wedge_angle) to reproduce the
+            # horizontal edge kick exactly and the vertical kick approximately
+            # (triangle-model fringe correction not included here).
+            wedge_angle = np.radians(params.get('angle', 0.0))
+            K0 = params.get('dipole_K0', 0.0)
+            if wedge_angle != 0 and K0 != 0:
+                K1L = -K0 * np.tan(wedge_angle)
+                elem = rft.Quadrupole()
+                elem.set_length(1e-10)  # near-zero; true zero segfaults
+                elem.set_strength(K1L)
+            else:
+                elem = rft.Drift(0)
+            ap_x = ap_y = self.default_aperture
+
+        elif elem_type in ['DIPOLE', 'DPH']:
             angle = params.get('angle', 0.0)
-            if angle != 0 and length > 0:
-                elem = rft.SBend()
-                elem.set_length(length)
-                # Use set_K0 (curvature = 1/rho = angle/length) instead of set_angle
-                # for proper curvilinear coordinate tracking in RF-Track Lattice
-                K0 = np.radians(angle) / length
-                elem.set_K0(K0)
+            if self._physical_apertures:
+                ap_x = self.DIPOLE_HALF_WIDTH
+                ap_y = self.DIPOLE_HALF_GAP
+            else:
+                ap_x = ap_y = self.default_aperture
+
+            if angle != 0 and length > 0 and self.dipole_slices > 0:
+                # RF-Track v2.5.5 SBend body tracking is broken (treats
+                # absolute P as δ). Use a Drift for the lattice placeholder
+                # (correct path length and y-plane) and mark for analytical
+                # sector-bend correction in segmented tracking.
+                elem = rft.Drift(length)
+                params['_analytical_dipole'] = True
             else:
                 elem = rft.Drift(length)
 
@@ -416,18 +473,21 @@ class RFTrackAdapter(SimulatorBase):
             elem = rft.Solenoid()
             elem.set_length(length)
             elem.set_Bz(params.get('field', 0.0))
+            ap_x = ap_y = self.default_aperture
 
         elif elem_type == 'SEXTUPOLE':
             elem = rft.Sextupole()
             elem.set_length(length)
             elem.set_strength(params.get('strength', 0.0))
+            ap_x = ap_y = self.default_aperture
 
         else:
             self.logger.warning(f"Unknown element type '{elem_type}', using drift")
             elem = rft.Drift(length)
+            ap_x = ap_y = self.BEAM_PIPE_RADIUS if self._physical_apertures else self.default_aperture
 
         if hasattr(elem, 'set_aperture'):
-            elem.set_aperture(aperture, aperture)
+            elem.set_aperture(ap_x, ap_y)
 
         if hasattr(elem, 'set_name') and 'name' in params:
             elem.set_name(params['name'])
@@ -523,15 +583,313 @@ class RFTrackAdapter(SimulatorBase):
         super().set_beamline(elements)
         self._build_lattice()
 
+    def _annotate_dipole_edges(self):
+        """Scan beamline for DPW-DPH-DPW triplets and annotate DPW elements.
+
+        FELsim models dipole edge kicks as separate DIPOLE_WEDGE (DPW) elements
+        flanking each DIPOLE (DPH). RF-Track's SBend set_E1/set_E2 is
+        informational only (no effect on tracking), so we convert each DPW
+        to a thin-lens quadrupole applying the equivalent edge kick:
+            K1L = -K0 * tan(wedge_angle)
+        where K0 = theta/L is the dipole curvature.
+
+        This method writes 'dipole_K0' into each DPW's parameters so
+        _convert_element_to_native can compute the thin-lens strength.
+        """
+        n_annotated = 0
+        for i in range(len(self.beamline) - 2):
+            e0, e1, e2 = self.beamline[i], self.beamline[i + 1], self.beamline[i + 2]
+            if (e0.element_type.upper() in ('DIPOLE_WEDGE', 'DPW') and
+                    e1.element_type.upper() in ('DIPOLE', 'DPH') and
+                    e2.element_type.upper() in ('DIPOLE_WEDGE', 'DPW')):
+                dph_angle = e1.parameters.get('angle', 0.0)
+                dph_length = e1.length
+                if dph_angle != 0 and dph_length > 0:
+                    # Use |K0| to match FELsim convention (R = L/|θ|).
+                    # Edge kick sign depends on pole face geometry, not bending direction.
+                    K0 = abs(np.radians(dph_angle) / dph_length)
+                    e0.parameters['dipole_K0'] = K0
+                    e2.parameters['dipole_K0'] = K0
+                    n_annotated += 1
+        if n_annotated:
+            self.logger.info(
+                f"Annotated {n_annotated} DPW-DPH-DPW triplets for edge kick conversion"
+            )
+
+    def _build_sliced_dipole(self, length, angle_rad, ap_x, ap_y):
+        """Build a sector bend from N Corrector+Drift slices (split-operator).
+
+        Workaround for RF-Track v2.5.5 SBend bug. Each slice:
+            half-Drift(ds/2) → Corrector(Kx) → half-Drift(ds/2)
+
+        The Corrector normalisation requires Kx = BdL/P₀ (same convention
+        as Quadrupole set_strength taking k1*L, not P/q*k1*L).
+        Since BdL = Bρ·dθ·1000 and Bρ = P₀/c, this simplifies to
+        Kx = dθ·1000/c = dθ/0.299792458, independent of beam energy.
+
+        Provides correct deflection and chromatic dispersion (1/P scaling).
+        Body focusing (R11 = cos θ) is NOT reproduced — that requires
+        a curved reference frame which only SBend provides.
+        """
+        N = self.dipole_slices
+        ds = length / N
+        dtheta = angle_rad / N
+        # Corrector Kx: normalised integrated field per slice
+        c_mev = PhysicalConstants.C * 1e-6  # 299.792458 MeV/c per T·m
+        dKx = dtheta * 1000 / c_mev  # sign follows angle sign
+
+        elements = []
+        for _ in range(N):
+            d1 = rft.Drift(ds / 2)
+            d1.set_aperture(ap_x, ap_y)
+            elements.append(d1)
+
+            c = rft.Corrector(0, dKx, 0)
+            c.set_aperture(ap_x, ap_y)
+            elements.append(c)
+
+            d2 = rft.Drift(ds / 2)
+            d2.set_aperture(ap_x, ap_y)
+            elements.append(d2)
+
+        return elements
+
+    @staticmethod
+    def _apply_sector_bend_correction(ps, length, angle_rad, Pc):
+        """Apply analytical sector-bend body correction to phase space.
+
+        RF-Track's SBend is broken (v2.5.5), so DPH elements are tracked as
+        Drifts. This method corrects the tracked phase space from drift
+        behaviour to sector-bend behaviour by applying:
+
+            M_correction = M_sector × M_drift⁻¹
+
+        to the horizontal plane (x, x'). The vertical plane (y, y') is
+        already correct (both drift and sector bend give identity + L).
+
+        Also applies:
+        - Dispersion: R₁₆ = ρ(1-cos θ), R₂₆ = sin θ (via δ = ΔP/P₀)
+        - Path length: R₅₆ correction (TODO: implement if needed)
+
+        Parameters
+        ----------
+        ps : ndarray (N, 6)
+            Phase space in RF-Track coordinates AFTER tracking through Drift.
+            Columns: x[mm], x'[mrad], y[mm], y'[mrad], t[mm/c], P[MeV/c]
+        length : float
+            Dipole length [m]
+        angle_rad : float
+            Bend angle [rad]
+        Pc : float
+            Reference momentum [MeV/c]
+        """
+        if ps.ndim != 2 or ps.shape[0] == 0:
+            return ps
+
+        theta = angle_rad
+        L = length
+        rho = L / theta
+        C = np.cos(theta)
+        S = np.sin(theta)
+
+        # The drift that was applied: M_drift = [[1, L], [0, 1]]
+        # We want: M_sector = [[C, ρS], [-S/ρ, C]]
+        # Correction: M_corr = M_sector × M_drift⁻¹
+        #   M_drift⁻¹ = [[1, -L], [0, 1]]
+        #   M_corr = [[C, ρS - LC], [-S/ρ, LS/ρ + C]]
+        # Units: R12 [m] = [mm/mrad], R21 [1/m] = [mrad/mm] — no scaling
+        # needed because both x and x' differ from SI by the same factor (1000).
+        R11 = C
+        R12 = rho * S - L * C    # m (= mm/mrad)
+        R21 = -S / rho           # 1/m (= mrad/mm)
+        R22 = L * S / rho + C
+
+        x = ps[:, 0].copy()    # mm
+        xp = ps[:, 1].copy()   # mrad
+
+        ps[:, 0] = R11 * x + R12 * xp
+        ps[:, 1] = R21 * x + R22 * xp
+
+        # Dispersion: Δx += ρ(1-C) × δ, Δx' += S × δ (in mrad)
+        # RF-Track 6th col is P [MeV/c]; δ = (P - Pc) / Pc
+        delta = (ps[:, 5] - Pc) / Pc
+        ps[:, 0] += rho * (1 - C) * 1000 * delta   # mm
+        ps[:, 1] += S * 1000 * delta                # mrad
+
+        # Path length correction: ΔL = -ρ sin θ × δ (chromatic)
+        # This enters the 5th coordinate (t in mm/c)
+        # Sector bend: R₅₆ = -L/(ρ²γ²) + (L-ρ sin θ)/ρ ≈ -(ρ sin θ - L)/ρ for ultra-rel
+        # Drift R₅₆ = 0. So correction = sector_R56 × δ.
+        # For highly relativistic (γ >> 1): R₅₆ ≈ -(ρ sin θ - L) / ρ = 1 - sin θ/θ
+        # In mm/c: multiply by 1000
+        # The drift already applied zero R₅₆; we add the sector-bend contribution
+        R56_sector = -(rho * S - L)  # metres (negative for bunch compression)
+        ps[:, 4] += R56_sector * 1000 * delta  # mm/c
+
+        return ps
+
+    def _track_segmented(self, particles_rftrack):
+        """Track through beamline segment-by-segment with analytical dipole corrections.
+
+        Groups consecutive non-analytical-dipole elements into sub-lattices
+        for efficient RF-Track tracking. At each analytical dipole, applies
+        the correction from _apply_sector_bend_correction.
+        """
+        ps = particles_rftrack.copy()
+
+        # Build segments: list of (sub_lattice, dipole_info_or_None)
+        # Each segment is either a group of normal elements (tracked by RF-Track)
+        # or a single analytical dipole (corrected after drift tracking)
+        segments = []
+        current_group = []
+
+        for elem in self.beamline:
+            params = elem.parameters
+            is_analytical = params.get('_analytical_dipole', False)
+
+            if is_analytical:
+                # Flush accumulated group
+                if current_group:
+                    segments.append(('lattice', current_group))
+                    current_group = []
+                # Add dipole as its own segment
+                segments.append(('dipole', elem))
+            else:
+                current_group.append(elem)
+
+        if current_group:
+            segments.append(('lattice', current_group))
+
+        # Track through segments
+        for seg_type, seg_data in segments:
+            if ps.ndim != 2 or ps.shape[0] == 0:
+                break
+
+            if seg_type == 'lattice':
+                lat = rft.Lattice()
+                for elem in seg_data:
+                    native = self._convert_element_to_native(elem)
+                    if isinstance(native, list):
+                        for ne in native:
+                            lat.append(ne)
+                    else:
+                        lat.append(native)
+
+                bunch = rft.Bunch6d(
+                    self.particle_mass, self.particle_charge, self._Pc, ps
+                )
+                tracked = lat.track(bunch)
+                ps = np.array(tracked.get_phase_space())
+
+            else:  # 'dipole'
+                elem = seg_data
+                angle_rad = np.radians(elem.parameters.get('angle', 0.0))
+                length = elem.length
+
+                # Track through drift (for y-plane and path length)
+                drift = rft.Drift(length)
+                ap = self.DIPOLE_HALF_WIDTH if self._physical_apertures else self.default_aperture
+                drift.set_aperture(ap, ap)
+                lat = rft.Lattice()
+                lat.append(drift)
+                bunch = rft.Bunch6d(
+                    self.particle_mass, self.particle_charge, self._Pc, ps
+                )
+                tracked = lat.track(bunch)
+                ps = np.array(tracked.get_phase_space())
+
+                # Apply analytical sector-bend correction
+                if ps.ndim == 2 and ps.shape[0] > 0:
+                    self._apply_sector_bend_correction(
+                        ps, length, angle_rad, self._Pc
+                    )
+
+        return ps
+
+    def track_elements(self, ps_rftrack, start_idx, end_idx):
+        """Track through beamline[start_idx:end_idx] with analytical dipole corrections.
+
+        Like _track_segmented() but for an arbitrary element range.
+        Input/output are RF-Track coordinates (N, 6).
+        """
+        ps = ps_rftrack.copy()
+        elements = self.beamline[start_idx:end_idx]
+
+        segments = []
+        current_group = []
+
+        for elem in elements:
+            if elem.parameters.get('_analytical_dipole', False):
+                if current_group:
+                    segments.append(('lattice', current_group))
+                    current_group = []
+                segments.append(('dipole', elem))
+            else:
+                current_group.append(elem)
+
+        if current_group:
+            segments.append(('lattice', current_group))
+
+        for seg_type, seg_data in segments:
+            if ps.ndim != 2 or ps.shape[0] == 0:
+                break
+
+            if seg_type == 'lattice':
+                lat = rft.Lattice()
+                for elem in seg_data:
+                    native = self._convert_element_to_native(elem)
+                    if isinstance(native, list):
+                        for ne in native:
+                            lat.append(ne)
+                    else:
+                        lat.append(native)
+                lat.set_aperture(self.default_aperture, self.default_aperture)
+
+                bunch = rft.Bunch6d(
+                    self.particle_mass, self.particle_charge, self._Pc, ps
+                )
+                tracked = lat.track(bunch)
+                ps = np.array(tracked.get_phase_space())
+
+            else:  # 'dipole'
+                elem = seg_data
+                angle_rad = np.radians(elem.parameters.get('angle', 0.0))
+                length = elem.length
+
+                drift = rft.Drift(length)
+                ap = self.DIPOLE_HALF_WIDTH if self._physical_apertures else self.default_aperture
+                drift.set_aperture(ap, ap)
+                lat = rft.Lattice()
+                lat.append(drift)
+                bunch = rft.Bunch6d(
+                    self.particle_mass, self.particle_charge, self._Pc, ps
+                )
+                tracked = lat.track(bunch)
+                ps = np.array(tracked.get_phase_space())
+
+                if ps.ndim == 2 and ps.shape[0] > 0:
+                    self._apply_sector_bend_correction(
+                        ps, length, angle_rad, self._Pc
+                    )
+
+        return ps
+
     def _build_lattice(self):
         """Build RF-Track lattice from beamline elements."""
         self._lattice = rft.Lattice()
         self._native_elements = []
 
+        self._annotate_dipole_edges()
+
         for elem in self.beamline:
             native_elem = self._convert_element_to_native(elem)
-            self._native_elements.append(native_elem)
-            self._lattice.append(native_elem)
+            if isinstance(native_elem, list):
+                for ne in native_elem:
+                    self._native_elements.append(ne)
+                    self._lattice.append(ne)
+            else:
+                self._native_elements.append(native_elem)
+                self._lattice.append(native_elem)
 
         # Set lattice aperture to match element apertures
         self._lattice.set_aperture(self.default_aperture, self.default_aperture)
@@ -577,6 +935,48 @@ class RFTrackAdapter(SimulatorBase):
         self.logger.info(
             f"Space charge: {enabled}, method={method}, mesh={self.sc_mesh}"
         )
+
+    def enable_physical_apertures(self, quad_half_aperture=None,
+                                   dipole_half_gap=None, dipole_half_width=None,
+                                   beam_pipe_radius=None):
+        """Enable per-element physical apertures for particle tracking.
+
+        Parameters
+        ----------
+        quad_half_aperture : float, optional
+            Quadrupole half-aperture [m]. Default: 13.5 mm (27 mm bore/2).
+        dipole_half_gap : float, optional
+            Dipole vertical half-gap [m]. Default: 7.24 mm.
+        dipole_half_width : float, optional
+            Dipole horizontal half-width [m]. Default: 25 mm (placeholder).
+        beam_pipe_radius : float, optional
+            Default beam pipe radius [m]. Default: 12.7 mm (1" pipe).
+        """
+        self._physical_apertures = True
+        if quad_half_aperture is not None:
+            self.QUAD_HALF_APERTURE = quad_half_aperture
+        if dipole_half_gap is not None:
+            self.DIPOLE_HALF_GAP = dipole_half_gap
+        if dipole_half_width is not None:
+            self.DIPOLE_HALF_WIDTH = dipole_half_width
+        if beam_pipe_radius is not None:
+            self.BEAM_PIPE_RADIUS = beam_pipe_radius
+
+        self.logger.info(
+            f"Physical apertures enabled: quad={self.QUAD_HALF_APERTURE*1e3:.1f} mm, "
+            f"dipole gap={self.DIPOLE_HALF_GAP*1e3:.2f} mm, "
+            f"dipole width={self.DIPOLE_HALF_WIDTH*1e3:.1f} mm, "
+            f"pipe={self.BEAM_PIPE_RADIUS*1e3:.1f} mm"
+        )
+
+        if self._lattice is not None and self.beamline:
+            self._build_lattice()
+
+    def disable_physical_apertures(self):
+        """Disable per-element physical apertures, revert to default."""
+        self._physical_apertures = False
+        if self._lattice is not None and self.beamline:
+            self._build_lattice()
 
     def _setup_space_charge(self):
         """Configure space charge via the global SC engine and per-element kicks.
@@ -647,12 +1047,18 @@ class RFTrackAdapter(SimulatorBase):
 
         # Track element by element
         s = 0.0
+        n_initial = particles.shape[0]
         for idx, elem in enumerate(self.beamline):
-            # Build single-element lattice
-            native_elem = self._convert_element_to_native(elem)
+            n_before = particles_rftrack.shape[0] if particles_rftrack.ndim == 2 else 0
+
+            # Build lattice for this element (may be multi-element for sliced dipoles)
+            native = self._convert_element_to_native(elem)
             single_lat = rft.Lattice()
-            single_lat.append(native_elem)
-            single_lat.set_aperture(self.default_aperture, self.default_aperture)
+            if isinstance(native, list):
+                for ne in native:
+                    single_lat.append(ne)
+            else:
+                single_lat.append(native)
 
             # Create bunch for this segment
             bunch = rft.Bunch6d(
@@ -666,9 +1072,32 @@ class RFTrackAdapter(SimulatorBase):
             s += elem.length
 
             # Get phase space from tracked bunch
-            particles_rftrack = tracked_bunch.get_phase_space()
+            n_good = tracked_bunch.get_ngood()
+            n_lost_elem = n_before - n_good
+            particles_rftrack = np.array(tracked_bunch.get_phase_space())
 
-            # Record element info
+            # Apply analytical sector-bend correction for flagged dipoles
+            if (elem.parameters.get('_analytical_dipole', False)
+                    and particles_rftrack.ndim == 2
+                    and particles_rftrack.shape[0] > 0):
+                angle_rad = np.radians(elem.parameters.get('angle', 0.0))
+                self._apply_sector_bend_correction(
+                    particles_rftrack, elem.length, angle_rad, self._Pc
+                )
+
+            if n_lost_elem > 0:
+                self.logger.info(
+                    f"Element {idx} ({elem.element_type}, s={s:.4f} m): "
+                    f"lost {n_lost_elem}, remaining {n_good}/{n_initial} "
+                    f"({n_good/n_initial:.1%})"
+                )
+
+            # Record element info with transmission data
+            elem_params = dict(elem.parameters)
+            elem_params['n_good'] = n_good
+            elem_params['n_lost'] = n_lost_elem
+            elem_params['transmission'] = n_good / n_initial if n_initial > 0 else 0
+
             evolution.elements.append(ElementInfo(
                 element_type=elem.element_type,
                 s_start=s - elem.length,
@@ -676,7 +1105,7 @@ class RFTrackAdapter(SimulatorBase):
                 length=elem.length,
                 color=self._get_element_color(elem.element_type),
                 index=idx,
-                parameters=elem.parameters
+                parameters=elem_params
             ))
 
             # Checkpoint if requested
@@ -726,8 +1155,12 @@ class RFTrackAdapter(SimulatorBase):
             params['current'] = native_elem.current
         if hasattr(native_elem, 'angle'):
             params['angle'] = native_elem.angle
+        if hasattr(native_elem, 'pole_gap'):
+            params['pole_gap'] = native_elem.pole_gap
         if hasattr(native_elem, 'fringeType'):
             params['fringe_type'] = native_elem.fringeType
+        if hasattr(native_elem, 'name') and native_elem.name:
+            params['name'] = native_elem.name
 
         return BeamlineElement(
             element_type=elem_type,

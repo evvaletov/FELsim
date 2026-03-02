@@ -683,8 +683,8 @@ class dipole_wedge(lattice):
         a = self.angle if angle is None else angle
         dipole_angle = self.dipole_angle
         dipole_length = self.dipole_length
-        By = (self.M * self.C * self.beta * self.gamma / self.Q) * (dipole_angle * np.pi / 180 / dipole_length)
-        R = self.M * self.C * self.beta * self.gamma / (self.Q * By)
+        # Edge kick uses |ρ|: direction depends on pole face geometry, not bending sign
+        R = dipole_length / (abs(dipole_angle) * np.pi / 180)
         eta = (a * np.pi / 180) * l / self.length
         Tx = np.tan(eta)
         # Fringe field contribution using triangle model
@@ -738,16 +738,15 @@ class dipole_wedge(lattice):
                 a = angle
         dipole_angle = self.dipole_angle
         dipole_length = self.dipole_length
-        By = (self.M * self.C * self.beta * self.gamma / self.Q) * (dipole_angle * sp.pi / 180 / dipole_length)
-        R = self.M * self.C * self.beta * self.gamma / (self.Q * By)
+        # Edge kick uses |ρ|: direction depends on pole face geometry, not bending sign
+        R = dipole_length / (sp.Abs(dipole_angle) * sp.pi / 180)
         eta = (a * sp.pi / 180) * l / self.length
         Tx = sp.tan(eta)
         z = sp.symbols("z", real=True)
         g = self.pole_gap
         le = self.length
-        Bz = By * (z / le)
-        K_expr = sp.integrate((Bz * (By - Bz)) / (g * By ** 2), (z, 0, le))
-        K_simplified = sp.simplify(K_expr)
+        # Fringe field K integral (triangle model): By not needed since R computed directly
+        K_simplified = le / (6 * g)
         h = 1 / R
         phi = sp.simplify(K_simplified * g * h * (1 + sp.sin(eta) ** 2) / sp.cos(eta))
         Ty = sp.tan(eta - phi)

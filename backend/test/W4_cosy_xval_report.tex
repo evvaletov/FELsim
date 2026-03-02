@@ -271,38 +271,39 @@ all three converged runs: FELsim, COSY FR\,0, and COSY FR\,1.
 
 \begin{table}[h]
 \centering
-\caption{Optimised quadrupole currents: FELsim, COSY FR\,0, and
-COSY FR\,1 (warm-started from FR\,0).}
+\caption{Optimised quadrupole currents: FELsim, COSY FR\,0,
+COSY FR\,1 (warm-started from FR\,0), and RF-Track (Stage~11 only,
+warm-started from FELsim).}
 \label{tab:currents_fr1}
 \small
 \sisetup{table-format=+1.3}
-\begin{tabular}{@{} c l l c SSS c @{}}
+\begin{tabular}{@{} c l l c SSSS c @{}}
 \toprule
-{Elem} & {Label} & {Section} & {F/D} & {FELsim (A)} & {COSY FR\,0 (A)} & {COSY FR\,1 (A)} & {Stage} \\
+{Elem} & {Label} & {Section} & {F/D} & {FELsim (A)} & {COSY FR\,0 (A)} & {COSY FR\,1 (A)} & {RFT-opt (A)} & {Stage} \\
 \midrule
-1   & LQ1   & First doublet     & F &  0.822 &  0.839 &  0.842 & 1 \\
-3   & LQ2   & First doublet     & D &  1.043 &  1.052 &  1.057 & 1 \\
-10  & DPHQ  & Chromaticity 1    & F &  3.883 &  3.957 &  3.979 & 2 \\
-16  & F1QA  & Triplet 1         & D &  2.240 &  1.993 &  1.994 & 3 \\
-18  & F1QB  & Triplet 1         & F &  4.953 &  4.859 &  4.955 & 3 \\
-20  & F1QC  & Triplet 1         & D &  3.426 &  3.499 &  3.599 & 3 \\
-27  & DPHQ  & Chromaticity 2    & F &  4.666 &  4.685 &  4.711 & 4 \\
-33  & F2QA  & Double triplet    & D &  2.694 &  0.357 &  0.518 & 5 \\
-35  & F2QB  & Double triplet    & F &  2.652 & -1.975 & -1.849 & 5 \\
-37  & F2QC  & Double triplet    & D &  0.277 & -1.995 & -1.985 & 5 \\
-50  & DPHQ  & Chromaticity 3    & F &  4.674 &  4.685 &  4.696 & 6 \\
-56  & F3QA  & IP doublet        & D &  3.122 &  3.168 &  3.218 & 7 \\
-58  & F3QB  & IP doublet        & F &  3.313 &  3.321 &  3.361 & 7 \\
-61  & F3QC  & Post-IP doublet   & F &  5.178 &  5.166 &  5.252 & 8 \\
-63  & F3QD  & Post-IP doublet   & D &  4.043 &  4.011 &  4.080 & 8 \\
-70  & DPHQ  & Chromaticity 4    & F &  4.682 &  4.662 &  4.811 & 9 \\
-76  & F4QA  & Triplet 2         & D &  3.934 &  3.869 &  3.953 & 10 \\
-78  & F4QB  & Triplet 2         & F &  4.079 &  4.452 &  4.506 & 10 \\
-80  & F4QC  & Triplet 2         & D &  0.014 &  0.608 &  0.592 & 10 \\
-87  & DPHQ  & Chromaticity 5    & F &  1.362 &  1.259 &  1.610 & 11 \\
-93  & UBQ1  & Final triplet     & D &  0.945 &  2.348 &  2.473 & 11 \\
-95  & UBQ2  & Final triplet     & F &  2.885 &  3.802 &  3.602 & 11 \\
-97  & UBQ3  & Final triplet     & D &  2.192 &  4.747 &  3.995 & 11 \\
+1   & LQ1   & First doublet     & F &  0.822 &  0.839 &  0.842 & {---} & 1 \\
+3   & LQ2   & First doublet     & D &  1.043 &  1.052 &  1.057 & {---} & 1 \\
+10  & DPHQ  & Chromaticity 1    & F &  3.883 &  3.957 &  3.979 & {---} & 2 \\
+16  & F1QA  & Triplet 1         & D &  2.240 &  1.993 &  1.994 & {---} & 3 \\
+18  & F1QB  & Triplet 1         & F &  4.953 &  4.859 &  4.955 & {---} & 3 \\
+20  & F1QC  & Triplet 1         & D &  3.426 &  3.499 &  3.599 & {---} & 3 \\
+27  & DPHQ  & Chromaticity 2    & F &  4.666 &  4.685 &  4.711 & {---} & 4 \\
+33  & F2QA  & Double triplet    & D &  2.694 &  0.357 &  0.518 & {---} & 5 \\
+35  & F2QB  & Double triplet    & F &  2.652 & -1.975 & -1.849 & {---} & 5 \\
+37  & F2QC  & Double triplet    & D &  0.277 & -1.995 & -1.985 & {---} & 5 \\
+50  & DPHQ  & Chromaticity 3    & F &  4.674 &  4.685 &  4.696 & {---} & 6 \\
+56  & F3QA  & IP doublet        & D &  3.122 &  3.168 &  3.218 & {---} & 7 \\
+58  & F3QB  & IP doublet        & F &  3.313 &  3.321 &  3.361 & {---} & 7 \\
+61  & F3QC  & Post-IP doublet   & F &  5.178 &  5.166 &  5.252 & {---} & 8 \\
+63  & F3QD  & Post-IP doublet   & D &  4.043 &  4.011 &  4.080 & {---} & 8 \\
+70  & DPHQ  & Chromaticity 4    & F &  4.682 &  4.662 &  4.811 & {---} & 9 \\
+76  & F4QA  & Triplet 2         & D &  3.934 &  3.869 &  3.953 & {---} & 10 \\
+78  & F4QB  & Triplet 2         & F &  4.079 &  4.452 &  4.506 & {---} & 10 \\
+80  & F4QC  & Triplet 2         & D &  0.014 &  0.608 &  0.592 & {---} & 10 \\
+87  & DPHQ  & Chromaticity 5    & F &  1.362 &  1.259 &  1.610 &  2.045 & 11 \\
+93  & UBQ1  & Final triplet     & D &  0.945 &  2.348 &  2.473 &  1.405 & 11 \\
+95  & UBQ2  & Final triplet     & F &  2.885 &  3.802 &  3.602 &  0.722 & 11 \\
+97  & UBQ3  & Final triplet     & D &  2.192 &  4.747 &  3.995 &  0.111 & 11 \\
 \bottomrule
 \end{tabular}
 \end{table}
