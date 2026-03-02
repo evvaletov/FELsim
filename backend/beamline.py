@@ -778,7 +778,7 @@ class beamline:
             Currently uses drift space approximation.
             '''
             l = self.length if length is None else length
-            M56 = (l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+            M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
             mat = np.array([
                 [1.0, l, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
@@ -801,7 +801,7 @@ class beamline:
                     l = symbols(length, real=True)
                 else:
                     l = length
-            M56 = (l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+            M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
             mat = Matrix([
                 [1, l, 0, 0, 0, 0],
                 [0, 1, 0, 0, 0, 0],

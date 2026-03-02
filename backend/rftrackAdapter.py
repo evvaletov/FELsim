@@ -84,6 +84,9 @@ class RFTrackAdapter(SimulatorBase):
     # Near-zero length for DPW thin-lens quadrupoles — true zero segfaults in RF-Track
     DPW_THIN_LENS_LENGTH = 1e-10
 
+    # Angles below this threshold are treated as zero in sector-bend correction
+    SECTOR_BEND_MIN_ANGLE = 1e-12
+
     def __init__(self,
                  lattice_path: Optional[str] = None,
                  excel_path: Optional[str] = None,
@@ -208,6 +211,8 @@ class RFTrackAdapter(SimulatorBase):
 
     def _update_relativistic_params(self):
         """Update relativistic parameters from beam energy."""
+        if self.beam_energy <= 0:
+            raise ValueError(f"beam_energy must be positive, got {self.beam_energy}")
         self._gamma = 1 + self.beam_energy / self.particle_mass
         self._beta = np.sqrt(1 - 1/self._gamma**2)
         self._Pc = self._gamma * self._beta * self.particle_mass  # MeV/c
@@ -531,40 +536,48 @@ class RFTrackAdapter(SimulatorBase):
         result = np.zeros_like(particles)
 
         if from_system == CoordinateSystem.FELSIM and to_system == CoordinateSystem.RFTRACK:
-            # FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T×10³, δW/W×10³]
+            # FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T×10³, ΔK/K₀×10³]
             # RF-Track: [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
             # Transverse coordinates: same units, no conversion needed
             result[:, 0:4] = particles[:, 0:4]
-            # Longitudinal time: ΔToF/T×10³ → t (mm/c)
-            # For small deviations, approximate t ≈ 0 + relative offset
-            # The FELsim coordinate is relative; RF-Track t is arrival time
-            result[:, 4] = particles[:, 4]  # Keep relative timing
-            # Energy → Momentum: δW/W×10³ → P = P_ref × (1 + δP/P)
-            # For relativistic particles: δP/P ≈ δE/E
-            result[:, 5] = self._Pc * (1.0 + particles[:, 5] * 1e-3)
+            # Longitudinal: pass-through. FELsim coord5 (ΔToF/T×10³) and RF-Track
+            # coord5 (ct in mm) use different units. The pass-through is valid because
+            # (a) the round-trip is self-consistent, (b) R56 corrections are applied
+            # in RF-Track's native mm/c, and (c) only relative timing matters.
+            # For absolute longitudinal analysis, the adapter would need rf_frequency.
+            result[:, 4] = particles[:, 4]
+            # FELsim coord6 = ΔK/K₀ × 10³ → RF-Track P [MeV/c] (exact)
+            K = self.beam_energy * (1.0 + particles[:, 5] * 1e-3)
+            E = K + self.particle_mass
+            result[:, 5] = np.sqrt(E**2 - self.particle_mass**2)
 
         elif from_system == CoordinateSystem.RFTRACK and to_system == CoordinateSystem.FELSIM:
             # RF-Track: [x(mm), x'(mrad), y(mm), y'(mrad), t(mm/c), P(MeV/c)]
-            # FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T×10³, δW/W×10³]
+            # FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T×10³, ΔK/K₀×10³]
             # Transverse coordinates: same units
             result[:, 0:4] = particles[:, 0:4]
-            # Time: keep as relative timing
+            # Longitudinal: pass-through (see FELSIM→RFTRACK comment above)
             result[:, 4] = particles[:, 4]
-            # Momentum → relative energy deviation
-            # P → δW/W×10³ = (P/P_ref - 1) × 10³
-            result[:, 5] = (particles[:, 5] / self._Pc - 1.0) * 1e3
+            # RF-Track P [MeV/c] → FELsim coord6 = ΔK/K₀ × 10³ (exact)
+            K = np.sqrt(particles[:, 5]**2 + self.particle_mass**2) - self.particle_mass
+            result[:, 5] = (K / self.beam_energy - 1.0) * 1e3
 
         elif from_system == CoordinateSystem.COSY and to_system == CoordinateSystem.RFTRACK:
             # COSY uses m and rad; RF-Track Bunch6d uses mm and mrad
             result[:, 0:4] = particles[:, 0:4] * 1e3  # m/rad → mm/mrad
             result[:, 4] = particles[:, 4] / (self._beta * PhysicalConstants.C) * 1e3  # l(m) → t(mm/c)
-            result[:, 5] = self._Pc * (1.0 + particles[:, 5])  # δ → P
+            # COSY δ = ΔK/K₀ → RF-Track P [MeV/c] (exact)
+            E0 = self.beam_energy + self.particle_mass  # total energy [MeV]
+            E = E0 + self.beam_energy * particles[:, 5]  # E₀ + K₀δ
+            result[:, 5] = np.sqrt(E**2 - self.particle_mass**2)  # P [MeV/c]
 
         elif from_system == CoordinateSystem.RFTRACK and to_system == CoordinateSystem.COSY:
             # RF-Track uses mm/mrad; COSY uses m/rad
             result[:, 0:4] = particles[:, 0:4] * 1e-3  # mm/mrad → m/rad
             result[:, 4] = particles[:, 4] * (self._beta * PhysicalConstants.C) * 1e-3  # t(mm/c) → l(m)
-            result[:, 5] = particles[:, 5] / self._Pc - 1.0  # P → δ
+            # RF-Track P [MeV/c] → COSY δ = ΔK/K₀ (exact)
+            K = np.sqrt(particles[:, 5]**2 + self.particle_mass**2) - self.particle_mass
+            result[:, 5] = K / self.beam_energy - 1.0
 
         else:
             raise NotImplementedError(
@@ -635,6 +648,9 @@ class RFTrackAdapter(SimulatorBase):
         Provides correct deflection and chromatic dispersion (1/P scaling).
         Body focusing (R11 = cos θ) is NOT reproduced — that requires
         a curved reference frame which only SBend provides.
+
+        Note: This method is retained for validation and future use. The primary
+        dipole tracking path uses ``_apply_sector_bend_correction()`` instead.
         """
         N = self.dipole_slices
         ds = length / N
@@ -660,7 +676,7 @@ class RFTrackAdapter(SimulatorBase):
         return elements
 
     @staticmethod
-    def _apply_sector_bend_correction(ps, length, angle_rad, Pc):
+    def _apply_sector_bend_correction(ps, length, angle_rad, Pc, particle_mass):
         """Apply analytical sector-bend body correction to phase space.
 
         RF-Track's SBend is broken (v2.5.5), so DPH elements are tracked as
@@ -674,9 +690,10 @@ class RFTrackAdapter(SimulatorBase):
 
         Also applies:
         - Dispersion: R₁₆ = ρ(1-cos θ), R₂₆ = sin θ (via δ = ΔP/P₀)
-        - Path length: R₅₆ = -(ρ sin θ - L) (ultra-relativistic approximation,
-          omits 1/γ² velocity term; error ~1/(θ²γ²) per dipole, negligible for
-          40 MeV electrons where γ ≈ 79)
+        - Path length: R₅₆ = -(ρ sin θ - L) (geometric only). The 1/γ²
+          velocity dispersion is already included by RF-Track's Drift tracking
+          (verified numerically). The correction converts geometric path-length
+          difference to time via 1/β₀.
 
         Parameters
         ----------
@@ -689,10 +706,18 @@ class RFTrackAdapter(SimulatorBase):
             Bend angle [rad]
         Pc : float
             Reference momentum [MeV/c]
+        particle_mass : float
+            Particle rest mass [MeV/c²]
+
+        Limitations
+        -----------
+        - Fringe field multipoles (Enge sextupole, octupole) not included
+        - Body focusing is linear only (no off-axis higher-order terms)
+        - No synchrotron radiation or space charge inside dipole body
         """
         if ps.ndim != 2 or ps.shape[0] == 0:
             return ps
-        if abs(angle_rad) < 1e-12:
+        if abs(angle_rad) < RFTrackAdapter.SECTOR_BEND_MIN_ANGLE:
             logger = get_logger_with_fallback(__name__)
             logger.warning("_apply_sector_bend_correction: near-zero angle (%.2e), skipping", angle_rad)
             return ps
@@ -724,18 +749,17 @@ class RFTrackAdapter(SimulatorBase):
         # Dispersion: Δx += ρ(1-C) × δ, Δx' += S × δ (in mrad)
         # RF-Track 6th col is P [MeV/c]; δ = (P - Pc) / Pc
         delta = (ps[:, 5] - Pc) / Pc
-        ps[:, 0] += rho * (1 - C) * 1000 * delta   # mm
+        # Use 2sin²(θ/2) instead of (1-cosθ) to avoid catastrophic cancellation for small θ
+        ps[:, 0] += rho * 2 * np.sin(theta / 2)**2 * 1000 * delta   # mm
         ps[:, 1] += S * 1000 * delta                # mrad
 
-        # Path length correction: ΔL = -ρ sin θ × δ (chromatic)
-        # This enters the 5th coordinate (t in mm/c)
-        # Sector bend: R₅₆ = -L/(ρ²γ²) + (L-ρ sin θ)/ρ ≈ -(ρ sin θ - L)/ρ for ultra-rel
-        # Drift R₅₆ = 0. So correction = sector_R56 × δ.
-        # For highly relativistic (γ >> 1): R₅₆ ≈ -(ρ sin θ - L) / ρ = 1 - sin θ/θ
-        # In mm/c: multiply by 1000
-        # The drift already applied zero R₅₆; we add the sector-bend contribution
+        # Geometric path-length correction: Δs = -(ρ sin θ - L) × δ
+        # The 1/γ² velocity dispersion is already handled by RF-Track's Drift.
+        # Convert path → time: Δ(ct) = Δs/β₀
+        gamma = np.sqrt(1 + (Pc / particle_mass)**2)
+        beta = np.sqrt(1 - 1/gamma**2)
         R56_sector = -(rho * S - L)  # metres (negative for bunch compression)
-        ps[:, 4] += R56_sector * 1000 * delta  # mm/c
+        ps[:, 4] += R56_sector * 1000 * delta / beta  # mm/c
 
         return ps
 
@@ -812,7 +836,7 @@ class RFTrackAdapter(SimulatorBase):
                 # Apply analytical sector-bend correction
                 if ps.ndim == 2 and ps.shape[0] > 0:
                     self._apply_sector_bend_correction(
-                        ps, length, angle_rad, self._Pc
+                        ps, length, angle_rad, self._Pc, self.particle_mass
                     )
 
         return ps
@@ -880,7 +904,7 @@ class RFTrackAdapter(SimulatorBase):
 
                 if ps.ndim == 2 and ps.shape[0] > 0:
                     self._apply_sector_bend_correction(
-                        ps, length, angle_rad, self._Pc
+                        ps, length, angle_rad, self._Pc, self.particle_mass
                     )
 
         return ps
@@ -993,8 +1017,11 @@ class RFTrackAdapter(SimulatorBase):
         """Configure space charge via the global SC engine and per-element kicks.
 
         RF-Track 2.5.x handles space charge through:
-        1. A global SC engine set via ``rft.cvars.SC_engine``
+        1. A global SC engine set via ``rft.cvar.SC_engine``
         2. Per-element activation via ``elem.set_sc_nsteps(N)``
+
+        Note: SC_engine is global RF-Track state. Parallel instances will
+        interfere. Each parallel worker must use a separate process.
         """
         nx, ny, nz = self.sc_mesh
         method = getattr(self, '_sc_method', 'PIC')
@@ -1093,7 +1120,8 @@ class RFTrackAdapter(SimulatorBase):
                     and particles_rftrack.shape[0] > 0):
                 angle_rad = np.radians(elem.parameters.get('angle', 0.0))
                 self._apply_sector_bend_correction(
-                    particles_rftrack, elem.length, angle_rad, self._Pc
+                    particles_rftrack, elem.length, angle_rad, self._Pc,
+                    self.particle_mass
                 )
 
             if n_lost_elem > 0:
@@ -1144,7 +1172,7 @@ class RFTrackAdapter(SimulatorBase):
             self.logger.info(f"Loaded {len(self.beamline)} elements from {lattice_path}")
 
         except Exception as e:
-            self.logger.error(f"Failed to load beamline from {lattice_path}: {e}")
+            self.logger.error(f"Failed to load beamline from {lattice_path}: {type(e).__name__}: {e}")
             raise
 
     def _convert_element_from_native(self, native_elem: Any) -> BeamlineElement:
@@ -1203,8 +1231,11 @@ class RFTrackAdapter(SimulatorBase):
                 alpha = -sig_xxp / emittance
                 # gamma = mrad²/(mm·mrad) = mrad/mm = rad/m
                 gamma = sig_xp2 / emittance
+                if beta > 1e6:
+                    self.logger.warning(f"Unphysical beta_{plane} = {beta:.1e} m — beam may be mismatched")
             else:
                 beta = alpha = gamma = 0.0
+                self.logger.warning(f"Zero emittance in {plane}-plane — degenerate beam distribution")
 
             twiss[plane] = {'beta': beta, 'alpha': alpha, 'gamma': gamma, 'emittance': emittance}
 

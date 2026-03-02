@@ -631,7 +631,7 @@ class COSYParticleSimulator(COSYSimulator):
         tan_xp = np.tan(xp_rad)
         tan_yp = np.tan(yp_rad)
 
-        KE_particle = KE0 + zp_energy * (KE0 + E0) / 1000
+        KE_particle = KE0 * (1 + zp_energy * 1e-3)
         pc = np.sqrt(KE_particle ** 2 + 2 * KE_particle * E0)
 
         # 3D momentum: p_i = p * tan(θ_i) / sqrt(1 + tan²(θ_x) + tan²(θ_y))
@@ -897,7 +897,7 @@ class COSYParticleSimulator(COSYSimulator):
 
             DeltaToF = -l_m * (1 + gamma) / (v0 * gamma)
             particles_felsim[:, 4] = (DeltaToF / T_RF) * 1e3
-            particles_felsim[:, 5] = KE0 * delta_K * 1000 / (KE0 + E0)
+            particles_felsim[:, 5] = delta_K * 1000
 
         if self.debug:
             with np.errstate(over='ignore', invalid='ignore'):
