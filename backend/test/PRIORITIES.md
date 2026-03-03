@@ -404,13 +404,18 @@
   fails with "no fixed point". Requires reconciling YAML beamline endpoint.
 - **Deferred:** Optimization (FIT blocks), MGE/fieldmap, particle tracking,
   solenoid/RF cavity/sextupole physics
-- **Future work — 3-way MAD↔PALS↔COSY conversion:**
-  1. Extend pals2cosy into a 3-way converter supporting MAD-X, PALS, and
-     COSY INFINITY formats (any→any direction). MAD-X is the de facto
-     standard for accelerator lattice interchange.
+- **Future work — 3-way MAD↔PALS↔COSY converter umbrella project:**
+  1. Build a 3-way converter supporting MAD-X, PALS, and COSY INFINITY
+     formats (any→any direction). MAD-X is the de facto standard for
+     accelerator lattice interchange.
   2. Validate via round-trip QA loop: MAD → PALS → COSY → MAD. Use the
      MAD-X lattice library on this machine as a test suite of real-world
      lattices covering diverse element types and beamline topologies.
+  3. The public `pals2cosy` repo remains a focused, standalone PALS→COSY
+     converter — simple and easy to use. The 3-way umbrella project
+     informs its design and provides QA, but `pals2cosy` does not depend
+     on the umbrella. Shared internal representations and conversion
+     logic can be extracted from the umbrella into pals2cosy as needed.
 - **Repo:** `~/COSY/PALS2COSY/` (git: evvaletov/pals2cosy)
 
 ### I4. COSY Aperture Commands for Particle Tracking [DONE 2026-02-22]
