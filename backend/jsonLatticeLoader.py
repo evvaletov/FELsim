@@ -2,7 +2,7 @@
 Load beamline lattice configurations from JSON files.
 
 Thin wrapper around LatticeLoaderBase that handles JSON I/O and schema
-validation. Supports format_version 1 and 2.
+validation. Supports format_version 1, 2, and 3.
 
 Author: Eremey Valetov
 """
@@ -16,6 +16,7 @@ from latticeLoaderBase import LatticeLoaderBase, SUPPORTED_FORMAT_VERSIONS
 _SCHEMA_FILES = {
     1: "lattice_schema_v1.json",
     2: "lattice_schema_v2.json",
+    3: "lattice_schema_v3.json",
 }
 
 

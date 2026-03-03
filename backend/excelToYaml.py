@@ -22,7 +22,7 @@ from excelToJson import convert as json_convert
 
 def convert(excel_path, output_path=None, name=None, description=None,
             reference_energy_mev=45.0, particle_type="electron",
-            format_version=2):
+            format_version=2):  # v2 default; use 3 for computed Bn1/BendP fields
     """Convert an Excel lattice file to YAML.
 
     Parameters
@@ -40,7 +40,8 @@ def convert(excel_path, output_path=None, name=None, description=None,
     particle_type : str
         Particle species.
     format_version : int
-        Output format version. Default 2 (PALS-aligned).
+        Output format version. Default 2 (PALS-aligned). Use 3 for
+        computed MagneticMultipoleP.Bn1 and BendP fields.
 
     Returns
     -------

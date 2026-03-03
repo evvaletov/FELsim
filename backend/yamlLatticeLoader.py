@@ -2,7 +2,7 @@
 Load beamline lattice configurations from YAML files.
 
 Thin wrapper around LatticeLoaderBase that handles YAML I/O and schema
-validation. Supports format_version 1 and 2. Uses the same JSON Schema
+validation. Supports format_version 1, 2, and 3. Uses the same JSON Schema
 files for validation since the in-memory dict representation is identical.
 
 Author: Eremey Valetov
@@ -18,6 +18,7 @@ from latticeLoaderBase import LatticeLoaderBase
 _SCHEMA_FILES = {
     1: "lattice_schema_v1.json",
     2: "lattice_schema_v2.json",
+    3: "lattice_schema_v3.json",
 }
 
 

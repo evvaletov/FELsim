@@ -1,20 +1,26 @@
 """
 Convert an Excel beamline lattice file to the FELsim JSON lattice format.
 
-Element type names in format_version 2 follow PALS conventions.
+Element type names in format_version 2+ follow PALS conventions.
 See manuals/lattice_specification.md for the mapping.
+
+format_version 3 extends v2 by computing PALS-aligned physics fields:
+  - MagneticMultipoleP.Bn1 for quadrupoles (pole-tip field in Tesla)
+  - BendP.g_ref for dipoles (reference bend strength in 1/m)
+  - BendP.e1/e2 for dipoles bracketed by wedge elements (edge angles in rad)
 
 Uses only the data already parsed by ExcelElements (no new columns or
 transformations). The output can be loaded by JsonLatticeLoader and
 should produce equivalent beamline representations.
 
 Usage:
-    python excelToJson.py [input.xlsx] [output.json]
+    python excelToJson.py [input.xlsx] [output.json] [--v2|--v3]
 
 Author: Eremey Valetov
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -76,7 +82,8 @@ def convert(excel_path, output_path=None, name=None, description=None,
     particle_type : str
         Particle species.
     format_version : int
-        Output format version (1 or 2). Default 1 for backward compatibility.
+        Output format version (1, 2, or 3). Default 1 for backward compatibility.
+        v3 adds MagneticMultipoleP.Bn1 for quads and BendP for dipoles.
         Note: excelToYaml defaults to format_version=2 since YAML is a v2-era format.
 
     Returns
@@ -92,6 +99,10 @@ def convert(excel_path, output_path=None, name=None, description=None,
         name = excel_path.stem
 
     elements, sectors = _build_elements(df, format_version)
+
+    if format_version >= 3:
+        G = 2.694  # matches global_settings default
+        _add_v3_fields(elements, G=G, default_aperture=0.027)
 
     lattice = {
         "beamline": {
@@ -144,6 +155,45 @@ def _safe(val):
     if isinstance(val, (np.floating,)):
         return float(val)
     return val
+
+
+def _add_v3_fields(elements, G, default_aperture):
+    """Enrich elements in-place with PALS v3 fields (Bn1, BendP).
+
+    Parameters
+    ----------
+    elements : list[dict]
+        Element dicts produced by _build_elements() with format_version >= 2.
+    G : float
+        Quadrupole gradient coefficient (T/A/m).
+    default_aperture : float
+        Default full aperture (m) used when aperture_m is not set on a quad.
+    """
+    for elem in elements:
+        if elem["type"] == "Quadrupole":
+            current = elem["parameters"].get("current_a", 0.0)
+            aperture = elem.get("aperture_m", default_aperture)
+            r = aperture / 2.0
+            sign = -1.0 if elem.get("polarity") == "focusing" else 1.0
+            elem["MagneticMultipoleP"] = {"Bn1": sign * G * current * r}
+
+        elif elem["type"] == "SBend":
+            angle_deg = elem["parameters"].get("bending_angle_deg", 0.0)
+            L = elem["parameters"].get("dipole_length_m", elem["length_m"])
+            angle_rad = math.radians(angle_deg)
+            g_ref = angle_rad / L if L != 0 else 0.0
+            elem["BendP"] = {"g_ref": g_ref}
+
+    # Propagate DPW edge angles into adjacent SBend elements
+    for i in range(1, len(elements) - 1):
+        if (elements[i]["type"] == "SBend"
+                and elements[i - 1]["type"] == "DIPOLE_WEDGE"
+                and elements[i + 1]["type"] == "DIPOLE_WEDGE"):
+            e1 = math.radians(elements[i - 1]["parameters"].get("wedge_angle_deg", 0.0))
+            e2 = math.radians(elements[i + 1]["parameters"].get("wedge_angle_deg", 0.0))
+            elements[i].setdefault("BendP", {}).update({"e1": e1, "e2": e2})
+            elements[i]["parameters"]["entrance_edge_angle_deg"] = elements[i - 1]["parameters"].get("wedge_angle_deg", 0.0)
+            elements[i]["parameters"]["exit_edge_angle_deg"] = elements[i + 1]["parameters"].get("wedge_angle_deg", 0.0)
 
 
 def _build_elements(df, format_version=1):
@@ -312,10 +362,10 @@ def _build_metadata(row):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} <input.xlsx> [output.json] [--v2]")
+        print(f"Usage: python {sys.argv[0]} <input.xlsx> [output.json] [--v2|--v3]")
         sys.exit(1)
 
-    fv = 2 if "--v2" in sys.argv else 1
+    fv = 3 if "--v3" in sys.argv else (2 if "--v2" in sys.argv else 1)
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
 
     excel_file = args[0]

@@ -12,6 +12,7 @@ machine-readable alternatives with richer metadata.
 | JSON | `var/UH_FEL_beamline.json` | v1 | FELsim-native type names |
 | JSON | `var/lattice_specification.json` | v2 | PALS-aligned, specification + examples |
 | YAML | `var/UH_FEL_beamline.yaml` | v2 | PALS-aligned |
+| JSON Schema | `var/lattice_schema_v3.json` | v3 | Extends v2 with Bn1/BendP |
 
 ## Format Versions
 
@@ -40,6 +41,18 @@ with `kind` as an alias for `type`:
   parameters:
     current_a: 3.5
 ```
+
+### Version 3
+
+Extends v2 with optional fields from the
+[official PALS specification](https://pals-project.readthedocs.io/):
+
+- `MagneticMultipoleP.Bn1` — quadrupole pole-tip field (Tesla), alternative to `current_a`
+- `BendP.g_ref` — bend strength (1/m), alternative to `bending_angle_deg`
+- `BendP.e1`/`e2` — edge angles (radians), alternative to `entrance_edge_angle_deg`/`exit_edge_angle_deg`
+
+If both old and new fields are present, the new PALS-aligned fields take
+precedence. Full specification: `manuals/lattice_specification_v3.md`.
 
 Key v2 conventions:
 
@@ -86,7 +99,16 @@ cd backend
 python excelToYaml.py ../beam_excel/Beamline_elements.xlsx -o ../var/UH_FEL_beamline.yaml
 ```
 
+## COSY INFINITY Conversion
+
+[pals2cosy](https://github.com/evvaletov/pals2cosy) is a standalone tool that
+converts both official PALS and FELsim v2/v3 lattice files to COSY INFINITY
+FOX code. It auto-detects the format and supports `MagneticMultipoleP.Bn1`,
+`BendP`, and `DIPOLE_WEDGE` triplet consolidation.
+
 ## Specification
 
 Full format specification with field descriptions and examples:
-`manuals/lattice_specification.md`
+
+- v2: `manuals/lattice_specification.md`
+- v3: `manuals/lattice_specification_v3.md`

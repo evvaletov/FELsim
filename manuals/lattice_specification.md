@@ -2,6 +2,9 @@
 
 Version 2.0
 
+> See also: [lattice_specification_v3.md](lattice_specification_v3.md) for format_version 3
+> extensions (MagneticMultipoleP, BendP).
+
 ## Overview
 
 The lattice format provides a human-readable, version-controllable beamline specification supporting both JSON and YAML serialisation. It contains all information needed to define a beamline: element sequence, physical parameters, beam properties, and simulator-specific settings.

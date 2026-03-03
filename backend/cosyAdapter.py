@@ -52,9 +52,15 @@ class COSYAdapter(SimulatorBase):
         self.excel_path = excel_path  # backward compat
 
         # COSY's native simulator requires an excel_path for BeamlineBuilder.
-        # For JSON/YAML lattices, we pass 'dummy.xlsx' and inject parsed dicts.
+        # For JSON/YAML lattices, use the explicit excel_path as a scaffold,
+        # or fall back to 'dummy.xlsx'.
         _is_excel = path and path.lower().endswith(('.xlsx', '.xls'))
-        sim_excel_path = path if _is_excel else 'dummy.xlsx'
+        if _is_excel:
+            sim_excel_path = path
+        elif excel_path and excel_path.lower().endswith(('.xlsx', '.xls')):
+            sim_excel_path = excel_path
+        else:
+            sim_excel_path = 'dummy.xlsx'
 
         if mode == 'transfer_matrix':
             self.simulation_mode = SimulationMode.TRANSFER_MATRIX

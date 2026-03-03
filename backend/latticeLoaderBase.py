@@ -14,11 +14,13 @@ Produces two output formats:
 Author: Eremey Valetov
 """
 
+import math
+
 from tracked_dict import TrackedDict
 from beamline import driftLattice, qpfLattice, qpdLattice, dipole, dipole_wedge
 from loggingConfig import get_logger_with_fallback
 
-SUPPORTED_FORMAT_VERSIONS = [1, 2]
+SUPPORTED_FORMAT_VERSIONS = [1, 2, 3]
 
 # Map element type/kind names to internal short names.
 # Includes FELsim-native names and PALS CamelCase aliases.
@@ -80,6 +82,10 @@ class LatticeLoaderBase:
         self._beamline = self._tracked["beamline"]
 
         fv = self._beamline["metadata"]["format_version"]
+        try:
+            fv = int(fv)
+        except (TypeError, ValueError):
+            pass
         if fv not in SUPPORTED_FORMAT_VERSIONS:
             raise ValueError(
                 f"Unsupported format_version {fv} (expected one of {SUPPORTED_FORMAT_VERSIONS})"
@@ -166,6 +172,13 @@ class LatticeLoaderBase:
             "lattice_structure", "global_settings", "simulator_specific"
         )
 
+        gs = self._beamline.get("global_settings", {})
+        if hasattr(gs, 'get') and gs.get("angle_unit") == "rad":
+            self.logger.warning(
+                "angle_unit: rad is reserved for future use and currently has no effect. "
+                "All angle parameters are interpreted as degrees."
+            )
+
         raw_elements = self._beamline["elements"]
         positioned = []
         for elem in raw_elements:
@@ -193,6 +206,10 @@ class LatticeLoaderBase:
             _ = elem["kind"]  # mark accessed
             if has_type:
                 # Both present; type takes precedence
+                self.logger.debug(
+                    f"Element {elem.get('name', '<unnamed>')!r}: both 'type' ({elem['type']}) "
+                    f"and 'kind' ({elem['kind']}) present; using 'type'"
+                )
                 self._resolved_types[id(elem)] = elem["type"]
                 return
             raw_type = _
@@ -231,6 +248,41 @@ class LatticeLoaderBase:
             return raw_type
         return short
 
+    def _resolve_quad_current(self, elem, params):
+        """Resolve quadrupole current from current_a or MagneticMultipoleP.Bn1."""
+        current = params.get("current_a", 0)
+        mmp = elem.get("MagneticMultipoleP")
+        if mmp is not None:
+            bn1 = mmp.get("Bn1")
+            if bn1 is not None:
+                gs = self._beamline.get("global_settings", {})
+                G = gs.get("quadrupole_gradient_coefficient_t_per_a_per_m")
+                if G is None:
+                    G = 2.694
+                r = elem.get("aperture_m")
+                if r is None:
+                    r = 0.027
+                r /= 2  # bore diameter → radius
+                if G * r != 0:
+                    # Bn1 sign encodes polarity (negative=focusing), but
+                    # FELsim uses unsigned current with QPF/QPD class choice.
+                    current = abs(bn1 / (G * r))
+            mmp.mark_all_accessed()
+        elem.mark_accessed("MagneticMultipoleP")
+        return current
+
+    def _resolve_dipole_angle(self, elem, params, length):
+        """Resolve dipole angle from bending_angle_deg or BendP.g_ref."""
+        angle = params.get("bending_angle_deg", 0)
+        bend_p = elem.get("BendP")
+        if bend_p is not None:
+            g_ref = bend_p.get("g_ref")
+            if g_ref is not None:
+                angle = math.degrees(g_ref * length)
+            bend_p.mark_all_accessed()
+        elem.mark_accessed("BendP")
+        return angle
+
     def _element_to_dict(self, elem):
         """Convert a tracked element to a BeamlineBuilder-compatible dict."""
         internal_type = self._resolve_type(elem)
@@ -239,7 +291,7 @@ class LatticeLoaderBase:
         z_end = elem["s_end_m"]
         params = elem["parameters"]
 
-        current = params.get("current_a", 0) or 0
+        current = self._resolve_quad_current(elem, params)
         angle = 0.0
         wedge_angle = 0.0
         gap_wedge = 0.0
@@ -247,14 +299,34 @@ class LatticeLoaderBase:
         enge_fct = ""
 
         if internal_type == "DPH":
-            angle = params.get("bending_angle_deg", 0) or 0
-            pole_gap = params.get("pole_gap_m", 0) or 0
+            angle = self._resolve_dipole_angle(elem, params, length)
+            pole_gap = params.get("pole_gap_m", 0)
             params.mark_accessed("dipole_length_m")
+
+            # BendP edge angles cannot be applied in dict/object output —
+            # FELsim requires DPW-DPH-DPW triplets for edge kicks.
+            bend_p = elem.get("BendP")
+            if bend_p is not None:
+                e1 = bend_p.get("e1")
+                e2 = bend_p.get("e2")
+                if e1 is not None:
+                    params.mark_accessed("entrance_edge_angle_deg")
+                if e2 is not None:
+                    params.mark_accessed("exit_edge_angle_deg")
+                if (e1 is not None and e1 != 0) or (e2 is not None and e2 != 0):
+                    self.logger.warning(
+                        f"Element {elem.get('name')!r}: BendP edge angles "
+                        f"(e1={e1}, e2={e2}) are not applied in FELsim output. "
+                        f"Edge kicks require DPW-DPH-DPW triplet representation."
+                    )
+                bend_p.mark_all_accessed()
+            elem.mark_accessed("BendP")
+
         elif internal_type == "DPW":
-            angle = params.get("dipole_angle_deg", 0) or 0
-            wedge_angle = params.get("wedge_angle_deg", 0) or 0
+            angle = params.get("dipole_angle_deg", 0)
+            wedge_angle = params.get("wedge_angle_deg", 0)
             gap_wedge = length
-            pole_gap = params.get("pole_gap_m", 0) or 0
+            pole_gap = params.get("pole_gap_m", 0)
             params.mark_accessed("dipole_length_m")
             enge_fct = self._get_enge(elem)
 
@@ -293,27 +365,35 @@ class LatticeLoaderBase:
                 return driftLattice(length, name=name)
             return None
 
-        elif internal_type == "QPF":
-            current = params.get("current_a", 0) or 0
+        elif internal_type in ("QPF", "QPD"):
+            current = self._resolve_quad_current(elem, params)
             params.mark_all_accessed()
-            return qpfLattice(current=current, length=length, name=name)
-
-        elif internal_type == "QPD":
-            current = params.get("current_a", 0) or 0
-            params.mark_all_accessed()
-            return qpdLattice(current=current, length=length, name=name)
+            cls = qpfLattice if internal_type == "QPF" else qpdLattice
+            return cls(current=current, length=length, name=name)
 
         elif internal_type == "DPH":
-            angle = params.get("bending_angle_deg", 0) or 0
             dipole_length = params.get("dipole_length_m", length) or length
+            angle = self._resolve_dipole_angle(elem, params, dipole_length)
+            # Warn about BendP edge angles that can't be applied
+            bend_p = elem.get("BendP")
+            if bend_p is not None:
+                e1, e2 = bend_p.get("e1"), bend_p.get("e2")
+                if (e1 is not None and e1 != 0) or (e2 is not None and e2 != 0):
+                    self.logger.warning(
+                        f"Element {name!r}: BendP edge angles "
+                        f"(e1={e1}, e2={e2}) are not applied in FELsim output. "
+                        f"Edge kicks require DPW-DPH-DPW triplet representation."
+                    )
+                bend_p.mark_all_accessed()
+            elem.mark_accessed("BendP")
             params.mark_all_accessed()
             return dipole(length=dipole_length, angle=angle, name=name)
 
         elif internal_type == "DPW":
-            wedge_angle = params.get("wedge_angle_deg", 0) or 0
-            dipole_angle = params.get("dipole_angle_deg", 0) or 0
-            dipole_length = params.get("dipole_length_m", 0) or 0
-            pole_gap = params.get("pole_gap_m", 0) or 0
+            wedge_angle = params.get("wedge_angle_deg", 0)
+            dipole_angle = params.get("dipole_angle_deg", 0)
+            dipole_length = params.get("dipole_length_m", 0)
+            pole_gap = params.get("pole_gap_m", 0)
             params.mark_all_accessed()
             enge_fct = self._get_enge(elem)
             return dipole_wedge(

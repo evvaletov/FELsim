@@ -1,6 +1,6 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-03-02)
+**Date:** 2026-02-11 (updated 2026-03-03)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
 
 ---
@@ -91,23 +91,21 @@
 - Script: `W9_cosy_longitudinal_study.py`
 - Results: `results/W9/`
 
-### I6. COSY σ_z Blowup Investigation [HIGH PRIORITY — MANUAL]
-- COSY particle tracking shows σ_z ≈ 92–233 ps (60–100× blowup) for 2 ps input.
-  RF-Track gives correct σ_z ≈ 2 ps for the same currents.
-- Both 2 ps and 0.5 ps inputs produce identical output σ_z, confirming the output
-  is dominated by energy-spread × R56 coupling, not initial bunch length.
-- **Not a coordinate conversion bug:** verified FELsim ↔ COSY round-trip is exact.
-  The FELsim col 4 std genuinely grows 60× during COSY tracking.
-- **Possible causes:** (a) COSY higher-order tracking amplifies dispersion errors
-  from the poorly matched optics (MSE = 7.1e-3); (b) COSY's l₀ coordinate picks
-  up path-length errors in the chicane that FELsim transfer matrices miss;
-  (c) the COSY FOX RP procedure may define the 5th coordinate differently than
-  assumed in `cosyParticleSimulator.transform_from_cosy_coordinates()`.
-- **Action:** Manually inspect COSY RRAY checkpoint files, trace l₀ evolution
-  element-by-element through the chicane, compare with FELsim prediction.
-  Check RP settings for coordinate convention.
-- **Expected resolution:** Either fix a unit convention mismatch or confirm that
-  better optics (lower MSE from glyfada) eliminate the blowup.
+### I6. COSY σ_z Blowup Investigation [DONE 2026-03-02]
+- **Root cause found:** The 60–100× blowup was NOT reproduced with W9-optimized
+  currents (MSE ≈ 2.3e-7). With properly matched optics:
+  - ORDER 1: σ_z = 2.264 ps (1.13× growth, consistent with R56 × σ_δ)
+  - ORDER 2: σ_z = 3.740 ps (1.87× growth)
+  - ORDER 3: σ_z = 4.158 ps (2.08× growth)
+- **Conclusion:** The original blowup occurred with poorly matched currents
+  (MSE ≈ 7.1e-3). Higher-order growth (ORDER 3 > ORDER 1) is correct physics
+  from nonlinear path-length terms, not a bug.
+- **Element-by-element evolution:** σ_l grows smoothly through the beamline with
+  a sharp jump at the chicane (elements 60–75) due to R56 coupling.
+- **Single particle test (Part C):** COSY RRAY with N=1 loses the particle at
+  every checkpoint (known RRAY limitation with single data particles).
+- Script: `I6_sigma_z_diagnostic.py`
+- Results: `results/I6/`
 
 ### C5. RF-Track SBend Bug & Analytical Workaround [DONE]
 - **Root cause:** RF-Track v2.5.5 SBend body tracking interprets Bunch6d's
@@ -261,7 +259,7 @@
 
 ## Category S: Parameter Studies
 
-### S5. 0.5 ps 2D Coupled Scans [HIGH PRIORITY]
+### S5. 0.5 ps 2D Coupled Scans [IN PROGRESS — script done, full scans pending]
 - **Motivation:** 1D scans hold other parameters fixed; realistic operation involves
   correlated changes (e.g., shorter bunch → larger energy spread). 2D scans map
   the feasibility surface.
@@ -270,7 +268,11 @@
   - S5b: (σ_E, ε_n) grid at h=5e9 — degradation interaction
   - S5c: (h, ε_n) grid — chirp compensation vs emittance
 - **Design:** 10×10 grids (100 points each), 500 particles, ~5 hours per scan.
-  Use contour/heatmap plots of MSE and Twiss deviation.
+  Checkpoint/resume via CSV. Contour/heatmap plots (MSE LogNorm, Twiss deviation,
+  feasibility bands). CLI: `--s5a/--s5b/--s5c/--all/--plots-only/--grid N`.
+- **Status:** 3×3 smoke test (S5a) completed, all 9 points converge.
+  Full 10×10 scans not yet launched.
+- Script: `S5_2d_parameter_scans.py`
 - **Output:** `results/params_05ps_2d/`, contour plots, feasibility boundary curves
 - **Prerequisite:** S4 results to identify interesting regions
 
@@ -357,10 +359,15 @@
 - **Design:** Plotly/Dash dashboard reading CSV data. Sliders for parameter
   selection, hover for quad currents.
 
-### R2. Comparison Table Across All Studies [MEDIUM PRIORITY]
-- **Motivation:** S1–S4 each have separate reports. A unified comparison table
-  showing how the same beamline responds to different parameter regimes.
-- **Output:** Standalone comparison document or section in a master report.
+### R2. Comparison Table Across All Studies [DONE 2026-03-02]
+- Aggregates data from W4, S4, W8, W9, W10, W11, W12 into 5 cross-code tables
+  and 3 summary plots.
+- **Tables:** (1) Baseline cross-code optimization, (2) Parameter sensitivity summary,
+  (3) Bunch length & transmission, (4) Compression feasibility, (5) Quad currents.
+- **Plots:** 3-panel MSE vs parameter, cross-code Twiss bar chart, compression curve.
+- Script: `R2_unified_comparison.py`
+- Report: `R2_unified_comparison_report.tex`
+- Results: `results/R2/`
 
 ---
 
@@ -375,26 +382,36 @@
 - Also fixed `tracked_mapping` → `tracked_dict` import (stale module name)
   in 4 files, resolving 6 smoke test failures.
 
-### I3. PALS / v2 Lattice → COSY INFINITY Converter [HIGH PRIORITY — due ~2026-03-08]
-- **Goal:** Standalone tool that converts a v2 (PALS-aligned) lattice file
-  (JSON or YAML) into a COSY INFINITY FOX input deck. Intended for the
-  official COSY INFINITY website as a community resource.
-- **Design considerations:**
-  - Mode switch: strict FELsim v2 (our superset with DIPOLE_WEDGE, etc.)
-    vs generic PALS (broader compatibility for general PALS-to-COSY use)
-  - Output: complete FOX procedure with element definitions, beamline
-    sequence, and initial beam parameters (energy, particle type)
-  - Element mapping: Quadrupole→MQ, SBend/RBend→DI/MC, Drift→DL,
-    Solenoid→SOLND, Sextupole→MH, RFCavity→RFC, diagnostics→DL(0)
-  - Fringe field options: FR 0/1/3 selectable; Enge coefficients carried
-    through where available
-  - Should work independently of FELsim runtime (no FastAPI dependency)
-- **Scope:**
-  1. Core converter module (reads JSON/YAML, emits FOX)
-  2. CLI entry point (`pals2cosy` or `lattice2cosy`)
-  3. Validation against our UH FEL beamline (round-trip: YAML → FOX → COSY
-     run → compare Twiss with existing W4 results)
-  4. Minimal documentation / README for the COSY website
+### I3. PALS / v2 Lattice → COSY INFINITY Converter [v0.3.0 DONE 2026-03-03]
+- **Goal:** Standalone tool that converts PALS-aligned lattice files
+  (JSON or YAML) into COSY INFINITY FOX input decks.
+- **v0.3.0 changes:**
+  1. **Official PALS format support:** Parses `PALS:` root key, `facility:` element
+     definitions, `BeamLine` composition with `line:` references, `inherit:` overrides,
+     `repeat:` expansion. New `pals_parser.py` module (~230 lines).
+  2. **MagneticMultipoleP.Bn1:** Quadrupole pole-tip field (Tesla) emitted directly
+     as COSY MQ `b_pole` — no gradient coefficient needed.
+  3. **BendP support:** `g_ref` (1/m) → angle (deg), `e1`/`e2` (rad) → edge angles.
+  4. **CLI auto-detection:** `--mode auto` (new default) routes to the correct parser
+     based on root key (`PALS:` vs `beamline:`). New `--beamline NAME` flag.
+  5. **Example lattices:** `fodo.pals.yaml` (official PALS FODO cell),
+     `uhfel_excerpt.pals.yaml` (UH FEL first section with Bn1 quads + BendP dipole).
+  6. **Test suite:** 55 passing tests (was 34).
+  7. **Sphinx documentation** updated with both formats, architecture, element mapping.
+- **v0.2.0 changes:** Particle type, element comments, strict PALS mode, FC
+  suppression, 34 passing tests.
+- **Known issue:** YAML has 8 spectrometer dipoles vs 4 in Excel → COSY round-trip
+  fails with "no fixed point". Requires reconciling YAML beamline endpoint.
+- **Deferred:** Optimization (FIT blocks), MGE/fieldmap, particle tracking,
+  solenoid/RF cavity/sextupole physics
+- **Future work — 3-way MAD↔PALS↔COSY conversion:**
+  1. Extend pals2cosy into a 3-way converter supporting MAD-X, PALS, and
+     COSY INFINITY formats (any→any direction). MAD-X is the de facto
+     standard for accelerator lattice interchange.
+  2. Validate via round-trip QA loop: MAD → PALS → COSY → MAD. Use the
+     MAD-X lattice library on this machine as a test suite of real-world
+     lattices covering diverse element types and beamline topologies.
+- **Repo:** `~/COSY/PALS2COSY/` (git: evvaletov/pals2cosy)
 
 ### I4. COSY Aperture Commands for Particle Tracking [DONE 2026-02-22]
 - AP commands generated after each element when `enable_aperture_cuts()` is called.
@@ -454,6 +471,25 @@
 - **W12 finding:** T566 = 0 for the UH FEL transport line (W9 Part A).
   A T566 FIT objective is redundant for this beamline. Implementation
   may still be useful for other beamlines with non-zero T566.
+
+### I8. FELsim v3 Lattice Format — PALS Alignment [DONE 2026-03-03]
+- **Goal:** Extend the v2 lattice format with optional PALS-aligned fields while
+  maintaining full backward compatibility with v1/v2 files.
+- **Changes:**
+  1. **Specification:** `manuals/lattice_specification_v3.md` — documents
+     `MagneticMultipoleP.Bn1`, `BendP` (g_ref, e1, e2), `angle_unit`, precedence
+     rules, backward compatibility matrix.
+  2. **JSON Schema:** `var/lattice_schema_v3.json` — extends v2 schema with
+     `MagneticMultipoleP`, `BendP` objects, `angle_unit` enum, `format_version` enum [1,2,3].
+  3. **Loader:** `latticeLoaderBase.py` updated — `SUPPORTED_FORMAT_VERSIONS = [1, 2, 3]`,
+     Bn1 → current conversion for quads (`current = Bn1 / (G × r)`), BendP override
+     for dipole angle and edge angles. Both `parse_beamline()` and `create_beamline()`
+     paths handle v3 fields.
+  4. **Documentation:** `docs/felsim/lattice-formats.md` updated with v3 section.
+- **Backward compatibility:** v1/v2 files load identically. Verified with existing
+  v2 YAML (137 elements from `create_beamline()`).
+- **Deferred:** Full PALS root key (`PALS:`) support in FELsim loaders, `line:`
+  composition, implicit positioning from lengths.
 
 ### I2. Engage with PALS as a Real-World Use Case [HIGH PRIORITY]
 - **Context:** The PALS (Particle Accelerator Lattice Standard) group is looking
