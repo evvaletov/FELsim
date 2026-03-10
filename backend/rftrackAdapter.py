@@ -453,11 +453,10 @@ class RFTrackAdapter(SimulatorBase):
             ap_x = ap_y = r
 
         elif elem_type in ['DIPOLE_WEDGE', 'DPW']:
-            # DPW edge kicks are applied analytically (like sector bends)
-            # because a thin-lens quad can't represent asymmetric x/y kicks.
-            # The Drift preserves correct path length; the kick is applied
-            # in _apply_dpw_edge_kick() during segmented tracking.
-            elem = rft.Drift(length)
+            # FELsim's DPW is a thin lens (M12=0, no drift) despite having
+            # a non-zero length attribute. Match this with near-zero drift.
+            # The edge kick is applied analytically in _apply_dpw_edge_kick().
+            elem = rft.Drift(self.DPW_THIN_LENS_LENGTH)
             ap_x = ap_y = self.default_aperture
 
         elif elem_type in ['DIPOLE', 'DPH']:
