@@ -201,6 +201,8 @@ class lattice:
 
 
 class driftLattice(lattice):
+    color = "white"
+
     def __init__(self, length: float, name=None):
         '''
         Represents a drift space (empty section) in the beamline.
@@ -277,6 +279,8 @@ class driftLattice(lattice):
 
 
 class qpfLattice(lattice):
+    color = "cornflowerblue"
+
     def __init__(self, current: float, length: float = 0.0889, fringeType='decay', name=None):
         '''
         Represents a quadrupole focusing magnet. This magnet focuses in the x plane
@@ -398,6 +402,8 @@ class qpfLattice(lattice):
 
 
 class qpdLattice(lattice):
+    color = "lightcoral"
+
     def __init__(self, current: float, length: float = 0.0889, fringeType='decay', name=None):
         '''
         Represents a quadrupole defocusing magnet. This magnet defocuses in the x plane
@@ -519,6 +525,8 @@ class qpdLattice(lattice):
 
 
 class dipole(lattice):
+    color = "forestgreen"
+
     def __init__(self, length: float = 0.0889, angle: float = 1.5, fringeType='decay', name=None):
         '''
         Represents a dipole bending magnet, which bends the beam horizontally.
@@ -553,6 +561,8 @@ class dipole(lattice):
         '''
         l = self.length if length is None else length
         a = self.angle if angle is None else angle
+        if a == 0:
+            return driftLattice(l)._compute_numeric_matrix()
         by = (self.M * self.C * self.beta * self.gamma / self.Q) * (a * np.pi / 180 / self.length)
         rho = self.M * self.C * self.beta * self.gamma / (self.Q * by)
         theta = l / rho
@@ -630,6 +640,8 @@ class dipole(lattice):
 
 
 class dipole_wedge(lattice):
+    color = "lightgreen"
+
     def __init__(self, length, angle: float = 1, dipole_length: float = 0.0889, dipole_angle: float = 1.5,
                  pole_gap=0.014478, enge_fct=0, fringeType='decay', name=None):
         '''
@@ -745,7 +757,6 @@ class dipole_wedge(lattice):
         # Edge kick uses the full wedge angle (thin-lens, not distributed)
         eta = a * sp.pi / 180
         Tx = sp.tan(eta)
-        z = sp.symbols("z", real=True)
         g = self.pole_gap
         le = self.length
         # Fringe field K integral (triangle model): By not needed since R computed directly

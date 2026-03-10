@@ -223,48 +223,47 @@ class COSYAdapter(SimulatorBase):
 
     def _calculate_twiss(self, particles_felsim: np.ndarray) -> dict:
         """Calculate Twiss parameters from FELsim-coordinate particles."""
-        if self._particle_sim is None:
-            from ebeam import beam
-            ebeam = beam()
-            _, _, twiss_df = ebeam.cal_twiss(particles_felsim, ddof=1)
+        if self._particle_sim is not None:
+            twiss = self._particle_sim.calculate_twiss_from_particles(particles_felsim)
+            # Add dispersion from particle correlations if not already present
+            for plane, pos_idx in [('x', 0), ('y', 2)]:
+                if plane in twiss and 'dispersion' not in twiss[plane]:
+                    sigma_delta_sq = np.var(particles_felsim[:, 5], ddof=1)
+                    if sigma_delta_sq > 0:
+                        twiss[plane]['dispersion'] = np.cov(
+                            particles_felsim[:, pos_idx], particles_felsim[:, 5], ddof=1
+                        )[0, 1] / sigma_delta_sq
+                    else:
+                        twiss[plane]['dispersion'] = 0.0
+            return twiss
 
-            # Use coord5 (ΔK/K₀×10³) for dispersion, not coord4 (ΔToF/T_RF×10³)
-            sigma_delta_sq = np.var(particles_felsim[:, 5], ddof=1)
-            if sigma_delta_sq > 0:
-                D_x = np.cov(particles_felsim[:, 0], particles_felsim[:, 5], ddof=1)[0, 1] / sigma_delta_sq
-                D_y = np.cov(particles_felsim[:, 2], particles_felsim[:, 5], ddof=1)[0, 1] / sigma_delta_sq
-            else:
-                D_x = D_y = 0.0
+        from ebeam import beam
+        ebeam = beam()
+        _, _, twiss_df = ebeam.cal_twiss(particles_felsim, ddof=1)
 
-            return {
-                'x': {
-                    'beta': twiss_df.loc['x', r'$\beta$ (m)'],
-                    'alpha': twiss_df.loc['x', r'$\alpha$'],
-                    'gamma': twiss_df.loc['x', r'$\gamma$ (rad/m)'],
-                    'emittance': twiss_df.loc['x', r'$\epsilon$ ($\pi$.mm.mrad)'],
-                    'dispersion': D_x
-                },
-                'y': {
-                    'beta': twiss_df.loc['y', r'$\beta$ (m)'],
-                    'alpha': twiss_df.loc['y', r'$\alpha$'],
-                    'gamma': twiss_df.loc['y', r'$\gamma$ (rad/m)'],
-                    'emittance': twiss_df.loc['y', r'$\epsilon$ ($\pi$.mm.mrad)'],
-                    'dispersion': D_y
-                }
+        sigma_delta_sq = np.var(particles_felsim[:, 5], ddof=1)
+        if sigma_delta_sq > 0:
+            D_x = np.cov(particles_felsim[:, 0], particles_felsim[:, 5], ddof=1)[0, 1] / sigma_delta_sq
+            D_y = np.cov(particles_felsim[:, 2], particles_felsim[:, 5], ddof=1)[0, 1] / sigma_delta_sq
+        else:
+            D_x = D_y = 0.0
+
+        return {
+            'x': {
+                'beta': twiss_df.loc['x', r'$\beta$ (m)'],
+                'alpha': twiss_df.loc['x', r'$\alpha$'],
+                'gamma': twiss_df.loc['x', r'$\gamma$ (rad/m)'],
+                'emittance': twiss_df.loc['x', r'$\epsilon$ ($\pi$.mm.mrad)'],
+                'dispersion': D_x
+            },
+            'y': {
+                'beta': twiss_df.loc['y', r'$\beta$ (m)'],
+                'alpha': twiss_df.loc['y', r'$\alpha$'],
+                'gamma': twiss_df.loc['y', r'$\gamma$ (rad/m)'],
+                'emittance': twiss_df.loc['y', r'$\epsilon$ ($\pi$.mm.mrad)'],
+                'dispersion': D_y
             }
-
-        twiss = self._particle_sim.calculate_twiss_from_particles(particles_felsim)
-        # Add dispersion from particle correlations if not already present
-        for plane, pos_idx in [('x', 0), ('y', 2)]:
-            if plane in twiss and 'dispersion' not in twiss[plane]:
-                sigma_delta_sq = np.var(particles_felsim[:, 5], ddof=1)
-                if sigma_delta_sq > 0:
-                    twiss[plane]['dispersion'] = np.cov(
-                        particles_felsim[:, pos_idx], particles_felsim[:, 5], ddof=1
-                    )[0, 1] / sigma_delta_sq
-                else:
-                    twiss[plane]['dispersion'] = 0.0
-        return twiss
+        }
 
     def _get_element_color(self, elem_type: str) -> str:
         """Map element type to display color."""

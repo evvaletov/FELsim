@@ -459,9 +459,6 @@ def getPngObjFromBeamList(beamlist, plotParams: PlottingParameters):
     plt.close('all')
     return pngObject
 
-def beamlineToJson():
-    pass
-
 @app.get("/")
 def root():
     return {"Hello" : "World!"}
@@ -615,10 +612,6 @@ def plot_parameters(graphParams: GraphParameters) -> List[GraphPlotData]:
     except Exception as e:
         print(e)
         raise HTTPException(status_code=400, detail=str(e))
-
-@app.post('/twiss-to-particles')
-def getParticlesFromTwiss(twissParams):
-    pass
 
 # Don't use, doesn't check for changes and server reloads
 #if __name__ == "__main__":

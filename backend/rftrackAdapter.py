@@ -1334,16 +1334,17 @@ class RFTrackAdapter(SimulatorBase):
             cov = np.cov(particles[:, pos_idx], particles[:, ang_idx], ddof=1)
             sig_x2, sig_xp2, sig_xxp = cov[0, 0], cov[1, 1], cov[0, 1]
 
-            # Dispersion-corrected emittance: subtract correlated energy spread
+            # Dispersion and dispersion-corrected emittance
+            dispersion = dispersion_prime = 0.0
             if particles.shape[1] > 5:
                 delta = particles[:, 5]
                 var_delta = np.var(delta, ddof=1)
                 if var_delta > 1e-30:
-                    D_pos = np.cov(particles[:, pos_idx], delta, ddof=1)[0, 1] / var_delta
-                    D_ang = np.cov(particles[:, ang_idx], delta, ddof=1)[0, 1] / var_delta
-                    sig_x2_corr = sig_x2 - D_pos**2 * var_delta
-                    sig_xp2_corr = sig_xp2 - D_ang**2 * var_delta
-                    sig_xxp_corr = sig_xxp - D_pos * D_ang * var_delta
+                    dispersion = np.cov(particles[:, pos_idx], delta, ddof=1)[0, 1] / var_delta
+                    dispersion_prime = np.cov(particles[:, ang_idx], delta, ddof=1)[0, 1] / var_delta
+                    sig_x2_corr = sig_x2 - dispersion**2 * var_delta
+                    sig_xp2_corr = sig_xp2 - dispersion_prime**2 * var_delta
+                    sig_xxp_corr = sig_xxp - dispersion * dispersion_prime * var_delta
                     emit_sq = max(0, sig_x2_corr * sig_xp2_corr - sig_xxp_corr**2)
                 else:
                     emit_sq = sig_x2 * sig_xp2 - sig_xxp**2
@@ -1352,30 +1353,14 @@ class RFTrackAdapter(SimulatorBase):
             emittance = np.sqrt(max(0, emit_sq))  # π·mm·mrad
 
             if emittance > 0:
-                # beta = mm²/(mm·mrad) = mm/mrad = m
                 beta = sig_x2 / emittance
                 alpha = -sig_xxp / emittance
-                # gamma = mrad²/(mm·mrad) = mrad/mm = rad/m
                 gamma = sig_xp2 / emittance
                 if beta > 1e6:
                     self.logger.warning(f"Unphysical beta_{plane} = {beta:.1e} m — beam may be mismatched")
             else:
                 beta = alpha = gamma = 0.0
                 self.logger.warning(f"Zero emittance in {plane}-plane — degenerate beam distribution")
-
-            # Dispersion: D = cov(x, delta) / var(delta)
-            if particles.shape[1] > 5:
-                delta = particles[:, 5]
-                var_delta = np.var(delta, ddof=1)
-                if var_delta > 0:
-                    dispersion = np.cov(particles[:, pos_idx], delta, ddof=1)[0, 1] / var_delta
-                    dispersion_prime = np.cov(particles[:, ang_idx], delta, ddof=1)[0, 1] / var_delta
-                else:
-                    dispersion = 0.0
-                    dispersion_prime = 0.0
-            else:
-                dispersion = 0.0
-                dispersion_prime = 0.0
 
             twiss[plane] = {
                 'beta': beta, 'alpha': alpha, 'gamma': gamma, 'emittance': emittance,
