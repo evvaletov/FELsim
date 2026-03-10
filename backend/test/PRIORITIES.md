@@ -503,6 +503,15 @@
   (element 87) runs successfully. Hybrid vs full RF-Track shows qualitatively
   similar results (transverse RMS within order of magnitude) with expected
   differences from dipole model (transfer matrix vs analytical sector-bend).
+- **TODO:**
+  - **C1C / MC-opt:** Optimize Stage 11 using MultiCodeSimulator as forward
+    model (FELsim prefix + RF-Track suffix NM optimization). Compare MC-opt
+    currents vs RFT-opt currents.
+  - **COSY adapter integration:** Test COSY→FELsim and COSY→RF-Track handoffs
+    with real DA map tracking through partial beamlines.
+  - **Space charge in hybrid:** Test `config={'space_charge': True}` on
+    RF-Track suffix to assess 3D SC impact on Stage 11 matching.
+  - **Merge `multisim` → `main`:** PR after MC-opt validation.
 
 ### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY — NOT NEEDED FOR UH FEL]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
@@ -635,6 +644,7 @@
     on near-identical points. **Fix for v3:** lower `maxfevals` per restart
     (e.g., 5000–10000) so BIPOP restarts trigger after sigma collapse, or add
     `tolx`-based early stopping.
+  - **TODO (C3v3):** Fix `maxfevals` (5000–10000 per restart), resubmit on Koa.
 - **Files:** `fields/chicane_dipole_fieldmap.dat`, `test/koa_cosy_mge_opt.py`,
   `test/koa_cosy_mge_opt.slurm`, `test/results/koa_cosy_mge_result.json`,
   `test/results/koa_cosy_mge_result_indexed.json`
