@@ -504,9 +504,6 @@
   similar results (transverse RMS within order of magnitude) with expected
   differences from dipole model (transfer matrix vs analytical sector-bend).
 - **TODO:**
-  - **C1C / MC-opt:** Optimize Stage 11 using MultiCodeSimulator as forward
-    model (FELsim prefix + RF-Track suffix NM optimization). Compare MC-opt
-    currents vs RFT-opt currents.
   - **COSY adapter integration:** Test COSY→FELsim and COSY→RF-Track handoffs
     with real DA map tracking through partial beamlines.
   - **Space charge in hybrid:** Test `config={'space_charge': True}` on
@@ -609,6 +606,21 @@
   - MC-val intermediate between FELsim and full RFT-val: FELsim prefix
     avoids dipole model differences in Stages 1-10, so Stage 11 beam state
     is closer to FELsim's expectations than full RF-Track.
+  - TODO: Run full comparison at ε_n = 5, 8, 14 with 5 restarts.
+- **Part D (C1C, 2026-03-10):** Five-way comparison adding MC-opt.
+  Script: `C1C_multicode_optimization.py` (`--smoke`, `--emittance`)
+  - Methods: FELsim / MC-val / MC-opt / RFT-val / RFT-opt
+  - MC-opt: MultiCodeSimulator with FELsim(0:87) + RF-Track(87:137),
+    NM optimization of Stage 11 quad currents [87, 93, 95, 97]
+  - Architecture: mc_full and mc_disp share `_master_beamline` by reference;
+    NM mutates `.current` on shared beamline, both simulators see updates
+  - **Smoke test (ε_n=8, 1 restart):**
+    FELsim MSE=1.3e-4, MC-val MSE=1.31, **MC-opt MSE=2.8e-5**,
+    RFT-val MSE=5.59, RFT-opt MSE=6.6e-3
+  - **MC-opt achieves 4.7× lower MSE than FELsim** and 238× lower than RFT-opt.
+    Nearly perfect Twiss match (β_y=0.242 vs target 0.242). RFT-opt struggles
+    with β_y (0.060 vs 0.242) — RF-Track dipole model creates different optics.
+  - Results: `results/C1C/`
   - TODO: Run full comparison at ε_n = 5, 8, 14 with 5 restarts.
 
 ### C3. FR3+MGE Optimization [IN PROGRESS — CMA-ES v2 on Koa]
