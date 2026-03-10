@@ -371,3 +371,86 @@ class TestHybridFELsimRFTrack:
         generic = _felsim_to_generic(dpws[0])
         assert generic.parameters.get('pole_gap', 0) > 0
         assert generic.parameters.get('dipole_angle', 0) != 0
+
+    def test_physical_apertures_config(self, beamline, particles):
+        """Per-section config toggles physical apertures on RF-Track."""
+        n_elem = len(beamline)
+
+        # With physical apertures — may lose particles
+        mc_ap = MultiCodeSimulator(
+            sections=[
+                SimSection("prefix", "felsim", (0, self.SPLIT)),
+                SimSection("stage11", "rftrack", (self.SPLIT, n_elem),
+                           config={'physical_apertures': True}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        result_ap = mc_ap.simulate(particles=particles)
+        assert result_ap.success
+
+        # Without physical apertures — all particles survive
+        mc_no = MultiCodeSimulator(
+            sections=[
+                SimSection("prefix", "felsim", (0, self.SPLIT)),
+                SimSection("stage11", "rftrack", (self.SPLIT, n_elem),
+                           config={'physical_apertures': False}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        result_no = mc_no.simulate(particles=particles)
+        assert result_no.success
+
+        # Without apertures, all particles survive; with apertures, possibly fewer
+        assert result_no.final_particles.shape[0] >= result_ap.final_particles.shape[0]
+
+
+@pytest.mark.skipif(not _RFTRACK_AVAILABLE, reason="RF-Track not installed")
+class TestPerSectionConfig:
+    """Per-section config passthrough tests."""
+
+    ENERGY = 40.0
+
+    def test_runtime_keys_not_passed_to_constructor(self):
+        """Runtime config keys should not be passed to SimulatorFactory.create()."""
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("s1", "rftrack", (0, 10),
+                           config={'space_charge': False, 'physical_apertures': True}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        # Should have created an rftrack simulator without error
+        # (space_charge/physical_apertures are not constructor kwargs)
+        assert len(mc._simulators) == 1
+
+    def test_same_key_different_creation_config_separate_instances(self):
+        """Two sections with same key but different creation config → separate instances."""
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("s1", "rftrack", (0, 60),
+                           config={'G_quad': 5.0}),
+                SimSection("s2", "rftrack", (60, 137),
+                           config={'G_quad': 10.0}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        assert len(mc._simulators) == 2
+
+    def test_same_key_same_creation_config_shared_instance(self):
+        """Two sections with same key and same creation config → shared instance."""
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("s1", "rftrack", (0, 60),
+                           config={'physical_apertures': True}),
+                SimSection("s2", "rftrack", (60, 137),
+                           config={'physical_apertures': False}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        # Both have only runtime config, no creation-time differences
+        assert len(mc._simulators) == 1

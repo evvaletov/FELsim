@@ -487,17 +487,22 @@
   - `SimSection` dataclass: (name, simulator_key, element_range, config)
   - `SimulatorFactory.create('multicode', ...)`: lazy-imported registration
   - `from_config()`: dict-based construction for YAML/JSON configuration
-  - Test suite (test_multicode.py): 22 tests — SimSection, init, coord
+  - Test suite (test_multicode.py): 26 tests — SimSection, init, coord
     roundtrips (all 3 pairs), FELsim split equivalence (2/3-section),
     element conversion (drift, quad, DPW params), factory registration,
-    FELsim→RF-Track hybrid (successful run, cross-validation, DPW params)
+    FELsim→RF-Track hybrid (successful run, cross-validation, DPW params,
+    physical apertures config), per-section config (runtime key filtering,
+    separate vs shared instances)
   - CI: test_multicode.py + test_attribute_guard.py added to pipeline
+- **Per-section config passthrough:** Runtime keys (space_charge, sc_mesh,
+  physical_apertures, aperture) applied via setter methods before each
+  section's tracking. Creation-time keys (G_quad, particle_mass) used to
+  key simulator instances — different creation configs get separate instances,
+  same creation config shares one instance.
 - **Production validated:** FELsim→RF-Track hybrid at Stage 11 boundary
   (element 87) runs successfully. Hybrid vs full RF-Track shows qualitatively
   similar results (transverse RMS within order of magnitude) with expected
   differences from dipole model (transfer matrix vs analytical sector-bend).
-  - COSY→FELsim handoff testing with real DA map tracking
-  - Per-section config passthrough (space_charge, fringe fields, etc.)
 
 ### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY — NOT NEEDED FOR UH FEL]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
@@ -612,6 +617,13 @@
     (best, barely unstable). Sigma collapsed to 4.7e-05 (from 0.5), axis ratio
     530:1. First BIPOP restart imminent — sigma exhausted around current best.
     No stable solution found in this basin; restart will explore larger volume.
+  - **Cancelled (2026-03-10):** Job cancelled (`scancel 11451841`). BIPOP never
+    triggered because `maxfevals=50000` is the per-restart budget — the first
+    CMA-ES run must exhaust all 50k evals before BIPOP activates a restart.
+    With sigma collapsed to 1.3e-05, the remaining ~35k evals would be wasted
+    on near-identical points. **Fix for v3:** lower `maxfevals` per restart
+    (e.g., 5000–10000) so BIPOP restarts trigger after sigma collapse, or add
+    `tolx`-based early stopping.
 - **Files:** `fields/chicane_dipole_fieldmap.dat`, `test/koa_cosy_mge_opt.py`,
   `test/koa_cosy_mge_opt.slurm`, `test/results/koa_cosy_mge_result.json`,
   `test/results/koa_cosy_mge_result_indexed.json`

@@ -22,6 +22,12 @@ from simulatorBase import (
 
 logger = logging.getLogger(__name__)
 
+# Config keys applied per-call via setter methods (not at construction time)
+_RUNTIME_CONFIG_KEYS = frozenset({
+    'space_charge', 'sc_mesh', 'sc_method',
+    'physical_apertures', 'dipole_slices', 'aperture',
+})
+
 # FELsim class name → generic element type
 _FELSIM_TYPE_MAP = {
     'driftLattice': 'DRIFT',
@@ -111,18 +117,19 @@ class MultiCodeSimulator(SimulatorBase):
     def _init_simulators(self):
         from simulatorFactory import SimulatorFactory
 
-        needed_keys = {s.simulator_key for s in self.sections}
-        for key in needed_keys:
-            if key in self._simulators:
-                continue
-            section_cfg = {}
-            for s in self.sections:
-                if s.simulator_key == key:
-                    section_cfg = s.config
-                    break
-            sim = SimulatorFactory.create(key, **section_cfg)
-            sim.set_beam_energy(self.beam_energy)
-            self._simulators[key] = sim
+        for section in self.sections:
+            creation_cfg = {k: v for k, v in section.config.items()
+                           if k not in _RUNTIME_CONFIG_KEYS}
+            cache_key = (section.simulator_key,
+                         tuple(sorted(creation_cfg.items())))
+
+            if cache_key not in self._simulators:
+                sim = SimulatorFactory.create(
+                    section.simulator_key, **creation_cfg)
+                sim.set_beam_energy(self.beam_energy)
+                self._simulators[cache_key] = sim
+
+            section._sim_cache_key = cache_key
 
     def _prepare_beamline_slice(self, sim: SimulatorBase,
                                 start: int, end: int) -> List:
@@ -141,6 +148,29 @@ class MultiCodeSimulator(SimulatorBase):
             return [_felsim_to_generic(e) for e in raw_slice]
         else:
             return raw_slice
+
+    @staticmethod
+    def _apply_section_config(sim: SimulatorBase, config: dict):
+        """Apply per-section runtime config to a simulator before tracking."""
+        if not config:
+            return
+
+        if 'space_charge' in config and hasattr(sim, 'set_space_charge'):
+            sim.set_space_charge(
+                config['space_charge'],
+                mesh=config.get('sc_mesh'),
+            )
+
+        if 'physical_apertures' in config:
+            if config['physical_apertures']:
+                if hasattr(sim, 'enable_physical_apertures'):
+                    sim.enable_physical_apertures()
+            else:
+                if hasattr(sim, 'disable_physical_apertures'):
+                    sim.disable_physical_apertures()
+
+        if 'aperture' in config and hasattr(sim, 'default_aperture'):
+            sim.default_aperture = config['aperture']
 
     def simulate(self,
                  particles: Optional[np.ndarray] = None,
@@ -171,7 +201,10 @@ class MultiCodeSimulator(SimulatorBase):
         section_metadata = []
 
         for i, section in enumerate(self.sections):
-            sim = self._simulators[section.simulator_key]
+            sim = self._simulators[section._sim_cache_key]
+
+            # Apply per-section runtime config before tracking
+            self._apply_section_config(sim, section.config)
 
             # Set beamline slice for this section
             start, end = section.element_range
