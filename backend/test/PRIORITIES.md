@@ -461,8 +461,12 @@
     `simulatorBase.py` (2), `cosySimulator.py` (1), `cosyAdapter.py` (3),
     `beamlineBuilder.py` (2). All changed from `except Exception` to specific
     exception tuples.
-  - **Remaining:** Configuration validation (warn on unused keys), attribute
-    typo guard (test-time validator).
+  - Configuration validation: `_report_unaccessed()` elevated from `info`
+    to `warning` level for unused lattice keys.
+  - Attribute typo guard: `test_attribute_guard.py` (13 tests) — AST-based
+    scan of all backend setattr calls, validates targets against element
+    class attribute whitelist, checks for suspicious near-duplicate names.
+  - **Current test suite:** 176 pass, 7 skip, 0 fail across 7 test modules.
 
 ### I7. Multi-Code Simulation Framework [HIGH PRIORITY]
 - **Motivation:** Different simulation codes have different strengths: RF-Track
@@ -593,6 +597,10 @@
 - **CMA-ES v2 (Koa job 11451841, submitted 2026-03-08):** 50,000 evals, sigma=0.5,
   all bounds [-10,10], BIPOP restarts ×9, warm-start from v1 MSE=1030.
   Est. runtime: ~89 hours (~4 days). Script: `test/koa_cosy_mge_opt.py`
+  - **Status (2026-03-10, 44.5 hrs):** 15,392/50,000 evals (31%), MSE=1000.005
+    (best, barely unstable). Sigma collapsed to 4.7e-05 (from 0.5), axis ratio
+    530:1. First BIPOP restart imminent — sigma exhausted around current best.
+    No stable solution found in this basin; restart will explore larger volume.
 - **Files:** `fields/chicane_dipole_fieldmap.dat`, `test/koa_cosy_mge_opt.py`,
   `test/koa_cosy_mge_opt.slurm`, `test/results/koa_cosy_mge_result.json`,
   `test/results/koa_cosy_mge_result_indexed.json`
