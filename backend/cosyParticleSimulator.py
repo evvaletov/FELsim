@@ -452,7 +452,8 @@ class COSYParticleSimulator(COSYSimulator):
 
         n_nan = np.sum(has_nan)
         n_inf = np.sum(has_inf)
-        n_valid = N - n_nan - n_inf
+        n_invalid = np.sum(has_nan | has_inf)
+        n_valid = N - n_invalid
 
         print(f"\n{'=' * 70}")
         print(f"Particle Distribution Diagnostics ({coordinate_system.upper()} coordinates)")
@@ -1057,7 +1058,7 @@ class COSYParticleSimulator(COSYSimulator):
                             float(first_line.split()[0])
                             format = 'ascii'
                             self.logger.debug("Auto-detected format: ASCII (raw data)")
-                        except:
+                        except (ValueError, IndexError):
                             raise ValueError(f"Cannot determine file format from: {first_line}")
 
         # Read file

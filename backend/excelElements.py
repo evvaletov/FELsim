@@ -32,9 +32,7 @@ class ExcelElements:
                      'Element name', 'Channel #', 'Label', 'Sector', 'Element']
         
         # Column name mapping
-        self.columnReplaceHandler = {}
-        for i in range(len(OLDCOLUMNS)):
-            self.columnReplaceHandler.update({OLDCOLUMNS[i]: self.COLUMNS[i]})
+        self.columnReplaceHandler = dict(zip(OLDCOLUMNS, self.COLUMNS))
         
         # Try loading as Excel first, fall back to dictionary format
         try:
@@ -66,6 +64,11 @@ class ExcelElements:
         except Exception as e:
             raise ValueError(f"Failed to load Excel file '{file_path}': {str(e)}") from e
         
+        if len(df.columns) != len(self.COLUMNS):
+            raise ValueError(
+                f"Excel file has {len(df.columns)} columns, expected {len(self.COLUMNS)}. "
+                f"Check that the lattice file matches the expected format."
+            )
         df.columns = self.COLUMNS
         df['Channel'] = pd.to_numeric(df['Channel'], errors='coerce')
         self.df = df
@@ -123,11 +126,13 @@ class ExcelElements:
             elif element == "QPD":
                 beamline.append(qpdLattice(current=current, length=(z_end - z_sta), name=label))
             elif element == "DPH":
-                beamline.append(dipole(length=curvature, angle=angle, name=label))
+                beamline.append(dipole(length=curvature, angle=angle,
+                                       pole_gap=pole_gap if pole_gap > 0 else None, name=label))
             elif element == "DPW":
                 beamline.append(dipole_wedge(length=gap_wedge, angle=angle_wedge,
                                             dipole_length=curvature, dipole_angle=angle,
-                                            pole_gap=pole_gap, enge_fct=enge_fct, name=label))
+                                            pole_gap=pole_gap if pole_gap > 0 else 0.014478,
+                                            enge_fct=enge_fct, name=label))
             else:
                 if (not z_end - z_sta == 0) and (not np.isnan(z_sta)) and (not np.isnan(z_end)):
                     logger.warning(f"Unknown element type '{element}' at {label} — treating as drift")

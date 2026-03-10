@@ -47,6 +47,9 @@ class lattice:
         self.fringeType = fringeType  # Each segment has no magnetic fringe by default
         self.startPos = None
         self.endPos = None
+        self.chromatic = False  # Per-particle momentum-dependent focusing
+        self.aperture_x = None  # Half-aperture in x [mm], None = no cut
+        self.aperture_y = None  # Half-aperture in y [mm], None = no cut
         if isinstance(length, (int, float)) and not math.isnan(length) and length > 0:
             self.length = length
         else:
@@ -61,6 +64,10 @@ class lattice:
         E : float
             New kinetic energy value (MeV/c^2).
         '''
+        if not isinstance(E, (int, float)) or math.isnan(E) or math.isinf(E):
+            raise ValueError(f"Invalid kinetic energy: {E}")
+        if E <= 0:
+            raise ValueError(f"Kinetic energy must be positive, got {E} MeV")
         self.E = E
         self.gamma = (1 + (self.E / self.E0))
         self.beta = np.sqrt(1 - (1 / (self.gamma ** 2)))
@@ -79,6 +86,10 @@ class lattice:
         restE : float
             The new rest energy of the particle in MeV.
         '''
+        if mass <= 0:
+            raise ValueError(f"Particle mass must be positive, got {mass} kg")
+        if restE <= 0:
+            raise ValueError(f"Rest energy must be positive, got {restE} MeV")
         self.M = mass
         self.Q = charge
         self.E0 = restE
@@ -200,6 +211,30 @@ class lattice:
         particles = np.asarray(val, dtype=np.float64)
         return (mat @ particles.T).T
 
+    def apply_aperture(self, particles):
+        '''
+        Remove particles that exceed the element's aperture.
+
+        Parameters
+        ----------
+        particles : np.ndarray
+            (N, 6) particle array in FELsim coordinates [x(mm), x', y(mm), y', c5, c6].
+
+        Returns
+        -------
+        np.ndarray
+            Surviving particles (may be smaller than input).
+        '''
+        if self.aperture_x is None and self.aperture_y is None:
+            return particles
+        particles = np.asarray(particles, dtype=np.float64)
+        mask = np.ones(particles.shape[0], dtype=bool)
+        if self.aperture_x is not None:
+            mask &= np.abs(particles[:, 0]) <= self.aperture_x
+        if self.aperture_y is not None:
+            mask &= np.abs(particles[:, 2]) <= self.aperture_y
+        return particles[mask]
+
 
 class driftLattice(lattice):
     color = "white"
@@ -281,6 +316,7 @@ class driftLattice(lattice):
 
 class qpfLattice(lattice):
     color = "cornflowerblue"
+    BORE_RADIUS_MM = 13.5  # 27 mm bore / 2
 
     def __init__(self, current: float, length: float = 0.0889, fringeType='decay', name=None):
         '''
@@ -299,6 +335,8 @@ class qpfLattice(lattice):
         self.current = current
         self.color = "cornflowerblue"
         self.G = 2.694  # Quadrupole focusing strength (T/A/m)
+        self.aperture_x = self.BORE_RADIUS_MM
+        self.aperture_y = self.BORE_RADIUS_MM
 
     def _compute_numeric_matrix(self, length=None, current=None, **kwargs):
         '''
@@ -382,7 +420,8 @@ class qpfLattice(lattice):
         M43 = sp.sqrt(k) * sp.sinh(theta)
         M44 = sp.cosh(theta)
         M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
-        if I == 0:
+        # Use numeric == 0 only for actual numbers; SymPy symbols use general formulas
+        if not isinstance(I, sp.Basic) and I == 0:
             M12 = l
             M34 = l
         else:
@@ -398,12 +437,49 @@ class qpfLattice(lattice):
         ])
         return mat
 
+    def useMatrice(self, val, **kwargs):
+        if not self.chromatic:
+            return super().useMatrice(val, **kwargs)
+        particles = np.asarray(val, dtype=np.float64)
+        l = kwargs.get('length', self.length)
+        I = kwargs.get('current', self.current)
+        if I == 0:
+            return super().useMatrice(val, **kwargs)
+
+        # Per-particle k: k ∝ 1/P (momentum-dependent focusing)
+        delta = particles[:, 5]  # ΔK/K₀ × 10³
+        bg0 = self.beta * self.gamma
+        gamma_p = (self.E * (1 + delta * 1e-3) + self.E0) / self.E0
+        bg_p = np.sqrt(np.maximum(gamma_p**2 - 1, 1e-30))
+        k0 = np.abs(self.Q * self.G * I / (self.M * self.C * bg0))
+        k = k0 * bg0 / bg_p
+
+        sqrtk = np.sqrt(k)
+        theta = sqrtk * l
+        out = particles.copy()
+
+        # x-plane: focusing (cos/sin)
+        C, S = np.cos(theta), np.sin(theta)
+        out[:, 0] = C * particles[:, 0] + (S / sqrtk) * particles[:, 1]
+        out[:, 1] = -sqrtk * S * particles[:, 0] + C * particles[:, 1]
+
+        # y-plane: defocusing (cosh/sinh)
+        Ch, Sh = np.cosh(theta), np.sinh(theta)
+        out[:, 2] = Ch * particles[:, 2] + (Sh / sqrtk) * particles[:, 3]
+        out[:, 3] = sqrtk * Sh * particles[:, 2] + Ch * particles[:, 3]
+
+        # Longitudinal (first-order, reference particle)
+        M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+        out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
+        return out
+
     def __str__(self):
         return f"QPF beamline segment {self.length} m long and a current of {self.current} amps"
 
 
 class qpdLattice(lattice):
     color = "lightcoral"
+    BORE_RADIUS_MM = 13.5  # 27 mm bore / 2
 
     def __init__(self, current: float, length: float = 0.0889, fringeType='decay', name=None):
         '''
@@ -422,6 +498,8 @@ class qpdLattice(lattice):
         self.current = current
         self.G = 2.694  # Quadrupole focusing strength (T/A/m)
         self.color = "lightcoral"
+        self.aperture_x = self.BORE_RADIUS_MM
+        self.aperture_y = self.BORE_RADIUS_MM
 
     def _compute_numeric_matrix(self, length=None, current=None, **kwargs):
         '''
@@ -505,7 +583,8 @@ class qpdLattice(lattice):
         M43 = -(sp.sqrt(k)) * sp.sin(theta)
         M44 = sp.cos(theta)
         M56 = -l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1))
-        if I == 0:
+        # Use numeric == 0 only for actual numbers; SymPy symbols use general formulas
+        if not isinstance(I, sp.Basic) and I == 0:
             M12 = l
             M34 = l
         else:
@@ -521,6 +600,42 @@ class qpdLattice(lattice):
         ])
         return mat
 
+    def useMatrice(self, val, **kwargs):
+        if not self.chromatic:
+            return super().useMatrice(val, **kwargs)
+        particles = np.asarray(val, dtype=np.float64)
+        l = kwargs.get('length', self.length)
+        I = kwargs.get('current', self.current)
+        if I == 0:
+            return super().useMatrice(val, **kwargs)
+
+        # Per-particle k: k ∝ 1/P (momentum-dependent focusing)
+        delta = particles[:, 5]  # ΔK/K₀ × 10³
+        bg0 = self.beta * self.gamma
+        gamma_p = (self.E * (1 + delta * 1e-3) + self.E0) / self.E0
+        bg_p = np.sqrt(np.maximum(gamma_p**2 - 1, 1e-30))
+        k0 = np.abs(self.Q * self.G * I / (self.M * self.C * bg0))
+        k = k0 * bg0 / bg_p
+
+        sqrtk = np.sqrt(k)
+        theta = sqrtk * l
+        out = particles.copy()
+
+        # x-plane: defocusing (cosh/sinh)
+        Ch, Sh = np.cosh(theta), np.sinh(theta)
+        out[:, 0] = Ch * particles[:, 0] + (Sh / sqrtk) * particles[:, 1]
+        out[:, 1] = sqrtk * Sh * particles[:, 0] + Ch * particles[:, 1]
+
+        # y-plane: focusing (cos/sin)
+        C, S = np.cos(theta), np.sin(theta)
+        out[:, 2] = C * particles[:, 2] + (S / sqrtk) * particles[:, 3]
+        out[:, 3] = -sqrtk * S * particles[:, 2] + C * particles[:, 3]
+
+        # Longitudinal (first-order, reference particle)
+        M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+        out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
+        return out
+
     def __str__(self):
         return f"QPD beamline segment {self.length} m long and a current of {self.current} amps"
 
@@ -528,7 +643,8 @@ class qpdLattice(lattice):
 class dipole(lattice):
     color = "forestgreen"
 
-    def __init__(self, length: float = 0.0889, angle: float = 1.5, fringeType='decay', name=None):
+    def __init__(self, length: float = 0.0889, angle: float = 1.5, fringeType='decay',
+                 pole_gap=None, name=None):
         '''
         Represents a dipole bending magnet, which bends the beam horizontally.
 
@@ -539,10 +655,14 @@ class dipole(lattice):
         angle : float, optional
             The bending angle of the dipole magnet in degrees.
         fringeType :
+        pole_gap : float, optional
+            Pole gap in meters. If provided, sets vertical aperture to ±gap/2.
         '''
         super().__init__(length, fringeType, name=name)
         self.color = "forestgreen"
         self.angle = angle
+        if pole_gap is not None:
+            self.aperture_y = pole_gap * 1000 / 2  # m → mm half-gap
 
     def _compute_numeric_matrix(self, length=None, angle=None, **kwargs):
         '''
@@ -563,7 +683,15 @@ class dipole(lattice):
         l = self.length if length is None else length
         a = self.angle if angle is None else angle
         if a == 0:
-            return driftLattice(l)._compute_numeric_matrix()
+            M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+            return np.array([
+                [1.0, l, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, l, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 1.0, M56],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+            ], dtype=np.float64)
         by = (self.M * self.C * self.beta * self.gamma / self.Q) * (a * np.pi / 180 / self.length)
         rho = self.M * self.C * self.beta * self.gamma / (self.Q * by)
         theta = l / rho
@@ -584,6 +712,45 @@ class dipole(lattice):
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         ], dtype=np.float64)
         return mat
+
+    def useMatrice(self, val, **kwargs):
+        if not self.chromatic or self.angle == 0:
+            return super().useMatrice(val, **kwargs)
+        particles = np.asarray(val, dtype=np.float64)
+        l = kwargs.get('length', self.length)
+        a = self.angle
+
+        # Reference bending (By uses full element length, not sub-step)
+        By = (self.M * self.C * self.beta * self.gamma / self.Q) * (a * np.pi / 180 / self.length)
+        rho0 = self.M * self.C * self.beta * self.gamma / (self.Q * By)
+
+        # Per-particle momentum
+        delta = particles[:, 5]  # ΔK/K₀ × 10³
+        bg0 = self.beta * self.gamma
+        gamma_p = (self.E * (1 + delta * 1e-3) + self.E0) / self.E0
+        bg_p = np.sqrt(np.maximum(gamma_p**2 - 1, 1e-30))
+        beta_p = bg_p / gamma_p
+
+        rho = rho0 * bg_p / bg0  # ρ ∝ P
+        theta = l / rho
+        C_t = np.cos(theta)
+        S_t = np.sin(theta)
+
+        x, xp = particles[:, 0], particles[:, 1]
+        y, yp = particles[:, 2], particles[:, 3]
+        gfac = gamma_p / (gamma_p + 1)
+
+        out = particles.copy()
+        out[:, 0] = C_t * x + rho * S_t * xp + rho * (1 - C_t) * gfac * delta
+        out[:, 1] = (-S_t / rho) * x + C_t * xp + S_t * gfac * delta
+        out[:, 2] = y + l * yp  # y-plane: drift
+        # out[:, 3] unchanged
+        M51 = self.f * S_t / (beta_p * self.C)
+        M52 = self.f * rho * (1 - C_t) / (beta_p * self.C)
+        R56 = (l - rho * S_t) - l / gamma_p**2
+        M56 = self.f * R56 * gamma_p / ((gamma_p + 1) * beta_p * self.C)
+        out[:, 4] = M51 * x + M52 * xp + particles[:, 4] + M56 * delta
+        return out
 
     def _compute_symbolic_matrix(self, length=None, angle=None, **kwargs):
         '''
@@ -675,6 +842,8 @@ class dipole_wedge(lattice):
         self.dipole_length = dipole_length
         self.dipole_angle = dipole_angle
         self.pole_gap = pole_gap
+        if pole_gap > 0:
+            self.aperture_y = pole_gap * 1000 / 2  # m → mm half-gap
 
     def _compute_numeric_matrix(self, length=None, angle=None, **kwargs):
         '''
@@ -697,18 +866,19 @@ class dipole_wedge(lattice):
         dipole_angle = self.dipole_angle
         dipole_length = self.dipole_length
         # Edge kick uses |ρ|: direction depends on pole face geometry, not bending sign
-        R = dipole_length / (abs(dipole_angle) * np.pi / 180)
+        if abs(dipole_angle) < 1e-14:
+            # Zero dipole angle → infinite ρ → zero edge kick (drift-like)
+            R = np.inf
+        else:
+            R = dipole_length / (abs(dipole_angle) * np.pi / 180)
         # Edge kick uses the full wedge angle (thin-lens effect at pole face,
         # not distributed over the magnet length)
         eta = a * np.pi / 180
         Tx = np.tan(eta)
-        # Fringe field contribution using triangle model
-        g = self.pole_gap
+        # Fringe field correction (triangle model): K·g = le/6 (g cancels analytically)
         le = self.length
-        # Analytical integration of K for triangle model: K = le/(6*g)
-        K_simplified = le / (6.0 * g)
         h = 1.0 / R
-        phi = K_simplified * g * h * (1 + np.sin(eta) ** 2) / np.cos(eta)
+        phi = (le / 6.0) * h * (1 + np.sin(eta) ** 2) / np.cos(eta)
         Ty = np.tan(eta - phi)
         M56 = -self.f * (l / (self.C * self.beta * self.gamma * (self.gamma + 1)))
         mat = np.array([
@@ -758,12 +928,10 @@ class dipole_wedge(lattice):
         # Edge kick uses the full wedge angle (thin-lens, not distributed)
         eta = a * sp.pi / 180
         Tx = sp.tan(eta)
-        g = self.pole_gap
         le = self.length
-        # Fringe field K integral (triangle model): By not needed since R computed directly
-        K_simplified = le / (6 * g)
+        # Fringe field correction (triangle model): K·g = le/6 (g cancels analytically)
         h = 1 / R
-        phi = sp.simplify(K_simplified * g * h * (1 + sp.sin(eta) ** 2) / sp.cos(eta))
+        phi = sp.simplify((le / 6) * h * (1 + sp.sin(eta) ** 2) / sp.cos(eta))
         Ty = sp.tan(eta - phi)
         M56 = -self.f * (l / (self.C * self.beta * self.gamma * (self.gamma + 1)))
         mat = Matrix([
@@ -775,6 +943,39 @@ class dipole_wedge(lattice):
             [0, 0, 0, 0, 0, 1]
         ])
         return mat
+
+    def useMatrice(self, val, **kwargs):
+        if not self.chromatic:
+            return super().useMatrice(val, **kwargs)
+        particles = np.asarray(val, dtype=np.float64)
+
+        eta = np.radians(self.angle)
+        if abs(self.dipole_angle) < 1e-14:
+            return super().useMatrice(val, **kwargs)
+        R0 = self.dipole_length / (abs(self.dipole_angle) * np.pi / 180)
+        le = self.length
+
+        # Per-particle bending radius: R ∝ P (magnetic rigidity)
+        delta = particles[:, 5]  # ΔK/K₀ × 10³
+        bg0 = self.beta * self.gamma
+        gamma_p = (self.E * (1 + delta * 1e-3) + self.E0) / self.E0
+        bg_p = np.sqrt(np.maximum(gamma_p**2 - 1, 1e-30))
+        R = R0 * bg_p / bg0  # per-particle R
+
+        Tx = np.tan(eta)
+        # Fringe correction (triangle model): K·g = le/6 (g cancels analytically)
+        h = 1.0 / R
+        phi = (le / 6.0) * h * (1 + np.sin(eta)**2) / np.cos(eta)
+        Ty = np.tan(eta - phi)
+
+        out = particles.copy()
+        out[:, 1] = particles[:, 1] + (Tx / R) * particles[:, 0]
+        out[:, 3] = particles[:, 3] - (Ty / R) * particles[:, 2]
+
+        # Longitudinal (first-order, reference particle)
+        M56 = -(self.length * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+        out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
+        return out
 
     def __str__(self):
         return f"Horizontal wedge dipole magnet segment {self.length} m long (curvature) with an angle of {self.angle} degrees"

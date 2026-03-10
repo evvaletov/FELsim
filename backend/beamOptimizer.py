@@ -54,6 +54,9 @@ class beamOptimizer():
         
         self.matrixVariables = matrixVariables
         self.beamline = beamline
+        self.use_apertures = False
+        self.min_surviving_fraction = 0.1  # Return penalty if <10% survive
+        self.transmission_weight = 0.0
     
     def _optiSpeed(self, variableVals):
         '''
@@ -77,6 +80,8 @@ class beamOptimizer():
         mse = []
         numGoals = 0
         
+        n_initial = len(particles)
+
         #  Loop through beamline indices
         for i in range(len(segments)):
             #  Check if indice is in segmentVar (x variable dictionary)
@@ -84,7 +89,7 @@ class beamOptimizer():
                 try:
                     #  Adjust the segment's x variable value according to its mathematical relationship
                     yFunc = self.segmentVar.get(i)[2]
-                    varIndex = self.variablesToOptimize.index(self.segmentVar.get(i)[0]) #  Get the index of the x variable to use with 
+                    varIndex = self.variablesToOptimize.index(self.segmentVar.get(i)[0]) #  Get the index of the x variable to use with
                     newValue = yFunc(variableVals[varIndex])
                     param = self.segmentVar.get(i)[1]
                     particles = segments[i].useMatrice(particles, **{param: newValue})
@@ -92,6 +97,16 @@ class beamOptimizer():
                     raise ValueError(f"segment {i} has no parameter {param}")
             else:
                 particles = segments[i].useMatrice(particles)
+            if self.use_apertures:
+                particles = segments[i].apply_aperture(particles)
+                if len(particles) < 2:
+                    # Can't compute Twiss with <2 particles — steep penalty
+                    penalty = 1e6 * (1 - len(particles) / n_initial)
+                    self.trackVariables.append(variableVals)
+                    self.plotMSE.append(penalty)
+                    self.plotIterate.append((self.iterationTrack) + 1)
+                    self.iterationTrack += 1
+                    return penalty
             #  Check if indice in objective dictionary
             if i in self.objectives:
                 for goalDict in self.objectives[i]:
@@ -102,6 +117,13 @@ class beamOptimizer():
                     numGoals = numGoals+1
                     stringForm = "indice " + str(i) + ": " + goalDict["measure"][0] + " " + goalDict["measure"][1].__name__
                     self.trackGoals[stringForm].append(stat) #  for plotting in calc()
+
+        # Transmission penalty: w_T × (1-T)²
+        if self.use_apertures and self.transmission_weight > 0:
+            T = len(particles) / n_initial
+            mse.append(self.transmission_weight * (1 - T) ** 2)
+            numGoals += 1
+            self.trackGoals.setdefault("transmission", []).append(T)
 
         #  Calculate MSE
         if numGoals == 0:
@@ -116,7 +138,7 @@ class beamOptimizer():
 
         return difference
     
-    def calc(self, method, segmentVar, startPoint, objectives, plotProgress = False, plotBeam = False, printResults = False, **kwargs):
+    def calc(self, method, segmentVar, startPoint, objectives, plotProgress = False, plotBeam = False, printResults = False, use_apertures = False, transmission_weight = 0.0, **kwargs):
         '''
         optimizes beamline segment attribute values so y values are close to objective values as possible.
         Post optimization plotting supported
@@ -147,6 +169,9 @@ class beamOptimizer():
         result: OptimizeResult
             Object containing resulting information about optimization process and results
         '''
+        self.use_apertures = use_apertures
+        self.transmission_weight = transmission_weight
+
         #  Variables for plotting purposes later
         self.plotMSE = []
         self.plotIterate = []
@@ -239,6 +264,8 @@ class beamOptimizer():
                 for indice, value in self.objectives.items():
                     for obj in value:
                         output += "indice " + str(indice) + ": " + obj["measure"][0] + " "  + obj["measure"][1].__name__ + " value of " + str(obj["measured"]) + "\n"
+                if self.use_apertures and "transmission" in self.trackGoals and self.trackGoals["transmission"]:
+                    output += f"Transmission: {self.trackGoals['transmission'][-1]*100:.1f}%\n"
                 output += "Final difference: " + str(result.fun) + "\n"
                 output += "\nTotal time: " + str(endTime-startTime) + " s\n"
                 output +="Total iterations: " + str(self.iterationTrack) + "\n"
@@ -286,7 +313,7 @@ class beamOptimizer():
             ax[0].set_xlabel('Iterations')
             ax[0].set_ylabel('Variable values')
             ax[0].set_title('Variable Values through each Iteration')
-            timeLine = mlines.Line2D([], [], color = 'white', label=f'{round((endTime-startTime)/self.iterationTrack,4)} s/iteration')
+            timeLine = mlines.Line2D([], [], color = 'white', label=f'{round((endTime-startTime)/max(self.iterationTrack, 1),4)} s/iteration')
             handles.append(timeLine)
             ax[0].legend(handles = handles, loc = 'upper right')
 

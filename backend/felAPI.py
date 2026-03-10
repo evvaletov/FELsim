@@ -258,7 +258,7 @@ async def glyfada_setup(req: GlyfadaSetupRequest):
                 mse = 1e6
             result = {"objective_1": -mse}
             if emit_constraints:
-                result["constraint_1"] = 0.0 if (math.isfinite(mse) and mse < 1e4) else 1.0
+                result["constraint_1"] = 0.0 if mse < 1e4 else 1.0
             return result
 
         async with state.lock:
@@ -326,13 +326,15 @@ async def glyfada_setup_pickle(req: GlyfadaSetupFromPickleRequest):
             vals = [float(params[name]) for name in variable_names]
             try:
                 mse = float(obj_func(vals))
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Objective function failed: {e}")
                 mse = 1e6
             if not math.isfinite(mse):
+                logger.warning(f"Objective returned non-finite value: {mse}")
                 mse = 1e6
             result = {"objective_1": -mse}
             if emit_constraints:
-                result["constraint_1"] = 0.0 if (math.isfinite(mse) and mse < 1e4) else 1.0
+                result["constraint_1"] = 0.0 if mse < 1e4 else 1.0
             return result
 
         async with state.lock:
@@ -383,7 +385,7 @@ async def glyfada_evaluate(req: GlyfadaEvalRequest):
         def _run():
             with state.eval_lock:
                 state.eval_count += 1
-                return state.evaluate_fn(req.params)
+                return evaluate_fn(req.params)
 
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, _run)

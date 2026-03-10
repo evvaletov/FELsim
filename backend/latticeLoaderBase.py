@@ -16,7 +16,35 @@ Author: Eremey Valetov
 
 import math
 
-from tracked_dict import TrackedDict
+try:
+    from tracked_dict import TrackedDict
+except ImportError:
+    class TrackedDict(dict):
+        """Minimal fallback when tracked_dict is not installed."""
+        def __init__(self, data=None, **kwargs):
+            super().__init__(data or {}, **kwargs)
+        def __getitem__(self, key):
+            val = super().__getitem__(key)
+            return self._wrap(val, key)
+        def _wrap(self, val, key=None):
+            if isinstance(val, dict) and not isinstance(val, TrackedDict):
+                val = TrackedDict(val)
+                if key is not None:
+                    super().__setitem__(key, val)
+            elif isinstance(val, list):
+                val = [self._wrap(v) for v in val]
+                if key is not None:
+                    super().__setitem__(key, val)
+            return val
+        def get(self, key, default=None):
+            try:
+                return self[key]
+            except KeyError:
+                return default
+        def mark_accessed(self, *keys): pass
+        def mark_all_accessed(self): pass
+        def report_unused(self): return []
+        def unaccessed(self): return []
 from beamline import driftLattice, qpfLattice, qpdLattice, dipole, dipole_wedge
 from loggingConfig import get_logger_with_fallback
 
@@ -400,7 +428,8 @@ class LatticeLoaderBase:
             return dipole_wedge(
                 length=length, angle=wedge_angle,
                 dipole_length=dipole_length, dipole_angle=dipole_angle,
-                pole_gap=pole_gap, enge_fct=enge_fct, name=name,
+                pole_gap=pole_gap if pole_gap > 0 else 0.014478,
+                enge_fct=enge_fct, name=name,
             )
 
         else:

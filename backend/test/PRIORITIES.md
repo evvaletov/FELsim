@@ -581,7 +581,7 @@
   `test/koa_cosy_mge_opt.slurm`, `test/results/koa_cosy_mge_result.json`,
   `test/results/koa_cosy_mge_result_indexed.json`
 
-### C4. Systematic Testing, Validation & Verification [HIGH PRIORITY]
+### C4. Systematic Testing, Validation & Verification [IN PROGRESS]
 - **Motivation:** FELsim currently relies on ad-hoc cross-validation studies.
   A systematic V&V programme is needed for production confidence.
 - **Actions:**
@@ -601,6 +601,21 @@
   6. **CI pipeline:** Automated test runs on commit (at minimum: unit tests
      + adapter round-trip + one optimization smoke test).
 - **Output:** `backend/test/test_*.py` files, CI config, benchmark report.
+- **Progress (2026-03-10):**
+  - Created `test_chromatic_physics.py`: 30 tests covering chromatic quads,
+    dipoles, wedges, apertures, and FODO integration — all pass.
+  - Fixed `test_transfer_matrices.py`: quad known-element test now uses
+    element's own constants (was using truncated test-file constants).
+  - Fixed `test_fieldmap_validation.py`: `np.trapezoid` → `np.trapz` for
+    numpy 1.x compatibility.
+  - Fixed `test_adapter_roundtrip.py`: YAML tests skip gracefully when
+    `tracked_dict` is unavailable (requires Python ≥3.10).
+  - Fixed `latticeLoaderBase.py`, `jsonLatticeLoader.py`: `TrackedDict`
+    import made optional with recursive fallback class.
+  - **Current test suite:** 152 pass, 7 skip, 0 fail across 6 test modules
+    (`test_chromatic_physics`, `test_transfer_matrices`, `test_twiss`,
+    `test_adapter_roundtrip`, `test_optimizer`, `test_fieldmap_validation`).
+  - **Remaining:** CI pipeline, edge-case tests, cross-code benchmark automation.
 
 ### C2. COSY INFINITY Cross-Validation [DONE — see W4]
 - **Motivation:** Independent DA-based simulation. Particularly valuable for
@@ -608,6 +623,143 @@
 - **Design:** Run COSY optimisation directly (W4), then compare element-by-element
   Twiss functions with the Python results.
 - **Due:** 2026-02-18 (W4)
+
+### C8. Chromatic Quadrupole Matrices [DONE 2026-03-10]
+- **Problem:** RF-Track applies momentum-dependent focusing (k_eff = k₀ × P₀/P),
+  while FELsim uses fixed k₀ for all particles. At σ_p = 0.5%, this causes
+  β_y to diverge by 65–1100% between codes.
+- **Solution:** Added `chromatic` flag to `lattice` base class (default False).
+  When enabled, `qpfLattice.useMatrice()` and `qpdLattice.useMatrice()` compute
+  per-particle k from coord6 (ΔK/K₀ × 10³) using vectorized numpy operations.
+  Formula: k = k₀ × βγ₀/βγ(δ) ≡ k₀ × P₀/P.
+- **Validation (D15):** Three-way comparison (linear FELsim, chromatic FELsim,
+  RF-Track) at σ_p = 0%, 0.1%, 0.25%, 0.5%, 1.0%:
+  - Chromatic FELsim ≡ RF-Track to 0.00% across all Twiss parameters (β, α, ε, σ)
+  - Linear FELsim errors: β up to 1466%, ε up to 98%, σ up to 90%
+- **Properties:** Opt-in, backward-compatible, symplectic (det M = 1.0 to
+  machine precision), no Python loops.
+- **Files:** `beamline.py` (qpfLattice, qpdLattice), `test/test_chromatic_quad.py`,
+  `test/D15_chromatic_comparison.py`
+
+---
+
+## Category P: Physics Model Upgrades
+
+Items are ordered by estimated impact on the UH MkV FEL beamline
+(40 MeV, σ_p = 0.5%, 2 ps bunch, chicane + 26 quads, 118 elements).
+
+### P1. Aperture Loss Tracking in FELsim [DONE 2026-03-10]
+- **Motivation:** RF-Track shows 40–50% particle loss at the 0.5 ps compression
+  operating point (W10, W11). FELsim never drops particles, so its optimizer
+  can find "optimal" solutions that are physically unrealizable (beam clips
+  apertures, especially in chicane dipoles with 14.5 mm pole gap).
+- **Impact:** >5%. Largest unmodeled effect. Directly changes optimization outcomes.
+- **Implementation:**
+  1. Added `aperture_x`, `aperture_y` attributes to `lattice` base class (default None).
+  2. Added `apply_aperture(particles)` method: masks particles exceeding the aperture,
+     returns surviving subset. `useMatrice` unchanged (no API break).
+  3. Default apertures set automatically:
+     - QPF/QPD: ±13.5 mm (27 mm bore, class attribute `BORE_RADIUS_MM`)
+     - DPH: ±pole_gap/2 in y (from Excel data, passed via new `pole_gap` parameter)
+     - DPW: ±pole_gap/2 in y (from existing `self.pole_gap` attribute)
+     - Drift: no aperture (None)
+  4. Tracking loop calls `apply_aperture` after each `useMatrice`.
+- **Validation (FELsim-optimized currents, 2000 particles, σ_p=0.5%):**
+  - 64.5% transmission (35.5% loss = 710 particles)
+  - Dominant loss: FC1.DPW.111 (element 100, ±6.3 mm) — 395 particles (56% of losses)
+  - Chicane exit dipoles (72–73, 89–90): 281 particles
+  - Quad losses minor: 34 particles total
+- **Optimizer integration:** `calc(..., use_apertures=True)` enables aperture cuts
+  in `_optiSpeed`. Smooth penalty: returns `1e6 × (1-T)` if <2 particles survive
+  (can't compute Twiss). Opt-in, backward-compatible (default: `use_apertures=False`).
+- **Transmission objective [DONE 2026-03-10]:** `calc(..., transmission_weight=W)` adds
+  `W × (1-T)²` to MSE, where T = n_surviving/n_initial. Tracks `transmission` in
+  `trackGoals` for plotting. Backward-compatible (default weight = 0).
+- **Chromatic re-optimization [DONE 2026-03-10]:** Multi-pass coordinate-descent
+  optimization with `chromatic=True` + `use_apertures=True` + `transmission_weight=5`.
+  3 passes over 11-stage NM sequence. Best result (Pass 2):
+  - MSE = 4.0e-4 (β_x=1.40, α_x=0.44, β_y=0.23, α_y=0.03)
+  - Transmission = 98.1% (up from 64.5% with linear-optimized currents)
+  - Significant current changes in chicane region (elements 33-43) and
+    downstream quads (70, 87, 93-97)
+  - Script: `test/UHM_beamline_opt_chromatic.py`, results: `results/felsim_chromatic_warm.json`
+- **Files:** `beamline.py` (lattice base, qpfLattice, qpdLattice, dipole, dipole_wedge),
+  `excelElements.py` (pole_gap → dipole constructor)
+
+### P2. Chromatic DPW Edge Kicks [DONE 2026-03-10]
+- **Motivation:** The DPW edge kick is tan(η)/R where R = ρ = L/|θ|. For
+  off-momentum particles, ρ ∝ P (magnetic rigidity), so the kick strength
+  scales as P₀/P — same mechanism as quad chromaticity.
+- **Impact:** ~2% on β_y per 1‰ energy offset in chicane regions.
+- **Implementation:**
+  1. Override `useMatrice` in `dipole_wedge` (same pattern as chromatic quads).
+  2. Per-particle R: R_p = R₀ × βγ_p/βγ₀.
+  3. Both h = 1/R and the fringe correction φ = K·g·h·(1+sin²η)/cos(η) are
+     momentum-dependent (h_p = h₀ × P₀/P).
+  4. Full chromatic DPW kick: M21_p = Tx/R_p, M43_p = -Ty_p/R_p where
+     Ty_p = tan(η - φ_p). Vectorized over all particles.
+- **Validation:**
+  - On-momentum: max|Δ| < 10⁻¹² vs linear (exact consistency)
+  - Off-momentum: Δyp ≈ 1.4e-6/mrad per ‰ of δ (correctly momentum-scaled)
+  - Symplecticity: det(M_x) = det(M_y) = 1.0 to machine precision
+- **Note:** FELsim chromatic DPW is more accurate than RF-Track's DPW model
+  (RF-Track uses K1L = -|K0|·tan(η) without fringe correction φ). COSY's
+  DIL includes all edge effects via DA — inherently chromatic.
+- **Files:** `beamline.py` (dipole_wedge.useMatrice)
+
+### P3. Chromatic Sector-Bend Body [DONE 2026-03-10]
+- **Motivation:** Dipole body focusing (cos θ, sin θ) uses reference ρ.
+  Off-momentum particles see different bending radii (ρ ∝ P = magnetic rigidity).
+  Per-particle θ = L/ρ(δ) produces momentum-dependent bending, dispersion, and R56.
+- **Impact:** <1% for σ_p = 0.5% (dominated by existing M16/M26 terms), but
+  needed for model consistency with chromatic quads and edges.
+- **Implementation:**
+  1. Override `useMatrice` in `dipole` class (same pattern as chromatic quads).
+  2. Per-particle ρ_p = ρ₀ × βγ_p/βγ₀, θ_p = L/ρ_p.
+  3. Full sector-bend body: M11 = cos(θ_p), M12 = ρ_p·sin(θ_p), M16 = ρ_p·(1-cos θ_p)·gfac·δ,
+     M21 = -sin(θ_p)/ρ_p, M22 = cos(θ_p), M26 = sin(θ_p)·gfac·δ. Y-plane: drift.
+  4. Longitudinal: M51, M52, R56 all per-particle (momentum-dependent dispersion).
+- **Validation:**
+  - On-momentum: max|Δ| < 10⁻¹⁰ vs linear matrix (exact consistency)
+  - Off-momentum: chromaticity effect = 9.8e-2 (correct direction)
+  - Symplecticity: det(Mx) = det(My) = 1.0 at δ = 0, ±5, +10
+  - ρ scaling: verified ρ_p/ρ₀ = βγ_p/βγ₀ at δ = 0.1–2.0%
+- **Files:** `beamline.py` (dipole.useMatrice), `test/test_chromatic_dipole.py`
+
+### P4. Fringe Field Sextupole Terms [LOW PRIORITY]
+- **Motivation:** COSY with FR ≥ 1 includes Enge sextupole contributions from
+  fringe fields. Neither FELsim nor RF-Track model these.
+- **Impact:** ~2–5% on β_y for high-order dipole fringe fields. Negligible for
+  linear Enge model (FR 0).
+- **Design:** Would require extracting sextupole kick from Enge function gradient.
+  More naturally handled by COSY (already does this via DA).
+- **Effort:** ~1 week. Medium difficulty (Enge coefficient extraction and validation).
+
+### P5. Chromatic M56 [LOW PRIORITY]
+- **Motivation:** M56 = -L·f/(c·β·γ·(γ+1)) uses reference β, γ. Per-particle
+  M56 would capture velocity-dependent time-of-flight.
+- **Impact:** <0.1% for σ_p = 0.5% at 40 MeV. Negligible.
+- **Effort:** Trivial (same per-particle γ calculation already in chromatic quads).
+
+### P6. CSR Module [LOW PRIORITY — NOT NEEDED FOR UH FEL]
+- **Motivation:** Coherent Synchrotron Radiation causes energy loss and emittance
+  growth in short bunches traversing bends. Derbenev-Saldin formula gives
+  Δσ_E ≈ 0.5% for 0.5 ps bunch at UH FEL chicane parameters.
+- **Impact:** Negligible at 2 ps operating point. Potentially significant at <1 ps,
+  but the beamline cannot compress to that regime anyway (W12 conclusion).
+- **Design:** 1D CSR solver (steady-state or transient). External module.
+- **Effort:** ~2 weeks.
+
+### P7. COSY Model Assessment [DONE 2026-03-10]
+- **Finding:** The COSY model uses NO kicks. Both element types are proper
+  thick-element representations:
+  - Quadrupoles: `MQ L B_pole R` — thick magnetic quadrupole (full DA map)
+  - Dipoles: `DIL L θ g/2 e₁ 0 e₂ 0` — thick dipole with integrated edge angles
+  - DPW-DPH-DPW triplets are consolidated into single DIPOLE_CONSOLIDATED
+    with entrance/exit edge angles passed to DIL
+  - Fringe fields via FC/FD (Enge) or MGE (fieldmap)
+- **Conclusion:** No element replacement needed in COSY. The DIL + FC/FD approach
+  is the most accurate available representation.
 
 ---
 

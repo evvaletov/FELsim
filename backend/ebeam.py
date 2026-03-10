@@ -31,7 +31,7 @@ class beam:
         self.scatter_alpha = 0.7
 
          # Define custom colormap for plots with white for lowest values
-        plasma = plt.cm.get_cmap('plasma', 256) #'magma'. 'inferno', 'plasma', 'viridis' for uniform (append _r for reverse).
+        plasma = plt.colormaps['plasma'].resampled(256)  # 'magma', 'inferno', 'plasma', 'viridis' for uniform (append _r for reverse)
         new_colors = plasma(np.linspace(0, 1, 256))
         new_colors[0] = [1, 1, 1, 0]
         plasma_with_white = LinearSegmentedColormap.from_list('plasma_with_white', new_colors)
@@ -75,11 +75,15 @@ class beam:
         beta = twiss_axis[r"$\beta$ (m)"]
         gamma = twiss_axis[r"$\gamma$ (rad/m)"]
 
-        # Ellipse bounds
-        x_max = xc + np.sqrt(emittance / (gamma - alpha ** 2 / beta))
-        x_min = xc - np.sqrt(emittance / (gamma - alpha ** 2 / beta))
-        y_max = yc + np.sqrt(emittance / (beta - alpha ** 2 / gamma))
-        y_min = yc - np.sqrt(emittance / (beta - alpha ** 2 / gamma))
+        # Ellipse bounds — guard against degenerate Twiss (β≈0, γ≈0, or ε≈0)
+        denom_x = gamma - alpha ** 2 / beta if abs(beta) > 1e-30 else 0.0
+        denom_y = beta - alpha ** 2 / gamma if abs(gamma) > 1e-30 else 0.0
+        half_x = np.sqrt(emittance / denom_x) if denom_x > 0 and emittance > 0 else 0.0
+        half_y = np.sqrt(emittance / denom_y) if denom_y > 0 and emittance > 0 else 0.0
+        x_max = xc + half_x
+        x_min = xc - half_x
+        y_max = yc + half_y
+        y_min = yc - half_y
 
         x_vals = np.linspace(x_min, x_max, num_pts)
         y_vals = np.linspace(y_min, y_max, num_pts)
@@ -151,7 +155,8 @@ class beam:
                     emittance_sq = max(emittance_sq, 0.0)
                 epsilon = np.sqrt(emittance_sq)
 
-                if epsilon < 1e-30:
+                # ε below float min → degenerate beam, Twiss undefined
+                if epsilon < np.finfo(float).tiny:
                     alpha = beta = gamma = 0.0
                 else:
                     alpha = -covar_disp_free / epsilon
@@ -167,7 +172,7 @@ class beam:
                     emittance_sq = max(emittance_sq, 0.0)
                 epsilon = np.sqrt(emittance_sq)
 
-                if epsilon < 1e-30:
+                if epsilon < np.finfo(float).tiny:
                     alpha = beta = gamma = 0.0
                 else:
                     alpha = -covar / epsilon
@@ -765,7 +770,7 @@ class beam:
             alpha = float(params['alpha'])
             beta = float(params['beta'])
             epsilon = float(params['epsilon'])
-            phi = float(params['phi'])
+            phi = np.deg2rad(float(params['phi']))
             cov2d = self.twiss_to_cov(alpha, beta, epsilon)
             cov2d_rot = self.rotate_cov(cov2d, phi)
             cov_blocks.append(cov2d_rot)
