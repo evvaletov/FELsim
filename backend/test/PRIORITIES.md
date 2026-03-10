@@ -590,6 +590,17 @@
   - Script: `UHM_rftrack_opt.py` (`--smoke`, `--emittance`, `--space-charge`)
   - Results: `results/rftrack_opt/`
   - TODO: Run full comparison at ε_n = 5, 8, 14 with 5 restarts.
+- **Part C (C1B, 2026-03-10):** Four-way hybrid comparison via MultiCodeSimulator.
+  Script: `C1B_hybrid_comparison.py` (`--smoke`, `--emittance`)
+  - Methods: FELsim / MC-val / RFT-val / RFT-opt
+  - MC-val: MultiCodeSimulator with FELsim(0:87) + RF-Track(87:137),
+    FELsim-optimised currents — validates production hybrid architecture
+  - **Smoke test (ε_n=8, 1 restart):**
+    FELsim MSE=1.3e-4, MC-val MSE=1.31, RFT-val MSE=5.59, RFT-opt MSE=6.6e-3
+  - MC-val intermediate between FELsim and full RFT-val: FELsim prefix
+    avoids dipole model differences in Stages 1-10, so Stage 11 beam state
+    is closer to FELsim's expectations than full RF-Track.
+  - TODO: Run full comparison at ε_n = 5, 8, 14 with 5 restarts.
 
 ### C3. FR3+MGE Optimization [IN PROGRESS — CMA-ES v2 on Koa]
 - **Fieldmap fix (2026-02-22):** DELTAS 0→0.001, removed 0.835× scaling. Peak field
