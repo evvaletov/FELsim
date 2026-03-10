@@ -631,7 +631,7 @@
   - Current: A
   - Bunch length: ps
 
-## Known Issues (from QA Passes 1–3)
+## Known Issues (from QA Passes 1–4)
 
 - **CRITICAL (pre-existing):** `/plot-parameters` endpoint (felAPI.py:580) references non-existent
   `Beamline` class and `findSegmentAtPos` method — endpoint always crashes with NameError.
@@ -639,6 +639,14 @@
 - **MODERATE:** Mutable default `shape={}` in `ebeam.plotXYZ` (ebeam.py:568) and
   `draw_beamline.plotBeamPositionTransform` (schematic.py:273). Shared across calls.
   Low risk since the dict is only read, not mutated, but violates Python best practice.
+- **MODERATE (needs domain knowledge):** `dipole_wedge` fringe field integral
+  (beamline.py:707) uses `le = self.length` which comes from `gap_wedge` in the Excel
+  lattice. Needs clarification whether `gap_wedge` is the fringe field extent or the
+  inter-dipole drift gap — if the latter, the K integral is wrong.
+- **MODERATE:** `ebeam.ellipse_sym` (ebeam.py:79–82) divides by Twiss beta or gamma
+  without zero guard. Crashes on degenerate beam distributions.
+- **MODERATE:** `AlgebraicOptimization.py` (lines 276–277) uses `set.pop()` for variable
+  extraction — non-deterministic ordering can silently swap x/y solutions between runs.
 
 ## Notes
 
