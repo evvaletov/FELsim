@@ -467,15 +467,10 @@ class RFTrackAdapter(SimulatorBase):
             else:
                 ap_x = ap_y = self.default_aperture
 
-            if angle != 0 and length > 0 and self.dipole_slices > 0:
-                # RF-Track v2.5.5 SBend body tracking is broken (treats
-                # absolute P as δ). Use a Drift for the lattice placeholder
-                # (correct path length and y-plane) and mark for analytical
-                # sector-bend correction in segmented tracking.
-                elem = rft.Drift(length)
-                params['_analytical_dipole'] = True
-            else:
-                elem = rft.Drift(length)
+            # DPH elements always become Drifts in RF-Track (SBend is
+            # broken in v2.5.5). The _analytical_dipole flag is set by
+            # _annotate_analytical_dipoles() during _build_lattice().
+            elem = rft.Drift(length)
 
         elif elem_type == 'SOLENOID':
             elem = rft.Solenoid()
@@ -1011,11 +1006,28 @@ class RFTrackAdapter(SimulatorBase):
 
         return ps
 
+    def _annotate_analytical_dipoles(self):
+        """Mark DPH elements for analytical sector-bend correction.
+
+        RF-Track v2.5.5 SBend treats absolute P as δ, so DPH elements
+        are tracked as Drifts with post-tracking analytical correction
+        (body focusing + dispersion + R₅₆). This method sets the flag
+        on the beamline element's parameters dict so that _track_segmented,
+        track_elements, and collect_evolution detect it.
+        """
+        for elem in self.beamline:
+            et = elem.element_type.upper()
+            if et in ('DIPOLE', 'DPH'):
+                angle = elem.parameters.get('angle', 0.0)
+                if angle != 0 and elem.length > 0 and self.dipole_slices > 0:
+                    elem.parameters['_analytical_dipole'] = True
+
     def _build_lattice(self):
         """Build RF-Track lattice from beamline elements."""
         self._lattice = rft.Lattice()
         self._native_elements = []
 
+        self._annotate_analytical_dipoles()
         self._annotate_dipole_edges()
 
         for elem in self.beamline:
