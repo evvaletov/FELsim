@@ -315,6 +315,59 @@ class TestRegression:
         for elem in bl_40MeV:
             assert abs(elem.f - 2856e6) < 1, f"Element {elem.name}: f = {elem.f}"
 
+    def test_frozen_cumulative_matrix(self, bl_40MeV):
+        """Key transfer matrix entries at 40 MeV — frozen from validated run."""
+        M = cumulative_matrix(bl_40MeV)
+        ref = {
+            (0, 0): -5.44778377666957567e+01,
+            (1, 1): -2.13735502709020864e+02,
+            (2, 2):  2.56979463243946249e+00,
+            (3, 3):  4.78598598695163901e+02,
+            (4, 5): -5.13275080880916001e-01,  # R56
+            (5, 5):  1.0,
+        }
+        for (i, j), val in ref.items():
+            assert abs(M[i, j] - val) < 1e-8, (
+                f"M[{i},{j}] changed: expected {val:.10e}, got {M[i,j]:.10e}"
+            )
+
+    def test_frozen_R56(self, bl_40MeV):
+        """R56 (path-length dependence on momentum) at 40 MeV."""
+        M = cumulative_matrix(bl_40MeV)
+        R56 = M[4, 5]
+        assert abs(R56 - (-0.513275080880916)) < 1e-10, f"R56 = {R56}"
+
+    def test_frozen_particle_output(self, bl_40MeV):
+        """Propagation of reference particles — frozen from validated run."""
+        np.random.seed(42)
+        particles = np.random.randn(10, 6) * [1e-3, 1e-4, 1e-3, 1e-4, 1e-3, 0.005]
+        result = propagate_particles(bl_40MeV, particles)
+        ref_p0 = np.array([
+            -1.62684553171482567e-02, -4.62746151060720780e-03,
+             4.65221809371370656e-03,  1.13465349941496776e-01,
+             3.53120177304948237e-04, -1.17068478474590277e-03,
+        ])
+        np.testing.assert_allclose(result[0], ref_p0, atol=1e-10,
+                                   err_msg="First particle output changed")
+        # Second particle
+        ref_p1 = np.array([
+            -1.42889337192785182e-01, -4.06469114909411428e-02,
+            -1.42089957511223766e-04, -3.44258224501952682e-03,
+             6.02567071962107205e-04, -2.32864876785128429e-03,
+        ])
+        np.testing.assert_allclose(result[1], ref_p1, atol=1e-10,
+                                   err_msg="Second particle output changed")
+
+    def test_frozen_symplecticity(self, bl_40MeV):
+        """2x2 sub-block determinants should be 1 (symplecticity)."""
+        M = cumulative_matrix(bl_40MeV)
+        # x-x' block
+        det_x = M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]
+        assert abs(det_x - 1.0) < 1e-10, f"det(M_x) = {det_x}"
+        # y-y' block
+        det_y = M[2, 2] * M[3, 3] - M[2, 3] * M[3, 2]
+        assert abs(det_y - 1.0) < 1e-10, f"det(M_y) = {det_y}"
+
 
 # ── Adapter-level tests ──────────────────────────────────────────────────
 

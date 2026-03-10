@@ -129,6 +129,8 @@ class beamOptimizer():
         if numGoals == 0:
             return np.inf
         difference = (np.sum(mse))/numGoals
+        if not np.isfinite(difference):
+            difference = 1e6
 
         #  For plotting purposes in calc()
         self.trackVariables.append(variableVals)

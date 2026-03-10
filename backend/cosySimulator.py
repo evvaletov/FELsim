@@ -82,6 +82,7 @@ class COSYSimulator(BeamlineBuilder):
         self._aperture_warning_logged = False
         self.particle_tracking_mode = False
         self.particle_input_unit = 200
+        self.particle_input_file = f'fort.{self.particle_input_unit}'
         self.particle_checkpoint_base_unit = 10000
         self.particle_checkpoint_elements = None
         self.particle_checkpoint_count = 0
@@ -456,6 +457,10 @@ END ;
         else:
             lines.append(f"{indent}B0(2) := ME(3,3)*ME(3,3)*{by0} - 2*ME(3,3)*ME(3,4)*{ay0} + ME(3,4)*ME(3,4)*{gy0} ;")
             lines.append(f"{indent}A0(2) := -(ME(3,3)*ME(4,3)*{by0} - (ME(3,3)*ME(4,4)+ME(3,4)*ME(4,3))*{ay0} + ME(3,4)*ME(4,4)*{gy0}) ;")
+
+        # Courant-Snyder γ = (1 + α²) / β
+        lines.append(f"{indent}G0(1) := (1 + A0(1)*A0(1)) / B0(1) ;")
+        lines.append(f"{indent}G0(2) := (1 + A0(2)*A0(2)) / B0(2) ;")
 
         return "\n".join(lines) + "\n"
 
@@ -916,7 +921,7 @@ END ;
                 else:
                     self.logger.error(f"Fieldmap file has insufficient data")
                     return None, None, None
-        except Exception as e:
+        except (OSError, ValueError) as e:
             self.logger.error(f"Error reading fieldmap: {e}")
             return None, None, None
 

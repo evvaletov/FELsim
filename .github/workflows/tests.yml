@@ -1,0 +1,40 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, multisim]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install numpy scipy pandas matplotlib sympy PyYAML openpyxl tqdm pydantic
+          pip install pytest
+
+      - name: Run core tests
+        working-directory: backend/test
+        run: |
+          python -m pytest \
+            test_transfer_matrices.py \
+            test_chromatic_physics.py \
+            test_twiss.py \
+            test_adapter_roundtrip.py \
+            test_fieldmap_validation.py \
+            -v --tb=short -x

@@ -52,7 +52,7 @@ class BeamlineElement:
     def __repr__(self):
         try:
             params_str = ", ".join(f"{k}={v!r}" for k, v in self.parameters.items())
-        except Exception:
+        except (TypeError, AttributeError):
             params_str = f"<{len(self.parameters)} parameters>"
         return f"{self.element_type}(L={self.length}, {params_str})"
 
@@ -222,8 +222,8 @@ class SimulatorBase(ABC):
             particles : ndarray — initial distribution (required for
                 particle-tracking simulators)
             For glyfada: pop_size, max_gen, sigma, n_processes,
-                timeout_minutes, algorithm, debug, and any key in
-                glyfadaAdapter.OPTIONAL_CONFIG_KEYS.
+                timeout_minutes, algorithm, debug, and additional
+                glyfada configuration keys forwarded via extra_config.
 
         Returns
         -------
@@ -348,9 +348,13 @@ class SimulatorBase(ABC):
             n_goals = 0
 
             for elem_idx, obj_list in objectives.items():
-                if isinstance(elem_idx, str):
+                try:
+                    elem_idx = int(elem_idx)
+                except (ValueError, TypeError):
                     continue
-                twiss = result.get_twiss(element_idx=int(elem_idx), source='statistical')
+                twiss = result.get_twiss(element_idx=elem_idx, source='statistical')
+                if not twiss:
+                    return 1e6  # no Twiss data — penalise
                 for obj in obj_list:
                     axis, param = obj['measure']
                     goal = obj['goal']
@@ -454,7 +458,7 @@ class SimulatorBase(ABC):
                 **{k: v for k, v in vars(native_element).items()
                    if not k.startswith('_')}
             )
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             raise NotImplementedError(
                 f"Must implement _convert_element_from_native for {self.name}"
             ) from e

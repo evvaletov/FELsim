@@ -122,7 +122,7 @@ class COSYAdapter(SimulatorBase):
             self.logger.debug(f"Parsed {len(parsed)} beamline elements from {lattice_path}")
         except FileNotFoundError:
             self.logger.debug(f"Lattice file not found: {lattice_path}")
-        except Exception as e:
+        except (ImportError, ValueError, AttributeError, KeyError) as e:
             self.logger.warning(f"Could not parse beamline from {lattice_path}: {e}")
 
     def _ensure_beamline_parsed(self):
@@ -398,7 +398,7 @@ class COSYAdapter(SimulatorBase):
                     self.logger.debug(f"Read final particles from {last_file}")
                 except FileNotFoundError as e:
                     self.logger.warning(f"Could not read final particles: {e}")
-                except Exception as e:
+                except (OSError, ValueError) as e:
                     self.logger.error(f"Error reading final particles: {e}")
 
                 if checkpoint_config.get('checkpoint_elements'):
@@ -407,7 +407,7 @@ class COSYAdapter(SimulatorBase):
                             checkpoint_config['checkpoint_elements'],
                             transform_to_felsim=False
                         )
-                    except Exception as e:
+                    except (OSError, ValueError, KeyError) as e:
                         self.logger.warning(f"Could not read checkpoint particles: {e}")
             else:
                 self.logger.warning("No checkpoint files generated")

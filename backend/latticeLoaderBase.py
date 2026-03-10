@@ -453,9 +453,9 @@ class LatticeLoaderBase:
         return list(coeffs) if coeffs else []
 
     def _report_unaccessed(self):
-        """Log any unconsumed data paths."""
+        """Warn about unconsumed data paths (unknown/unused keys)."""
         unaccessed = self._tracked.unaccessed()
         if unaccessed:
-            self.logger.info(f"Lattice: {len(unaccessed)} unhandled field(s):")
+            self.logger.warning(f"Lattice: {len(unaccessed)} unhandled field(s):")
             for path in unaccessed:
-                self.logger.info(f"  {path}")
+                self.logger.warning(f"  {path}")

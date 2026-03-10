@@ -103,7 +103,7 @@ class BeamlineBuilder:
                     try:
                         result = func(self, idx, *args, **kwargs)
                         results.append(result)
-                    except Exception as e:
+                    except (IndexError, TypeError, ValueError, KeyError) as e:
                         error_msg = f"Error at index {idx}: {e}"
                         errors.append(error_msg)
                         self.logger.warning(f"{error_msg}")
@@ -258,7 +258,7 @@ class BeamlineBuilder:
                     "element_type": modified_element.get('type', 'UNKNOWN')
                 })
 
-            except Exception as e:
+            except (TypeError, ValueError, IndexError, KeyError) as e:
                 error_info = {
                     "index": index,
                     "modifications": modifications,

@@ -430,7 +430,7 @@
   metadata in `simulate()`.
 - **TODO:** Determine actual UH MkV dipole pole face width (currently 50 mm placeholder).
 
-### I6. MCNP-Style Robustness & Foolproofness [HIGH PRIORITY]
+### I6. MCNP-Style Robustness & Foolproofness [IN PROGRESS]
 - **Motivation:** MCNP is a gold standard for production code robustness: every
   input is validated, edge cases are caught with clear diagnostics, defaults are
   sensible, and the code never silently produces wrong results. FELsim should
@@ -447,6 +447,22 @@
      `__slots__` or property validation on beamline element classes).
   6. Configuration validation: warn on unused/unknown keys, reject
      contradictory settings.
+- **Progress (2026-03-10):**
+  - `beamline.py`: `setE()` and `setMQE()` validate inputs (positive, finite).
+    `dipole_wedge` guards zero-angle case in both `_compute_numeric_matrix`
+    and chromatic `useMatrice`.
+  - `ebeam.py`: `ellipse_sym()` sqrt guard, `cal_twiss()` epsilon threshold
+    uses `np.finfo(float).tiny` instead of arbitrary 1e-30.
+  - `beamOptimizer.py`: NaN/Inf guard after MSE computation (`_optiSpeed`).
+  - `cosyParticleSimulator.py`: bare `except:` narrowed to
+    `except (ValueError, IndexError):`.
+  - `felAPI.py`: Silently caught exceptions now logged.
+  - **Broad except audit (8 handlers narrowed):**
+    `simulatorBase.py` (2), `cosySimulator.py` (1), `cosyAdapter.py` (3),
+    `beamlineBuilder.py` (2). All changed from `except Exception` to specific
+    exception tuples.
+  - **Remaining:** Configuration validation (warn on unused keys), attribute
+    typo guard (test-time validator).
 
 ### I7. Multi-Code Simulation Framework [HIGH PRIORITY]
 - **Motivation:** Different simulation codes have different strengths: RF-Track
@@ -612,10 +628,13 @@
     `tracked_dict` is unavailable (requires Python ≥3.10).
   - Fixed `latticeLoaderBase.py`, `jsonLatticeLoader.py`: `TrackedDict`
     import made optional with recursive fallback class.
-  - **Current test suite:** 152 pass, 7 skip, 0 fail across 6 test modules
+  - Added frozen regression tests to `test_adapter_roundtrip.py`: cumulative
+    matrix entries, R56, symplecticity, and particle output at 40 MeV — all
+    frozen from validated runs to catch silent physics changes.
+  - **Current test suite:** 156 pass, 7 skip, 0 fail across 6 test modules
     (`test_chromatic_physics`, `test_transfer_matrices`, `test_twiss`,
     `test_adapter_roundtrip`, `test_optimizer`, `test_fieldmap_validation`).
-  - **Remaining:** CI pipeline, edge-case tests, cross-code benchmark automation.
+  - **Remaining:** CI pipeline, cross-code benchmark automation.
 
 ### C2. COSY INFINITY Cross-Validation [DONE — see W4]
 - **Motivation:** Independent DA-based simulation. Particularly valuable for
@@ -800,9 +819,28 @@ Items are ordered by estimated impact on the UH MkV FEL beamline
 - **MODERATE:** `AlgebraicOptimization.py` (lines 276–277) uses `set.pop()` for variable
   extraction — non-deterministic ordering can silently swap x/y solutions between runs.
 
+## Longer-Term Improvements (from multi-AI review 2026-03-10)
+
+Source: 4-perspective expert review (FEL scientist, Berz-style computational physicist, SWE, UX/UI)
+
+### Physics & Validation
+- [ ] **Order-by-order convergence study**: Run COSY at orders 1, 2, 3, 5 — quantify how optimized currents and final phase space change with map order
+- [ ] **Emittance preservation plot**: ε_n(s) through the chicane to quantify CSR-driven emittance growth
+- [ ] **Chromaticity analysis**: Twiss parameters and beam size as a function of energy deviation δ
+- [ ] **Fringe field treatment in FELsim**: Currently fringe_field_order=0; currents are optimized for the wrong model. Add fringe field support or at least quantify the impact
+- [ ] **Sensitivity / error analysis**: Magnet errors, misalignments, power supply ripple — DA methods can compute high-order sensitivities directly
+- [ ] **Multi-seed robustness study**: Run optimization with seeds 42, 137, 2023+ and compare results to confirm global minimum was found
+
+### Code Quality
+- [ ] **Decouple optimization from visualization**: Cache optimization results (HDF5/NPZ) so figure generation doesn't require re-running the 2-minute optimization
+- [ ] **Add pytest test suite**: Unit tests for Twiss computation, integration test for simplified optimization, visual regression with pytest-mpl
+- [ ] **Extract rcParams to .mplstyle file**: Reusable seminar style across projects
+- [ ] **Make output formats configurable**: argparse for PDF/PNG selection
+
 ## Notes
 
 - **Frontend ownership:** The frontend (`fel-app/`) is developed exclusively by Christian Komo. QA and code changes should focus on the backend. Minor frontend improvements are acceptable, but avoid making extensive changes that step on his work.
 - All optimization scripts use `seed=42` for reproducibility
 - NewFELsim conda environment required: `/home/evaletov/.conda/envs/NewFELsim/bin/python`
 - Run commands from `backend/` with `MPLBACKEND=Agg PYTHONPATH=$(pwd)`
+- **Review methodology**: Apply Berz-style computational physics perspective regularly when reviewing simulation results. Use multi-AI collab for second opinions.
