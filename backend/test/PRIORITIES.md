@@ -468,25 +468,28 @@
     class attribute whitelist, checks for suspicious near-duplicate names.
   - **Current test suite:** 176 pass, 7 skip, 0 fail across 7 test modules.
 
-### I7. Multi-Code Simulation Framework [HIGH PRIORITY]
+### I7. Multi-Code Simulation Framework [MVP DONE 2026-03-10]
 - **Motivation:** Different simulation codes have different strengths: RF-Track
   excels at 3D space charge, COSY INFINITY excels at high-order DA maps and
   fringe fields. A production beamline study should be able to use RF-Track
   for one section and COSY for another — seamlessly and configurably.
-- **Design goals:**
-  1. Per-section code assignment: lattice file or config specifies which
-     simulator handles each beamline segment (e.g., elements 0–86 with COSY,
-     87–117 with RF-Track).
-  2. Beam state handoff: well-defined coordinate transforms between codes
-     at junction points. Currently `transform_coordinates()` handles
-     FELsim↔RF-Track; extend to include COSY particle format.
-  3. Unified result format: `SimulationResult` already provides this;
-     ensure all adapters populate it consistently.
-  4. Configuration: YAML/JSON config with per-section `simulator` key
-     (e.g., `{simulator: rftrack, elements: [87, 117], space_charge: true}`).
-  5. Prototype: the hybrid FELsim→RF-Track Stage 11 optimisation (C1/W8) is
-     the first instance of this pattern. Generalise from there.
-- **Prerequisite:** C1 Part B (RF-Track optimisation) validates the handoff approach.
+- **MVP implementation:**
+  - `CoordinateTransformer` (simulatorFactory.py): all 6 pairwise transforms
+    (FELSIM↔COSY, FELSIM↔RFTRACK, COSY↔RFTRACK) as static methods
+  - `MultiCodeSimulator` (multiCodeSimulator.py): orchestrator that chains
+    multiple SimulatorBase instances on contiguous beamline sections with
+    automatic coordinate transforms at handoff points
+  - `SimSection` dataclass: (name, simulator_key, element_range, config)
+  - `SimulatorFactory.create('multicode', ...)`: lazy-imported registration
+  - `from_config()`: dict-based construction for YAML/JSON configuration
+  - Test suite (test_multicode.py): 15 tests — SimSection, init, coord
+    roundtrips (all 3 pairs), FELsim split equivalence (2-section, 3-section),
+    metadata, particle count, factory registration
+  - CI: test_multicode.py added to GitHub Actions pipeline
+- **Next steps:**
+  - Production use: FELsim→RF-Track hybrid for Stage 11 (C1/W8)
+  - COSY→FELsim handoff testing with real DA map tracking
+  - Per-section config passthrough (space_charge, fringe fields, etc.)
 
 ### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY — NOT NEEDED FOR UH FEL]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.

@@ -27,6 +27,7 @@ class SimulatorType(Enum):
     FELSIM = "felsim"
     COSY = "cosy"
     RFTRACK = "rftrack"
+    MULTICODE = "multicode"
 
 
 class SimulatorFactory:
@@ -70,8 +71,16 @@ class SimulatorFactory:
         else:
             sim_type = simulator_type.lower()
 
+        # MultiCodeSimulator uses lazy import to avoid circular dependency
+        if sim_type == SimulatorType.MULTICODE.value:
+            from multiCodeSimulator import MultiCodeSimulator
+            try:
+                return MultiCodeSimulator(**kwargs)
+            except Exception as e:
+                raise ValueError(f"Failed to create multicode simulator: {e}") from e
+
         if sim_type not in cls._registry:
-            available = ', '.join(cls._registry.keys())
+            available = ', '.join(list(cls._registry.keys()) + ['multicode'])
             raise ValueError(f"Unknown simulator '{sim_type}'. Available: {available}")
 
         try:
@@ -82,7 +91,7 @@ class SimulatorFactory:
     @classmethod
     def get_available_simulators(cls) -> List[str]:
         """Return list of available simulator types."""
-        return list(cls._registry.keys())
+        return list(cls._registry.keys()) + [SimulatorType.MULTICODE.value]
 
     @classmethod
     def register_simulator(cls, name: str, simulator_class: type):
@@ -199,6 +208,12 @@ class CoordinateTransformer:
     """
     Coordinate transformations between simulator coordinate systems.
 
+    Implements FELsim ↔ COSY transforms directly using PhysicalConstants,
+    without requiring a simulator instance or lattice file.
+
+    FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF×10³, ΔK/K₀×10³]
+    COSY:   [x(m), a=px/p0, y(m), b=py/p0, l(m), δK=(K-K0)/K₀]
+
     Usage:
         particles_cosy = CoordinateTransformer.transform(
             particles_felsim,
@@ -207,6 +222,155 @@ class CoordinateTransformer:
             energy_mev=45.0
         )
     """
+
+    @staticmethod
+    def _felsim_to_cosy(particles_felsim: np.ndarray, energy_mev: float) -> np.ndarray:
+        from physicalConstants import PhysicalConstants
+        E0 = PhysicalConstants.E0_electron
+        C = float(PhysicalConstants.C)
+        f_RF = PhysicalConstants.f_RF_default
+
+        KE0 = energy_mev
+        gamma = 1 + KE0 / E0
+        p0c = np.sqrt(KE0 ** 2 + 2 * KE0 * E0)
+        beta0 = p0c / (gamma * E0)
+        v0 = beta0 * C
+        T_RF = 1.0 / f_RF
+
+        out = np.zeros_like(particles_felsim)
+
+        # Transverse: mm → m
+        out[:, 0] = particles_felsim[:, 0] * 1e-3
+        out[:, 2] = particles_felsim[:, 2] * 1e-3
+
+        # Angles → momentum ratios (exact 3D decomposition)
+        xp_rad = particles_felsim[:, 1] * 1e-3
+        yp_rad = particles_felsim[:, 3] * 1e-3
+        tan_xp = np.tan(xp_rad)
+        tan_yp = np.tan(yp_rad)
+
+        KE_particle = KE0 * (1 + particles_felsim[:, 5] * 1e-3)
+        pc = np.sqrt(KE_particle ** 2 + 2 * KE_particle * E0)
+        denom = np.sqrt(1 + tan_xp ** 2 + tan_yp ** 2)
+
+        out[:, 1] = pc * tan_xp / (denom * p0c)
+        out[:, 3] = pc * tan_yp / (denom * p0c)
+
+        # Longitudinal
+        DeltaToF = particles_felsim[:, 4] * 1e-3 * T_RF
+        out[:, 4] = -DeltaToF * v0 * gamma / (1 + gamma)
+        out[:, 5] = (KE_particle - KE0) / KE0
+
+        return out
+
+    @staticmethod
+    def _cosy_to_felsim(particles_cosy: np.ndarray, energy_mev: float) -> np.ndarray:
+        from physicalConstants import PhysicalConstants
+        E0 = PhysicalConstants.E0_electron
+        C = float(PhysicalConstants.C)
+        f_RF = PhysicalConstants.f_RF_default
+
+        KE0 = energy_mev
+        gamma = 1 + KE0 / E0
+        p0c = np.sqrt(KE0 ** 2 + 2 * KE0 * E0)
+        beta0 = p0c / (gamma * E0)
+        v0 = beta0 * C
+        T_RF = 1.0 / f_RF
+
+        out = np.zeros_like(particles_cosy)
+
+        # Transverse: m → mm
+        out[:, 0] = particles_cosy[:, 0] * 1e3
+        out[:, 2] = particles_cosy[:, 2] * 1e3
+
+        # Momentum ratios → angles
+        a = particles_cosy[:, 1]
+        b = particles_cosy[:, 3]
+        delta_K = particles_cosy[:, 5]
+
+        KE_particle = KE0 * (1 + delta_K)
+        momentum_sq = np.maximum(KE_particle ** 2 + 2 * KE_particle * E0, 0)
+        pc = np.sqrt(momentum_sq)
+        k = pc / p0c
+
+        discriminant = np.maximum(k ** 2 - a ** 2 - b ** 2, 0)
+        pz_norm = np.sqrt(discriminant)
+
+        with np.errstate(divide='ignore', invalid='ignore'):
+            out[:, 1] = np.where(pz_norm > 0, np.arctan(a / pz_norm) * 1e3, 0)
+            out[:, 3] = np.where(pz_norm > 0, np.arctan(b / pz_norm) * 1e3, 0)
+
+        # Longitudinal
+        out[:, 4] = -particles_cosy[:, 4] * (1 + gamma) / (v0 * gamma * T_RF) * 1e3
+        out[:, 5] = delta_K * 1e3
+
+        return out
+
+    @staticmethod
+    def _felsim_to_rftrack(particles: np.ndarray, energy_mev: float,
+                           particle_mass_mev: float = None,
+                           rf_frequency_hz: float = None) -> np.ndarray:
+        from physicalConstants import PhysicalConstants
+        mass = particle_mass_mev or PhysicalConstants.E0_electron
+        f_RF = rf_frequency_hz or PhysicalConstants.f_RF_default
+        t_scale = PhysicalConstants.C / f_RF
+
+        out = np.zeros_like(particles)
+        out[:, 0:4] = particles[:, 0:4]
+        out[:, 4] = particles[:, 4] * t_scale
+        K = energy_mev * (1.0 + particles[:, 5] * 1e-3)
+        E = K + mass
+        out[:, 5] = np.sqrt(E**2 - mass**2)
+        return out
+
+    @staticmethod
+    def _rftrack_to_felsim(particles: np.ndarray, energy_mev: float,
+                           particle_mass_mev: float = None,
+                           rf_frequency_hz: float = None) -> np.ndarray:
+        from physicalConstants import PhysicalConstants
+        mass = particle_mass_mev or PhysicalConstants.E0_electron
+        f_RF = rf_frequency_hz or PhysicalConstants.f_RF_default
+        t_scale = PhysicalConstants.C / f_RF
+
+        out = np.zeros_like(particles)
+        out[:, 0:4] = particles[:, 0:4]
+        out[:, 4] = particles[:, 4] / t_scale
+        K = np.sqrt(particles[:, 5]**2 + mass**2) - mass
+        out[:, 5] = (K / energy_mev - 1.0) * 1e3
+        return out
+
+    @staticmethod
+    def _cosy_to_rftrack(particles: np.ndarray, energy_mev: float,
+                         particle_mass_mev: float = None,
+                         rf_frequency_hz: float = None) -> np.ndarray:
+        from physicalConstants import PhysicalConstants
+        mass = particle_mass_mev or PhysicalConstants.E0_electron
+        gamma = 1 + energy_mev / mass
+        beta = np.sqrt(1 - 1/gamma**2)
+
+        out = np.zeros_like(particles)
+        out[:, 0:4] = particles[:, 0:4] * 1e3  # m/rad → mm/mrad
+        out[:, 4] = -particles[:, 4] * (1 + gamma) / (beta * gamma) * 1e3
+        E0 = energy_mev + mass
+        E = E0 + energy_mev * particles[:, 5]
+        out[:, 5] = np.sqrt(E**2 - mass**2)
+        return out
+
+    @staticmethod
+    def _rftrack_to_cosy(particles: np.ndarray, energy_mev: float,
+                         particle_mass_mev: float = None,
+                         rf_frequency_hz: float = None) -> np.ndarray:
+        from physicalConstants import PhysicalConstants
+        mass = particle_mass_mev or PhysicalConstants.E0_electron
+        gamma = 1 + energy_mev / mass
+        beta = np.sqrt(1 - 1/gamma**2)
+
+        out = np.zeros_like(particles)
+        out[:, 0:4] = particles[:, 0:4] * 1e-3  # mm/mrad → m/rad
+        out[:, 4] = -particles[:, 4] * beta * gamma / ((1 + gamma) * 1e3)
+        K = np.sqrt(particles[:, 5]**2 + mass**2) - mass
+        out[:, 5] = K / energy_mev - 1.0
+        return out
 
     @staticmethod
     def transform(particles: np.ndarray,
@@ -225,27 +389,37 @@ class CoordinateTransformer:
             Source and target coordinate systems
         energy_mev : float
             Beam kinetic energy in MeV
+        **kwargs
+            particle_mass_mev : float (default: electron mass)
+            rf_frequency_hz : float (default: 2856 MHz)
         """
         if from_system == to_system:
             return particles.copy()
 
-        # Create appropriate simulator for transformation
-        if from_system == CoordinateSystem.FELSIM and to_system == CoordinateSystem.COSY:
-            cosy_sim = SimulatorFactory.create('cosy', mode='particle_tracking')
-            cosy_sim.set_beam_energy(energy_mev)
-            native_sim = cosy_sim.get_native_simulator()
-            return native_sim.transform_to_cosy_coordinates(particles, energy=energy_mev)
+        mass = kwargs.get('particle_mass_mev')
+        f_RF = kwargs.get('rf_frequency_hz')
+        key = (from_system, to_system)
 
-        elif from_system == CoordinateSystem.COSY and to_system == CoordinateSystem.FELSIM:
-            cosy_sim = SimulatorFactory.create('cosy', mode='particle_tracking')
-            cosy_sim.set_beam_energy(energy_mev)
-            native_sim = cosy_sim.get_native_simulator()
-            return native_sim.transform_from_cosy_coordinates(particles, energy=energy_mev)
+        dispatch = {
+            (CoordinateSystem.FELSIM, CoordinateSystem.COSY):
+                lambda: CoordinateTransformer._felsim_to_cosy(particles, energy_mev),
+            (CoordinateSystem.COSY, CoordinateSystem.FELSIM):
+                lambda: CoordinateTransformer._cosy_to_felsim(particles, energy_mev),
+            (CoordinateSystem.FELSIM, CoordinateSystem.RFTRACK):
+                lambda: CoordinateTransformer._felsim_to_rftrack(particles, energy_mev, mass, f_RF),
+            (CoordinateSystem.RFTRACK, CoordinateSystem.FELSIM):
+                lambda: CoordinateTransformer._rftrack_to_felsim(particles, energy_mev, mass, f_RF),
+            (CoordinateSystem.COSY, CoordinateSystem.RFTRACK):
+                lambda: CoordinateTransformer._cosy_to_rftrack(particles, energy_mev, mass, f_RF),
+            (CoordinateSystem.RFTRACK, CoordinateSystem.COSY):
+                lambda: CoordinateTransformer._rftrack_to_cosy(particles, energy_mev, mass, f_RF),
+        }
 
-        else:
+        if key not in dispatch:
             raise NotImplementedError(
                 f"Transformation {from_system.value} → {to_system.value} not implemented"
             )
+        return dispatch[key]()
 
     @staticmethod
     def transform_with_simulators(particles: np.ndarray,
