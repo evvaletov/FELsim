@@ -361,13 +361,18 @@ async def glyfada_evaluate(req: GlyfadaEvalRequest):
     """Evaluate a parameter set. Called by glyfada's HttpEvaluator."""
     state: _GlyfadaState = glyfada_router.state
 
-    if state.evaluate_fn is None:
+    # Snapshot state atomically to avoid race with concurrent /setup calls
+    async with state.lock:
+        evaluate_fn = state.evaluate_fn
+        variable_names = state.variable_names
+
+    if evaluate_fn is None:
         raise HTTPException(
             status_code=400,
             detail="Evaluation context not configured. Call /glyfada/setup first."
         )
 
-    missing = [v for v in state.variable_names if v not in req.params]
+    missing = [v for v in variable_names if v not in req.params]
     if missing:
         raise HTTPException(
             status_code=400,
@@ -377,11 +382,11 @@ async def glyfada_evaluate(req: GlyfadaEvalRequest):
     try:
         def _run():
             with state.eval_lock:
+                state.eval_count += 1
                 return state.evaluate_fn(req.params)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, _run)
-        state.eval_count += 1
         return result
 
     except Exception as e:

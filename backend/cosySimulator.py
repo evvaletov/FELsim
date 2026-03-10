@@ -168,14 +168,6 @@ PROCEDURE RUN ;
 {{Optimization}}
     CO {self.transfer_matrix_order} ; PM 99 ;
 
-    OPENF 51 'result.txt' 'UNKNOWN';
-        WRITE 51 '{{';
-        WRITE 51 '"spos": '&S(SPOS)&',';
-        WRITE 51 '"optimization_enabled": {1 if self.optimization_enabled else 0}' ;
-{{Variables}}
-        WRITE 51 '}}';
-    CLOSEF 51 ;
-
     GT MAP F0 MU0 A0 B0 G0 R0 ;
 
     OPENF 51 'result.txt' 'UNKNOWN';

@@ -128,7 +128,7 @@ class lattice:
                 A = int(isotopeData[0])
                 Z = int(isotopeData[1])
                 m_i = A * self.M_AMU
-                q_i = Z * 1.60217663e-19
+                q_i = Z * self.Q
                 meV = (m_i * self.C ** 2) * self.k_MeV
                 self.setMQE(m_i, q_i, meV)
                 self.setE(kineticE)

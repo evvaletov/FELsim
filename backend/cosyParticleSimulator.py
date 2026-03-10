@@ -35,7 +35,7 @@ class COSYParticleSimulator(COSYSimulator):
         self.particle_tracking_enabled = False
         self.particle_save_points = []
         self.n_particles = 0
-        self.f = 2856e6  # RF frequency (Hz)
+        self.f = PhysicalConstants.f_RF_default
 
         # File I/O
         self.particle_input_file = 'particles_in.dat'
