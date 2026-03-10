@@ -468,26 +468,34 @@
     class attribute whitelist, checks for suspicious near-duplicate names.
   - **Current test suite:** 176 pass, 7 skip, 0 fail across 7 test modules.
 
-### I7. Multi-Code Simulation Framework [MVP DONE 2026-03-10]
+### I7. Multi-Code Simulation Framework [DONE 2026-03-10]
 - **Motivation:** Different simulation codes have different strengths: RF-Track
   excels at 3D space charge, COSY INFINITY excels at high-order DA maps and
   fringe fields. A production beamline study should be able to use RF-Track
   for one section and COSY for another — seamlessly and configurably.
-- **MVP implementation:**
+- **Implementation:**
   - `CoordinateTransformer` (simulatorFactory.py): all 6 pairwise transforms
     (FELSIM↔COSY, FELSIM↔RFTRACK, COSY↔RFTRACK) as static methods
   - `MultiCodeSimulator` (multiCodeSimulator.py): orchestrator that chains
-    multiple SimulatorBase instances on contiguous beamline sections with
-    automatic coordinate transforms at handoff points
+    multiple SimulatorBase instances on contiguous beamline sections.
+    All adapters use FELsim coordinates as I/O format (each handles its
+    own internal transforms), so no inter-section coordinate conversion
+    is needed.
+  - `_felsim_to_generic()`: converts FELsim native elements to generic
+    `BeamlineElement` for non-FELsim adapters, preserving all parameters
+    including DPW pole_gap, dipole_angle, dipole_length
   - `SimSection` dataclass: (name, simulator_key, element_range, config)
   - `SimulatorFactory.create('multicode', ...)`: lazy-imported registration
   - `from_config()`: dict-based construction for YAML/JSON configuration
-  - Test suite (test_multicode.py): 15 tests — SimSection, init, coord
-    roundtrips (all 3 pairs), FELsim split equivalence (2-section, 3-section),
-    metadata, particle count, factory registration
-  - CI: test_multicode.py added to GitHub Actions pipeline
-- **Next steps:**
-  - Production use: FELsim→RF-Track hybrid for Stage 11 (C1/W8)
+  - Test suite (test_multicode.py): 22 tests — SimSection, init, coord
+    roundtrips (all 3 pairs), FELsim split equivalence (2/3-section),
+    element conversion (drift, quad, DPW params), factory registration,
+    FELsim→RF-Track hybrid (successful run, cross-validation, DPW params)
+  - CI: test_multicode.py + test_attribute_guard.py added to pipeline
+- **Production validated:** FELsim→RF-Track hybrid at Stage 11 boundary
+  (element 87) runs successfully. Hybrid vs full RF-Track shows qualitatively
+  similar results (transverse RMS within order of magnitude) with expected
+  differences from dipole model (transfer matrix vs analytical sector-bend).
   - COSY→FELsim handoff testing with real DA map tracking
   - Per-section config passthrough (space_charge, fringe fields, etc.)
 

@@ -2,7 +2,9 @@
 Multi-code beamline simulator orchestrator.
 
 Runs different simulation backends on different beamline sections,
-handling beam state handoff and coordinate transforms at junctions.
+chaining them in sequence. All adapters accept and return FELsim
+coordinates, so no inter-section coordinate transforms are needed —
+each adapter handles its own internal transforms.
 
 Author: Eremey Valetov
 """
@@ -14,10 +16,40 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from simulatorBase import (
-    SimulatorBase, SimulationResult, CoordinateSystem, SimulationMode
+    SimulatorBase, SimulationResult, BeamlineElement,
+    CoordinateSystem, SimulationMode
 )
 
 logger = logging.getLogger(__name__)
+
+# FELsim class name → generic element type
+_FELSIM_TYPE_MAP = {
+    'driftLattice': 'DRIFT',
+    'qpfLattice': 'QUAD_F',
+    'qpdLattice': 'QUAD_D',
+    'dipole': 'DIPOLE',
+    'dipole_wedge': 'DIPOLE_WEDGE',
+}
+
+# Attributes to copy for each element type
+_PARAM_KEYS = {
+    'DRIFT': (),
+    'QUAD_F': ('current',),
+    'QUAD_D': ('current',),
+    'DIPOLE': ('angle',),
+    'DIPOLE_WEDGE': ('angle', 'dipole_length', 'dipole_angle', 'pole_gap'),
+}
+
+
+def _felsim_to_generic(elem) -> BeamlineElement:
+    """Convert a FELsim native element to a generic BeamlineElement."""
+    cls_name = type(elem).__name__
+    elem_type = _FELSIM_TYPE_MAP.get(cls_name, cls_name.upper())
+    keys = _PARAM_KEYS.get(elem_type, ())
+    params = {k: getattr(elem, k) for k in keys if hasattr(elem, k)}
+    if hasattr(elem, 'fringeType'):
+        params['fringe_type'] = elem.fringeType
+    return BeamlineElement(element_type=elem_type, length=elem.length, **params)
 
 
 @dataclass
@@ -32,7 +64,12 @@ class SimSection:
 class MultiCodeSimulator(SimulatorBase):
     """
     Orchestrator that chains multiple SimulatorBase instances on
-    contiguous beamline sections with coordinate transforms at handoffs.
+    contiguous beamline sections.
+
+    All adapters (FELsim, COSY, RF-Track) accept and return particles
+    in FELsim coordinates — each handles its own internal coordinate
+    transforms. The orchestrator simply passes FELsim-format particles
+    from one section's output to the next section's input.
 
     Usage::
 
@@ -87,15 +124,33 @@ class MultiCodeSimulator(SimulatorBase):
             sim.set_beam_energy(self.beam_energy)
             self._simulators[key] = sim
 
-    def _slice_beamline(self, start: int, end: int) -> List[Any]:
-        return self._master_beamline[start:end]
+    def _prepare_beamline_slice(self, sim: SimulatorBase,
+                                start: int, end: int) -> List:
+        """Get beamline slice in the format the target simulator expects."""
+        raw_slice = self._master_beamline[start:end]
+        if not raw_slice:
+            return raw_slice
+
+        is_felsim_native = hasattr(raw_slice[0], 'useMatrice')
+        sim_is_felsim = sim.native_coordinates == CoordinateSystem.FELSIM
+
+        if is_felsim_native and sim_is_felsim:
+            return raw_slice
+        elif is_felsim_native:
+            # Non-FELsim adapter needs generic BeamlineElement objects
+            return [_felsim_to_generic(e) for e in raw_slice]
+        else:
+            return raw_slice
 
     def simulate(self,
                  particles: Optional[np.ndarray] = None,
                  mode: Optional[SimulationMode] = None) -> SimulationResult:
         """
         Run multi-code simulation: track particles through each section
-        in order, transforming coordinates at handoff points.
+        in order.
+
+        All adapters accept and return FELsim coordinates, so particles
+        are passed directly between sections without coordinate transforms.
 
         Parameters
         ----------
@@ -112,31 +167,16 @@ class MultiCodeSimulator(SimulatorBase):
         self.validate_particles(particles)
 
         current_particles = particles.copy()
-        current_system = CoordinateSystem.FELSIM
-
         all_checkpoints = {}
         section_metadata = []
 
         for i, section in enumerate(self.sections):
             sim = self._simulators[section.simulator_key]
-            target_system = sim.get_native_coordinate_system()
 
-            # Transform to this section's native coordinates
-            if current_system != target_system:
-                from simulatorFactory import CoordinateTransformer
-                current_particles = CoordinateTransformer.transform(
-                    current_particles,
-                    from_system=current_system,
-                    to_system=target_system,
-                    energy_mev=self.beam_energy,
-                )
-                current_system = target_system
-
-            # Set beamline slice and run
+            # Set beamline slice for this section
             start, end = section.element_range
-            bl_slice = self._slice_beamline(start, end)
-
-            if hasattr(sim, 'set_beamline') and hasattr(bl_slice[0], 'useMatrice'):
+            bl_slice = self._prepare_beamline_slice(sim, start, end)
+            if bl_slice and hasattr(sim, 'set_beamline'):
                 sim.set_beamline(bl_slice)
 
             result = sim.simulate(particles=current_particles)
@@ -171,16 +211,6 @@ class MultiCodeSimulator(SimulatorBase):
                     metadata={'failed_section': section.name,
                               'reason': 'no output particles'}
                 )
-
-        # Transform final particles back to FELsim coordinates
-        if current_system != CoordinateSystem.FELSIM:
-            from simulatorFactory import CoordinateTransformer
-            current_particles = CoordinateTransformer.transform(
-                current_particles,
-                from_system=current_system,
-                to_system=CoordinateSystem.FELSIM,
-                energy_mev=self.beam_energy,
-            )
 
         return SimulationResult(
             simulator_name=self.name,
@@ -222,7 +252,7 @@ class MultiCodeSimulator(SimulatorBase):
                 "beam_energy_mev": 40.0,
                 "sections": [
                     {"name": "prefix", "simulator": "felsim", "elements": [0, 87]},
-                    {"name": "suffix", "simulator": "felsim", "elements": [87, 118]},
+                    {"name": "suffix", "simulator": "rftrack", "elements": [87, 118]},
                 ]
             }
         """

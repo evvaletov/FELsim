@@ -37,5 +37,6 @@ jobs:
             test_twiss.py \
             test_adapter_roundtrip.py \
             test_fieldmap_validation.py \
+            test_attribute_guard.py \
             test_multicode.py \
             -v --tb=short -x

@@ -1,7 +1,7 @@
 """I7: Multi-code simulation framework tests.
 
 Validates that MultiCodeSimulator correctly chains simulator sections
-with coordinate transforms at handoff points.
+and converts beamline elements across adapters.
 
 Author: Eremey Valetov
 """
@@ -19,9 +19,15 @@ if str(_BACKEND) not in sys.path:
 
 JSON_PATH = _PROJECT_ROOT / "var" / "UH_FEL_beamline.json"
 
-from multiCodeSimulator import MultiCodeSimulator, SimSection
-from simulatorBase import CoordinateSystem, SimulationResult
+from multiCodeSimulator import MultiCodeSimulator, SimSection, _felsim_to_generic
+from simulatorBase import CoordinateSystem, SimulationResult, BeamlineElement
 from simulatorFactory import SimulatorFactory, CoordinateTransformer
+
+try:
+    import RF_Track
+    _RFTRACK_AVAILABLE = True
+except ImportError:
+    _RFTRACK_AVAILABLE = False
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -232,6 +238,44 @@ class TestFELsimSplitEquivalence:
         assert result.final_particles.shape == particles.shape
 
 
+class TestElementConversion:
+    """FELsim native → generic BeamlineElement conversion."""
+
+    def test_drift_conversion(self, beamline):
+        from beamline import driftLattice
+        drifts = [e for e in beamline if isinstance(e, driftLattice)]
+        assert len(drifts) > 0
+        generic = _felsim_to_generic(drifts[0])
+        assert isinstance(generic, BeamlineElement)
+        assert generic.element_type == 'DRIFT'
+        assert generic.length == drifts[0].length
+
+    def test_quad_conversion(self, beamline):
+        from beamline import qpfLattice
+        quads = [e for e in beamline if isinstance(e, qpfLattice)]
+        assert len(quads) > 0
+        generic = _felsim_to_generic(quads[0])
+        assert generic.element_type == 'QUAD_F'
+        assert generic.parameters['current'] == quads[0].current
+
+    def test_dipole_wedge_conversion(self, beamline):
+        from beamline import dipole_wedge
+        dpws = [e for e in beamline if isinstance(e, dipole_wedge)]
+        assert len(dpws) > 0
+        generic = _felsim_to_generic(dpws[0])
+        assert generic.element_type == 'DIPOLE_WEDGE'
+        for key in ('angle', 'dipole_length', 'dipole_angle', 'pole_gap'):
+            assert key in generic.parameters, f"Missing '{key}' in DPW conversion"
+            assert generic.parameters[key] == getattr(dpws[0], key)
+
+    def test_all_elements_convertible(self, beamline):
+        """Every element in the beamline must convert without error."""
+        for i, elem in enumerate(beamline):
+            generic = _felsim_to_generic(elem)
+            assert isinstance(generic, BeamlineElement), f"Element {i} conversion failed"
+            assert generic.length >= 0
+
+
 class TestFactoryRegistration:
     """MultiCodeSimulator accessible via SimulatorFactory."""
 
@@ -242,3 +286,88 @@ class TestFactoryRegistration:
     def test_create_multicode(self):
         mc = SimulatorFactory.create('multicode', sections=[])
         assert isinstance(mc, MultiCodeSimulator)
+
+
+@pytest.mark.skipif(not _RFTRACK_AVAILABLE, reason="RF-Track not installed")
+class TestHybridFELsimRFTrack:
+    """FELsim→RF-Track hybrid simulation via MultiCodeSimulator."""
+
+    SPLIT = 87  # Stage 11 boundary
+    ENERGY = 40.0
+
+    def test_hybrid_runs_successfully(self, beamline, particles):
+        """MultiCode(felsim:0-87 + rftrack:87-end) completes without error."""
+        n_elem = len(beamline)
+
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("prefix", "felsim", (0, self.SPLIT)),
+                SimSection("stage11", "rftrack", (self.SPLIT, n_elem),
+                           config={'beam_energy': self.ENERGY}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+
+        result = mc.simulate(particles=particles)
+        assert result.success, f"Hybrid simulation failed: {result.metadata}"
+        assert result.final_particles is not None
+        assert result.final_particles.shape[1] == 6
+        assert result.metadata['num_sections'] == 2
+
+    def test_hybrid_vs_full_rftrack(self, beamline, particles):
+        """MultiCode(felsim+rftrack) vs full RF-Track: same physics, different models.
+
+        FELsim uses linear transfer matrices; RF-Track uses analytical
+        sector-bend corrections. Results should be qualitatively similar
+        (same order of magnitude) but not identical.
+        """
+        n_elem = len(beamline)
+
+        # Hybrid: FELsim prefix + RF-Track suffix
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("prefix", "felsim", (0, self.SPLIT)),
+                SimSection("stage11", "rftrack", (self.SPLIT, n_elem),
+                           config={'beam_energy': self.ENERGY}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        hybrid_result = mc.simulate(particles=particles)
+        assert hybrid_result.success
+
+        # Full RF-Track reference
+        from rftrackAdapter import RFTrackAdapter
+        rt = RFTrackAdapter(beam_energy=self.ENERGY)
+        generic_bl = [_felsim_to_generic(e) for e in beamline]
+        rt.set_beamline(generic_bl)
+        rt_result = rt.simulate(particles=particles)
+        assert rt_result.success
+
+        # Both should produce finite, non-degenerate output
+        h = hybrid_result.final_particles
+        r = rt_result.final_particles
+        assert np.all(np.isfinite(h))
+        assert np.all(np.isfinite(r))
+
+        # Transverse coordinates should be same order of magnitude
+        # (not a tight match — different dipole models)
+        for col in [0, 2]:  # x, y
+            h_rms = np.std(h[:, col])
+            r_rms = np.std(r[:, col])
+            ratio = h_rms / r_rms if r_rms > 0 else float('inf')
+            assert 0.1 < ratio < 10, (
+                f"Column {col}: hybrid RMS={h_rms:.4g} vs RF-Track RMS={r_rms:.4g}"
+            )
+
+    def test_hybrid_element_conversion_preserves_dpw(self, beamline):
+        """DPW parameters (pole_gap, dipole_angle) survive conversion for RF-Track."""
+        from beamline import dipole_wedge
+        dpws = [e for e in beamline if isinstance(e, dipole_wedge)]
+        if not dpws:
+            pytest.skip("No DPW elements in beamline")
+
+        generic = _felsim_to_generic(dpws[0])
+        assert generic.parameters.get('pole_gap', 0) > 0
+        assert generic.parameters.get('dipole_angle', 0) != 0
