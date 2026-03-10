@@ -39,4 +39,5 @@ jobs:
             test_fieldmap_validation.py \
             test_attribute_guard.py \
             test_multicode.py \
+            test_cross_code_benchmark.py \
             -v --tb=short -x
