@@ -394,8 +394,7 @@ class beam:
         float
             The alpha Twiss parameter.
         '''
-        ebeam = beam()
-        dist_avg, dist_cov, twiss = ebeam.cal_twiss(particles, ddof=self.DDOF)
+        dist_avg, dist_cov, twiss = self.cal_twiss(particles, ddof=self.DDOF)
         return twiss.loc[variable].loc[r"$\alpha$"]
     
     def epsilon(self, particles, variable):
@@ -414,8 +413,7 @@ class beam:
         float
             The emittance (epsilon) Twiss parameter in ($\pi$.mm.mrad).
         '''
-        ebeam = beam()
-        dist_avg, dist_cov, twiss = ebeam.cal_twiss(particles, ddof=self.DDOF)
+        dist_avg, dist_cov, twiss = self.cal_twiss(particles, ddof=self.DDOF)
         return twiss.loc[variable].loc[r"$\epsilon$ ($\pi$.mm.mrad)"]
     
     def beta(self, particles, variable):
@@ -434,8 +432,7 @@ class beam:
         float
             The beta Twiss parameter in (m).
         '''
-        ebeam = beam()
-        dist_avg, dist_cov, twiss = ebeam.cal_twiss(particles, ddof=self.DDOF)
+        dist_avg, dist_cov, twiss = self.cal_twiss(particles, ddof=self.DDOF)
         return twiss.loc[variable].loc[r"$\beta$ (m)"]
     
     def gamma(self, particles, variable):
@@ -454,8 +451,7 @@ class beam:
         float
             The gamma Twiss parameter in (rad/m).
         '''
-        ebeam = beam()
-        dist_avg, dist_cov, twiss = ebeam.cal_twiss(particles, ddof=self.DDOF)
+        dist_avg, dist_cov, twiss = self.cal_twiss(particles, ddof=self.DDOF)
         return twiss.loc[variable].loc[r"$\gamma$ (rad/m)"]
     
     def phi(self, particles, variable):
@@ -474,8 +470,7 @@ class beam:
         float
             The phi Twiss parameter in (deg).
         '''
-        ebeam = beam()
-        dist_avg, dist_cov, twiss = ebeam.cal_twiss(particles, ddof=self.DDOF)
+        dist_avg, dist_cov, twiss = self.cal_twiss(particles, ddof=self.DDOF)
         return twiss.loc[variable].loc[r"$\phi$ (deg)"]
     
     def envelope(self, particles, variable):
@@ -496,8 +491,7 @@ class beam:
         float
             The beam envelope.
         '''
-        ebeam = beam()
-        dist_avg, dist_cov, twiss = ebeam.cal_twiss(particles, ddof=self.DDOF)
+        dist_avg, dist_cov, twiss = self.cal_twiss(particles, ddof=self.DDOF)
         emittance = (10 ** -6) * twiss.loc[variable].loc[r"$\epsilon$ ($\pi$.mm.mrad)"]
         beta = twiss.loc[variable].loc[r"$\beta$ (m)"]
         envelope = (10 ** 3) * np.sqrt(emittance * beta)
@@ -519,8 +513,7 @@ class beam:
         float
             The dispersion (D) Twiss parameter in meters.
         '''
-        ebeam = beam()
-        dist_avg, dist_cov, twiss = ebeam.cal_twiss(particles, ddof=self.DDOF)
+        dist_avg, dist_cov, twiss = self.cal_twiss(particles, ddof=self.DDOF)
         return twiss.loc[variable].loc[r"$D$ (m)"]
 
 

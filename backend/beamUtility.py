@@ -2,15 +2,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.stats import norm
+from physicalConstants import PhysicalConstants
 
 class beamUtility:
-    e = 1.602176634e-19  # Elementary charge (C) [CODATA 2018]
-    MeV_to_J = 1.602176634e-13  # Conversion factor from MeV to Joules [CODATA 2018]
-    NA = 6.02214076e23  # Avogadro's number
-    epsilon_0 = 8.854187817e-12  # Vacuum permittivity (F/m)
-    me = 9.10938356e-31  # Electron mass (kg)
-    m_p = 1.67262192595e-27  # Proton Mass (kg)
-    c = 299792458.0  # Speed of light (m/s)
+    e = PhysicalConstants.Q
+    MeV_to_J = PhysicalConstants.MeV_to_J
+    NA = PhysicalConstants.NA
+    epsilon_0 = PhysicalConstants.epsilon_0
+    me = PhysicalConstants.M_e
+    m_p = PhysicalConstants.M_p
+    c = float(PhysicalConstants.C)
 
     # Material properties (Density in kg/m^3, Specific Heat in J/kg*K, Stopping Power in MeV cm^2/g, heat capacity in J/g°C)
     # Source: National Institute of Standards and Technology (NIST) Stopping Power Data

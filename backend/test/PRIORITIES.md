@@ -631,6 +631,15 @@
   - Current: A
   - Bunch length: ps
 
+## Known Issues (from QA Passes 1–3)
+
+- **CRITICAL (pre-existing):** `/plot-parameters` endpoint (felAPI.py:580) references non-existent
+  `Beamline` class and `findSegmentAtPos` method — endpoint always crashes with NameError.
+  Part of the frontend-facing API (Christian's responsibility to fix or coordinate).
+- **MODERATE:** Mutable default `shape={}` in `ebeam.plotXYZ` (ebeam.py:568) and
+  `draw_beamline.plotBeamPositionTransform` (schematic.py:273). Shared across calls.
+  Low risk since the dict is only read, not mutated, but violates Python best practice.
+
 ## Notes
 
 - **Frontend ownership:** The frontend (`fel-app/`) is developed exclusively by Christian Komo. QA and code changes should focus on the backend. Minor frontend improvements are acceptable, but avoid making extensive changes that step on his work.

@@ -5,6 +5,7 @@ import numpy as np
 from scipy import interpolate
 from scipy import optimize
 import math
+from physicalConstants import PhysicalConstants
 
 
 # IMPORTANT NOTES:
@@ -29,14 +30,14 @@ class lattice:
         '''
         self.name = name
         self.E = 45  # Kinetic energy (MeV/c^2)
-        self.E0 = 0.51099895000  # Electron rest energy (MeV/c^2)
-        self.Q = 1.60217663e-19  # (C)
-        self.M = 9.1093837e-31  # (kg)
-        self.C = 299792458  # Celerity (m/s)
-        self.f = 2856 * (10 ** 6)  # RF frequency (Hz)
-        self.M_AMU = 1.66053906892E-27  # Atomic mass unit (kg)
+        self.E0 = PhysicalConstants.E0_electron  # Electron rest energy (MeV/c^2)
+        self.Q = PhysicalConstants.Q  # (C)
+        self.M = PhysicalConstants.M_e  # (kg)
+        self.C = PhysicalConstants.C  # Speed of light (m/s)
+        self.f = PhysicalConstants.f_RF_default  # RF frequency (Hz)
+        self.M_AMU = PhysicalConstants.M_AMU  # Atomic mass unit (kg)
         self.k_MeV = 1e-6 / self.Q  # Conversion factor (MeV / J)
-        self.m_p = 1.67262192595e-27  # Proton Mass (kg)
+        self.m_p = PhysicalConstants.M_p  # Proton Mass (kg)
         self.PARTICLES = {"electron": [self.M, self.Q, (self.M * self.C ** 2) * self.k_MeV],
                           "proton": [self.m_p, self.Q, (self.m_p * self.C ** 2) * self.k_MeV]}
         self.gamma = (1 + (self.E / self.E0))
