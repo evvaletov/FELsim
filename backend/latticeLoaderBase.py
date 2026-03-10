@@ -299,7 +299,8 @@ class LatticeLoaderBase:
         enge_fct = ""
 
         if internal_type == "DPH":
-            angle = self._resolve_dipole_angle(elem, params, length)
+            dipole_length = params.get("dipole_length_m", length) or length
+            angle = self._resolve_dipole_angle(elem, params, dipole_length)
             pole_gap = params.get("pole_gap_m", 0)
             params.mark_accessed("dipole_length_m")
 

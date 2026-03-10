@@ -14,7 +14,7 @@ class COSYParticleSimulator(COSYSimulator):
 
     Coordinate conventions:
         FELsim: [x(mm), x'(mrad), y(mm), y'(mrad), ΔToF/T_RF(10^-3), ΔK/K₀(10^-3)]
-        COSY:   [x(m), a=px/p0, y(m), b=py/p0, l(m), δK=(K-K0)/K]
+        COSY:   [x(m), a=px/p0, y(m), b=py/p0, l(m), δK=(K-K0)/K₀]
 
     Notes:
         - a, b are normalized transverse momenta (≈ angles for paraxial beams)
@@ -98,7 +98,7 @@ class COSYParticleSimulator(COSYSimulator):
 
             if energy_chirp != 0:
                 T_RF = 1.0 / self.f
-                tof_dist = particles[:, 4] / self.f
+                tof_dist = particles[:, 4] * 1e-3 / self.f
                 particles[:, 5] += energy_chirp * tof_dist
 
         else:
@@ -192,13 +192,14 @@ class COSYParticleSimulator(COSYSimulator):
         y_c = y - mean[2]
         yp_c = yp - mean[3]
 
-        x2 = np.mean(x_c ** 2)
-        xp2 = np.mean(xp_c ** 2)
-        xxp = np.mean(x_c * xp_c)
+        n = len(x_c)
+        x2 = np.sum(x_c ** 2) / (n - 1)
+        xp2 = np.sum(xp_c ** 2) / (n - 1)
+        xxp = np.sum(x_c * xp_c) / (n - 1)
 
-        y2 = np.mean(y_c ** 2)
-        yp2 = np.mean(yp_c ** 2)
-        yyp = np.mean(y_c * yp_c)
+        y2 = np.sum(y_c ** 2) / (n - 1)
+        yp2 = np.sum(yp_c ** 2) / (n - 1)
+        yyp = np.sum(y_c * yp_c) / (n - 1)
 
         # ε² = ⟨x²⟩⟨x'²⟩ - ⟨xx'⟩²
         emittance_x_sq = max(x2 * xp2 - xxp ** 2, 0.0)
@@ -304,9 +305,10 @@ class COSYParticleSimulator(COSYSimulator):
             pos_c = pos - mean[coord_idx]
             ang_c = ang - mean[coord_idx + 1]
 
-            pos2 = np.mean(pos_c ** 2)
-            ang2 = np.mean(ang_c ** 2)
-            pos_ang = np.mean(pos_c * ang_c)
+            n = len(pos_c)
+            pos2 = np.sum(pos_c ** 2) / (n - 1)
+            ang2 = np.sum(ang_c ** 2) / (n - 1)
+            pos_ang = np.sum(pos_c * ang_c) / (n - 1)
 
             emittance_sq = pos2 * ang2 - pos_ang ** 2
 

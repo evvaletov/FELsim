@@ -40,7 +40,7 @@ def propagate(beamline: List,
         remaining = segment.length
 
         while remaining - interval > EPS:
-            current = np.array(segment.useMatrice(current, length=interval))
+            current = segment.useMatrice(current, length=interval)
             s = round(s + interval, rounding)
             remaining -= interval
 
@@ -53,7 +53,7 @@ def propagate(beamline: List,
             )
 
         if remaining > EPS:
-            current = np.array(segment.useMatrice(current, length=remaining))
+            current = segment.useMatrice(current, length=remaining)
             s = round(s + remaining, rounding)
 
             yield PropagationCheckpoint(

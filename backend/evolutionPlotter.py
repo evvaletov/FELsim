@@ -59,8 +59,8 @@ class EvolutionPlotter:
 
     def _compute_global_extents(self, evolution: BeamEvolution):
         """Compute axis limits encompassing entire beamline evolution."""
-        maxVals = np.zeros(6)
-        minVals = np.zeros(6)
+        maxVals = np.full(6, -np.inf)
+        minVals = np.full(6, np.inf)
 
         for s, particles in evolution.particles.items():
             for i in range(6):
@@ -228,15 +228,15 @@ class EvolutionPlotter:
                 ax.add_patch(rect)
 
         # Secondary axis for dispersion
-        ax2 = ax.twinx()
         if 'dispersion_x' in twiss_df.columns:
+            ax2 = ax.twinx()
             ax2.plot(s, twiss_df['dispersion_x'],
                      color=self.envelope_colors['x'], linestyle='--',
-                     label=r'$D_x$ (mm)', alpha=0.7)
+                     label=r'$D_x$ (m)', alpha=0.7)
             ax2.plot(s, twiss_df['dispersion_y'],
                      color=self.envelope_colors['y'], linestyle='--',
-                     label=r'$D_y$ (mm)', alpha=0.7)
-            ax2.set_ylabel('Dispersion (mm)')
+                     label=r'$D_y$ (m)', alpha=0.7)
+            ax2.set_ylabel('Dispersion (m)')
             ax2.legend(loc='upper right')
 
     def _plot_phase_space(self, axes, particles, shape, scatter):

@@ -123,10 +123,11 @@ class COSYSimulator(BeamlineBuilder):
         # File search paths
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.current_dir = os.getcwd()
+        self.project_fields_dir = os.path.join(os.path.dirname(self.script_dir), 'fields')
         self.default_cosy_dir = os.path.expanduser('/usr/local/bin')
         self.cosy_dist_dir = os.path.expanduser('~/COSY/10.2/UNIX')
-        self.search_dirs = [self.script_dir, self.current_dir, self.default_cosy_dir,
-                            self.cosy_dist_dir]
+        self.search_dirs = [self.script_dir, self.current_dir, self.project_fields_dir,
+                            self.default_cosy_dir, self.cosy_dist_dir]
 
         # MGE parameters
         self.mge_array_name = "MkIIIChicaneDipoleField"
@@ -135,25 +136,16 @@ class COSYSimulator(BeamlineBuilder):
         self.mge_scaling = self.P / self.P_45
         self.symbolic_variables = set()
 
-        self.mge_initialization = """    VARIABLE {array_name} 1 1 300 ;
-    VARIABLE VEC 300 1 ;
-    VARIABLE MGE_FIELD 300 ;
-    VARIABLE COL 1 1 ;
-    VARIABLE J 1 ;
+        # MGE declarations go in {Initialization} (before PROCEDURE LATTICE)
+        # Only the field array + NP/NS/DELTAS scalars — no intermediate arrays
+        self.mge_declarations = """    VARIABLE {array_name} 1 1 {ns} ;
     VARIABLE NP 1 ;
     VARIABLE NS 1 ;
     VARIABLE DELTAS 1 ;
-    COL(1) := 1 ;
-    FILE2VE '{fieldmap_file}' 1 COL VEC ;
-    NP := VEC(1)|1 ;
-    NS := VEC(1)|2 ;
-    DELTAS := VEC(1)|3 ;
-    MGE_FIELD := VEC(1)|(4&LENGTH(VEC(1))) ;
-    MGE_FIELD := MGE_FIELD * {mge_scaling} ;
-    LOOP J 1 NS ;
-        {array_name}(1,J) := MGE_FIELD|J ;
-    ENDLOOP ;
 """
+        # MGE executable code goes in {PreLattice} (after ENDPROCEDURE, before OV)
+        # Field values written directly to avoid VEC/MGE_FIELD intermediate arrays
+        self.mge_setup_template = "    NP := {np} ;\n    NS := {ns} ;\n    DELTAS := {deltas} ;\n"
 
     def _build_boilerplate(self):
         """Generate COSY input boilerplate with current configuration."""
@@ -168,6 +160,7 @@ PROCEDURE RUN ;
 {{Elements}}
     ENDPROCEDURE ;
 
+{{PreLattice}}
     OV {self.order} {self.dimensions} 0 ;
     RPE {self.KE} ;
     FR {self.fringe_field_order} ;
@@ -1414,16 +1407,52 @@ END ;
         var_output = self._generate_variable_output_code()
 
         if needs_mge:
-            mge_init = self.mge_initialization.format(
-                array_name=self.mge_array_name,
-                fieldmap_file=self.mge_fieldmap_filename,
-                mge_scaling=self.mge_scaling
-            )
-            full_init = var_declarations + mge_init
+            # Read fieldmap and resample to ≤30 points (COSY MFD limit)
+            import numpy as np_lib
+            fm_path = self._find_file(self.mge_fieldmap_filename)
+            if not fm_path:
+                raise FileNotFoundError(
+                    f"MGE fieldmap '{self.mge_fieldmap_filename}' not found in: "
+                    f"{', '.join(self.search_dirs)}")
+            with open(fm_path) as f:
+                fm_lines = [l.strip() for l in f if l.strip()]
+            np_val = int(float(fm_lines[0]))
+            ns_orig = int(fm_lines[1])
+            deltas_orig = float(fm_lines[2])
+            field_orig = np_lib.array([float(l) for l in fm_lines[3:3 + ns_orig]])
+
+            # COSY 10.2 MFD array limits NS to 30
+            mge_ns_max = 30
+            if ns_orig > mge_ns_max:
+                z_orig = np_lib.arange(ns_orig) * deltas_orig
+                z_new = np_lib.linspace(z_orig[0], z_orig[-1], mge_ns_max)
+                field_values = list(np_lib.interp(z_new, z_orig, field_orig))
+                ns_val = mge_ns_max
+                deltas_val = float(z_new[1] - z_new[0])
+                if self.debug:
+                    self.logger.debug(
+                        f"Resampled fieldmap: {ns_orig}→{ns_val} points, "
+                        f"DELTAS={deltas_orig}→{deltas_val:.6f}")
+            else:
+                field_values = list(field_orig)
+                ns_val = ns_orig
+                deltas_val = deltas_orig
+
+            fmt_args = dict(array_name=self.mge_array_name, ns=ns_val)
+            full_init = var_declarations + self.mge_declarations.format(**fmt_args)
+
+            # Build direct-assignment code for field values
+            pre_lattice = self.mge_setup_template.format(
+                np=np_val, ns=ns_val, deltas=deltas_val)
+            for j, val in enumerate(field_values, 1):
+                scaled = val * self.mge_scaling
+                pre_lattice += f"    {self.mge_array_name}(1,{j}) := {scaled} ;\n"
         else:
             full_init = var_declarations
+            pre_lattice = ""
 
         full_input = self._build_boilerplate().replace("{Initialization}", full_init)
+        full_input = full_input.replace("{PreLattice}", pre_lattice)
         full_input = full_input.replace("{Elements}", elements_str.rstrip())
 
         # Optimization code

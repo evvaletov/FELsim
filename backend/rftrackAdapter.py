@@ -283,9 +283,11 @@ class RFTrackAdapter(SimulatorBase):
             f"{self._lattice.size()} elements (L={self._lattice.get_length():.3f} m)"
         )
 
-        # Use segmented tracking if any dipoles need analytical correction
+        # Use segmented tracking if any elements need analytical correction
         has_analytical = any(
-            e.parameters.get('_analytical_dipole', False) for e in self.beamline
+            e.parameters.get('_analytical_dipole', False)
+            or e.parameters.get('_analytical_dpw', False)
+            for e in self.beamline
         )
 
         if has_analytical:
@@ -427,7 +429,7 @@ class RFTrackAdapter(SimulatorBase):
         RF-Track element object (rft.Drift, rft.Quadrupole, etc.)
         """
         elem_type = element.element_type.upper()
-        params = element.parameters
+        params = dict(element.parameters)
         length = element.length
 
         if elem_type == 'DRIFT':
@@ -451,20 +453,11 @@ class RFTrackAdapter(SimulatorBase):
             ap_x = ap_y = r
 
         elif elem_type in ['DIPOLE_WEDGE', 'DPW']:
-            # FELsim models edge kicks as thin-lens matrices. RF-Track's SBend
-            # set_E1/set_E2 is informational only, so we use a thin-lens
-            # Quadrupole with K1L = -K0 * tan(wedge_angle) to reproduce the
-            # horizontal edge kick exactly and the vertical kick approximately
-            # (triangle-model fringe correction not included here).
-            wedge_angle = np.radians(params.get('angle', 0.0))
-            K0 = params.get('dipole_K0', 0.0)
-            if wedge_angle != 0 and K0 != 0:
-                K1L = -K0 * np.tan(wedge_angle)
-                elem = rft.Quadrupole()
-                elem.set_length(self.DPW_THIN_LENS_LENGTH)
-                elem.set_strength(K1L)
-            else:
-                elem = rft.Drift(0)
+            # DPW edge kicks are applied analytically (like sector bends)
+            # because a thin-lens quad can't represent asymmetric x/y kicks.
+            # The Drift preserves correct path length; the kick is applied
+            # in _apply_dpw_edge_kick() during segmented tracking.
+            elem = rft.Drift(length)
             ap_x = ap_y = self.default_aperture
 
         elif elem_type in ['DIPOLE', 'DPH']:
@@ -571,7 +564,10 @@ class RFTrackAdapter(SimulatorBase):
         elif from_system == CoordinateSystem.COSY and to_system == CoordinateSystem.RFTRACK:
             # COSY uses m and rad; RF-Track Bunch6d uses mm and mrad
             result[:, 0:4] = particles[:, 0:4] * 1e3  # m/rad → mm/mrad
-            result[:, 4] = particles[:, 4] / (self._beta * PhysicalConstants.C) * 1e3  # l(m) → t(mm/c)
+            # COSY l → RF-Track ct [mm]:
+            # COSY l = -Δt · v₀ · γ/(1+γ), so Δt = -l·(1+γ)/(v₀·γ)
+            # ct [mm] = c·Δt·10³ = -l·(1+γ)/(β·γ)·10³
+            result[:, 4] = -particles[:, 4] * (1 + self._gamma) / (self._beta * self._gamma) * 1e3
             # COSY δ = ΔK/K₀ → RF-Track P [MeV/c] (exact)
             E0 = self.beam_energy + self.particle_mass  # total energy [MeV]
             E = E0 + self.beam_energy * particles[:, 5]  # E₀ + K₀δ
@@ -580,7 +576,9 @@ class RFTrackAdapter(SimulatorBase):
         elif from_system == CoordinateSystem.RFTRACK and to_system == CoordinateSystem.COSY:
             # RF-Track uses mm/mrad; COSY uses m/rad
             result[:, 0:4] = particles[:, 0:4] * 1e-3  # mm/mrad → m/rad
-            result[:, 4] = particles[:, 4] * (self._beta * PhysicalConstants.C) * 1e-3  # t(mm/c) → l(m)
+            # RF-Track ct [mm] → COSY l [m]:
+            # l = -ct·β·γ/((1+γ)·10³)
+            result[:, 4] = -particles[:, 4] * self._beta * self._gamma / ((1 + self._gamma) * 1e3)
             # RF-Track P [MeV/c] → COSY δ = ΔK/K₀ (exact)
             K = np.sqrt(particles[:, 5]**2 + self.particle_mass**2) - self.particle_mass
             result[:, 5] = K / self.beam_energy - 1.0
@@ -610,13 +608,16 @@ class RFTrackAdapter(SimulatorBase):
 
         FELsim models dipole edge kicks as separate DIPOLE_WEDGE (DPW) elements
         flanking each DIPOLE (DPH). RF-Track's SBend set_E1/set_E2 is
-        informational only (no effect on tracking), so we convert each DPW
-        to a thin-lens quadrupole applying the equivalent edge kick:
-            K1L = -K0 * tan(wedge_angle)
-        where K0 = theta/L is the dipole curvature.
+        informational only (no effect on tracking), so we use analytical
+        thin-lens kicks matching FELsim's transfer matrix exactly:
 
-        This method writes 'dipole_K0' into each DPW's parameters so
-        _convert_element_to_native can compute the thin-lens strength.
+            Δx' = (Tx/R) · x       where Tx = tan(η)
+            Δy' = (-Ty/R) · y      where Ty = tan(η - φ)
+            φ = K·g·h·(1 + sin²η)/cos(η)    (triangle-model fringe)
+
+        The vertical kick uses Ty (with fringe correction φ), NOT Tx.
+        A single thin-lens quadrupole cannot represent this asymmetric kick,
+        so DPW elements are tracked analytically like DPH sector bends.
         """
         n_annotated = 0
         for i in range(len(self.beamline) - 2):
@@ -627,18 +628,46 @@ class RFTrackAdapter(SimulatorBase):
                 dph_angle = e1.parameters.get('angle', 0.0)
                 dph_length = e1.length
                 if dph_angle != 0 and dph_length > 0:
-                    # Use |K0| to match FELsim convention (R = L/|θ|).
-                    # Edge kick sign depends on pole face geometry, not bending direction.
                     K0 = abs(np.radians(dph_angle) / dph_length)
-                    e0.parameters['dipole_K0'] = K0
-                    e2.parameters['dipole_K0'] = K0
+                    for dpw in (e0, e2):
+                        self._compute_dpw_kicks(dpw, K0)
                     n_annotated += 1
         if n_annotated:
             self.logger.info(
-                f"Annotated {n_annotated} DPW-DPH-DPW triplets for edge kick conversion"
+                f"Annotated {n_annotated} DPW-DPH-DPW triplets for analytical edge kicks"
             )
         else:
             self.logger.debug("No DPW-DPH-DPW triplets found")
+
+    @staticmethod
+    def _compute_dpw_kicks(dpw_elem, K0):
+        """Compute asymmetric edge kick parameters for a DPW element.
+
+        Matches FELsim dipole_wedge._compute_numeric_matrix exactly:
+            M[1,0] = Tx/R,  M[3,2] = -Ty/R
+        where Ty includes the triangle-model fringe field correction.
+        """
+        p = dpw_elem.parameters
+        eta = np.radians(p.get('angle', 0.0))
+        R = 1.0 / K0
+        Tx = np.tan(eta)
+
+        # Triangle-model fringe correction: φ = K·g·h·(1 + sin²η)/cos(η)
+        pole_gap = p.get('pole_gap', 0.0)
+        wedge_length = dpw_elem.length
+        if pole_gap > 0 and wedge_length > 0:
+            K_triangle = wedge_length / (6.0 * pole_gap)
+            h = K0  # = 1/R
+            phi = K_triangle * pole_gap * h * (1 + np.sin(eta)**2) / np.cos(eta)
+        else:
+            phi = 0.0
+        Ty = np.tan(eta - phi)
+
+        # Store precomputed kicks (units: mrad/mm = 1/m)
+        p['dpw_kick_x'] = Tx / R      # M[1,0]: Δx' = kick_x · x
+        p['dpw_kick_y'] = -Ty / R     # M[3,2]: Δy' = kick_y · y
+        p['_analytical_dpw'] = True
+        p['dipole_K0'] = K0
 
     def _build_sliced_dipole(self, length, angle_rad, ap_x, ap_y):
         """Build a sector bend from N Corrector+Drift slices (split-operator).
@@ -724,7 +753,7 @@ class RFTrackAdapter(SimulatorBase):
         if ps.ndim != 2 or ps.shape[0] == 0:
             return ps
         if abs(angle_rad) < RFTrackAdapter.SECTOR_BEND_MIN_ANGLE:
-            logger = get_logger_with_fallback(__name__)
+            logger, _ = get_logger_with_fallback(__name__)
             logger.warning("_apply_sector_bend_correction: near-zero angle (%.2e), skipping", angle_rad)
             return ps
 
@@ -769,8 +798,35 @@ class RFTrackAdapter(SimulatorBase):
 
         return ps
 
+    @staticmethod
+    def _apply_dpw_edge_kick(ps, kick_x, kick_y):
+        """Apply analytical dipole edge kick to phase space (RF-Track coords).
+
+        Reproduces FELsim dipole_wedge transfer matrix exactly:
+            Δx' = kick_x · x       (M[1,0] = Tx/R)
+            Δy' = kick_y · y       (M[3,2] = -Ty/R, with fringe correction)
+
+        The kick is position-dependent (like a quadrupole) but asymmetric
+        between x and y planes due to the triangle-model fringe field
+        correction. A single RF-Track Quadrupole cannot represent this.
+
+        Parameters
+        ----------
+        ps : ndarray (N, 6)
+            Phase space: x[mm], x'[mrad], y[mm], y'[mrad], t[mm/c], P[MeV/c]
+        kick_x : float
+            Horizontal kick coefficient M[1,0] = Tx/R [mrad/mm = 1/m]
+        kick_y : float
+            Vertical kick coefficient M[3,2] = -Ty/R [mrad/mm = 1/m]
+        """
+        if ps.ndim != 2 or ps.shape[0] == 0:
+            return ps
+        ps[:, 1] += kick_x * ps[:, 0]
+        ps[:, 3] += kick_y * ps[:, 2]
+        return ps
+
     def _track_segmented(self, particles_rftrack):
-        """Track through beamline segment-by-segment with analytical dipole corrections.
+        """Track through beamline segment-by-segment with analytical corrections.
 
         Groups consecutive non-analytical-dipole elements into sub-lattices
         for efficient RF-Track tracking. At each analytical dipole, applies
@@ -786,15 +842,16 @@ class RFTrackAdapter(SimulatorBase):
 
         for elem in self.beamline:
             params = elem.parameters
-            is_analytical = params.get('_analytical_dipole', False)
-
-            if is_analytical:
-                # Flush accumulated group
+            if params.get('_analytical_dipole', False):
                 if current_group:
                     segments.append(('lattice', current_group))
                     current_group = []
-                # Add dipole as its own segment
                 segments.append(('dipole', elem))
+            elif params.get('_analytical_dpw', False):
+                if current_group:
+                    segments.append(('lattice', current_group))
+                    current_group = []
+                segments.append(('dpw', elem))
             else:
                 current_group.append(elem)
 
@@ -822,12 +879,11 @@ class RFTrackAdapter(SimulatorBase):
                 tracked = lat.track(bunch)
                 ps = np.array(tracked.get_phase_space())
 
-            else:  # 'dipole'
+            elif seg_type == 'dipole':
                 elem = seg_data
                 angle_rad = np.radians(elem.parameters.get('angle', 0.0))
                 length = elem.length
 
-                # Track through drift (for y-plane and path length)
                 drift = rft.Drift(length)
                 ap = self.DIPOLE_HALF_WIDTH if self._physical_apertures else self.default_aperture
                 drift.set_aperture(ap, ap)
@@ -839,16 +895,34 @@ class RFTrackAdapter(SimulatorBase):
                 tracked = lat.track(bunch)
                 ps = np.array(tracked.get_phase_space())
 
-                # Apply analytical sector-bend correction
                 if ps.ndim == 2 and ps.shape[0] > 0:
                     self._apply_sector_bend_correction(
                         ps, length, angle_rad, self._Pc, self.particle_mass
                     )
 
+            else:  # 'dpw'
+                elem = seg_data
+                # Track through drift for path length
+                native = self._convert_element_to_native(elem)
+                lat = rft.Lattice()
+                lat.append(native)
+                bunch = rft.Bunch6d(
+                    self.particle_mass, self.particle_charge, self._Pc, ps
+                )
+                tracked = lat.track(bunch)
+                ps = np.array(tracked.get_phase_space())
+                # Apply analytical edge kick
+                if ps.ndim == 2 and ps.shape[0] > 0:
+                    self._apply_dpw_edge_kick(
+                        ps,
+                        elem.parameters.get('dpw_kick_x', 0.0),
+                        elem.parameters.get('dpw_kick_y', 0.0),
+                    )
+
         return ps
 
     def track_elements(self, ps_rftrack, start_idx, end_idx):
-        """Track through beamline[start_idx:end_idx] with analytical dipole corrections.
+        """Track through beamline[start_idx:end_idx] with analytical corrections.
 
         Like _track_segmented() but for an arbitrary element range.
         Input/output are RF-Track coordinates (N, 6).
@@ -865,6 +939,11 @@ class RFTrackAdapter(SimulatorBase):
                     segments.append(('lattice', current_group))
                     current_group = []
                 segments.append(('dipole', elem))
+            elif elem.parameters.get('_analytical_dpw', False):
+                if current_group:
+                    segments.append(('lattice', current_group))
+                    current_group = []
+                segments.append(('dpw', elem))
             else:
                 current_group.append(elem)
 
@@ -884,7 +963,8 @@ class RFTrackAdapter(SimulatorBase):
                             lat.append(ne)
                     else:
                         lat.append(native)
-                lat.set_aperture(self.default_aperture, self.default_aperture)
+                if not self._physical_apertures:
+                    lat.set_aperture(self.default_aperture, self.default_aperture)
 
                 bunch = rft.Bunch6d(
                     self.particle_mass, self.particle_charge, self._Pc, ps
@@ -892,7 +972,7 @@ class RFTrackAdapter(SimulatorBase):
                 tracked = lat.track(bunch)
                 ps = np.array(tracked.get_phase_space())
 
-            else:  # 'dipole'
+            elif seg_type == 'dipole':
                 elem = seg_data
                 angle_rad = np.radians(elem.parameters.get('angle', 0.0))
                 length = elem.length
@@ -911,6 +991,23 @@ class RFTrackAdapter(SimulatorBase):
                 if ps.ndim == 2 and ps.shape[0] > 0:
                     self._apply_sector_bend_correction(
                         ps, length, angle_rad, self._Pc, self.particle_mass
+                    )
+
+            else:  # 'dpw'
+                elem = seg_data
+                native = self._convert_element_to_native(elem)
+                lat = rft.Lattice()
+                lat.append(native)
+                bunch = rft.Bunch6d(
+                    self.particle_mass, self.particle_charge, self._Pc, ps
+                )
+                tracked = lat.track(bunch)
+                ps = np.array(tracked.get_phase_space())
+                if ps.ndim == 2 and ps.shape[0] > 0:
+                    self._apply_dpw_edge_kick(
+                        ps,
+                        elem.parameters.get('dpw_kick_x', 0.0),
+                        elem.parameters.get('dpw_kick_y', 0.0),
                     )
 
         return ps
@@ -1120,15 +1217,20 @@ class RFTrackAdapter(SimulatorBase):
             n_lost_elem = n_before - n_good
             particles_rftrack = np.array(tracked_bunch.get_phase_space())
 
-            # Apply analytical sector-bend correction for flagged dipoles
-            if (elem.parameters.get('_analytical_dipole', False)
-                    and particles_rftrack.ndim == 2
-                    and particles_rftrack.shape[0] > 0):
-                angle_rad = np.radians(elem.parameters.get('angle', 0.0))
-                self._apply_sector_bend_correction(
-                    particles_rftrack, elem.length, angle_rad, self._Pc,
-                    self.particle_mass
-                )
+            # Apply analytical corrections for flagged elements
+            if particles_rftrack.ndim == 2 and particles_rftrack.shape[0] > 0:
+                if elem.parameters.get('_analytical_dipole', False):
+                    angle_rad = np.radians(elem.parameters.get('angle', 0.0))
+                    self._apply_sector_bend_correction(
+                        particles_rftrack, elem.length, angle_rad, self._Pc,
+                        self.particle_mass
+                    )
+                elif elem.parameters.get('_analytical_dpw', False):
+                    self._apply_dpw_edge_kick(
+                        particles_rftrack,
+                        elem.parameters.get('dpw_kick_x', 0.0),
+                        elem.parameters.get('dpw_kick_y', 0.0),
+                    )
 
             if n_lost_elem > 0:
                 self.logger.info(
@@ -1202,6 +1304,10 @@ class RFTrackAdapter(SimulatorBase):
             params['angle'] = native_elem.angle
         if hasattr(native_elem, 'pole_gap'):
             params['pole_gap'] = native_elem.pole_gap
+        if hasattr(native_elem, 'dipole_length'):
+            params['dipole_length'] = native_elem.dipole_length
+        if hasattr(native_elem, 'dipole_angle'):
+            params['dipole_angle'] = native_elem.dipole_angle
         if hasattr(native_elem, 'fringeType'):
             params['fringe_type'] = native_elem.fringeType
         if hasattr(native_elem, 'name') and native_elem.name:
@@ -1228,7 +1334,21 @@ class RFTrackAdapter(SimulatorBase):
             cov = np.cov(particles[:, pos_idx], particles[:, ang_idx], ddof=1)
             sig_x2, sig_xp2, sig_xxp = cov[0, 0], cov[1, 1], cov[0, 1]
 
-            emit_sq = sig_x2 * sig_xp2 - sig_xxp**2
+            # Dispersion-corrected emittance: subtract correlated energy spread
+            if particles.shape[1] > 5:
+                delta = particles[:, 5]
+                var_delta = np.var(delta, ddof=1)
+                if var_delta > 1e-30:
+                    D_pos = np.cov(particles[:, pos_idx], delta, ddof=1)[0, 1] / var_delta
+                    D_ang = np.cov(particles[:, ang_idx], delta, ddof=1)[0, 1] / var_delta
+                    sig_x2_corr = sig_x2 - D_pos**2 * var_delta
+                    sig_xp2_corr = sig_xp2 - D_ang**2 * var_delta
+                    sig_xxp_corr = sig_xxp - D_pos * D_ang * var_delta
+                    emit_sq = max(0, sig_x2_corr * sig_xp2_corr - sig_xxp_corr**2)
+                else:
+                    emit_sq = sig_x2 * sig_xp2 - sig_xxp**2
+            else:
+                emit_sq = sig_x2 * sig_xp2 - sig_xxp**2
             emittance = np.sqrt(max(0, emit_sq))  # π·mm·mrad
 
             if emittance > 0:
@@ -1243,7 +1363,24 @@ class RFTrackAdapter(SimulatorBase):
                 beta = alpha = gamma = 0.0
                 self.logger.warning(f"Zero emittance in {plane}-plane — degenerate beam distribution")
 
-            twiss[plane] = {'beta': beta, 'alpha': alpha, 'gamma': gamma, 'emittance': emittance}
+            # Dispersion: D = cov(x, delta) / var(delta)
+            if particles.shape[1] > 5:
+                delta = particles[:, 5]
+                var_delta = np.var(delta, ddof=1)
+                if var_delta > 0:
+                    dispersion = np.cov(particles[:, pos_idx], delta, ddof=1)[0, 1] / var_delta
+                    dispersion_prime = np.cov(particles[:, ang_idx], delta, ddof=1)[0, 1] / var_delta
+                else:
+                    dispersion = 0.0
+                    dispersion_prime = 0.0
+            else:
+                dispersion = 0.0
+                dispersion_prime = 0.0
+
+            twiss[plane] = {
+                'beta': beta, 'alpha': alpha, 'gamma': gamma, 'emittance': emittance,
+                'dispersion': dispersion, 'dispersion_prime': dispersion_prime,
+            }
 
         return twiss
 
@@ -1324,7 +1461,7 @@ class RFTrackAdapter(SimulatorBase):
                 sigma_xp = np.sqrt(emit / beta) if beta > 0 else 0
 
                 particles[:, idx] = sigma_x * u1
-                particles[:, idx+1] = sigma_xp * (-alpha * u1 / np.sqrt(beta) + u2) if beta > 0 else 0
+                particles[:, idx+1] = sigma_xp * (-alpha * u1 + u2) if beta > 0 else 0
 
             particles[:, 4] = np.random.randn(num_particles) * std_dev[4]
             particles[:, 5] = np.random.randn(num_particles) * std_dev[5]

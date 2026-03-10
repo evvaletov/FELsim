@@ -34,7 +34,6 @@ class beamUtility:
     def __init__(self, beam_type = "electron", sigma_x = 1e-3, sigma_y = 10e-3) -> None:
         self.beam_information = self.PARTICLES[beam_type]
 
-        # Beam transverse size (6 sigma contains ~95% of beam)
         self.sigma_x = sigma_x # sigma_x : 1 mm
         self.sigma_y = sigma_y # sigma_y : 10 mm
 
@@ -73,7 +72,8 @@ class beamUtility:
 
     # penetration_depch : 1 mm
     def getPowerDF(self, I_pulse_range: np.array, T_pulse_values: np.array, rep_rate_values: np.array,
-                   E_energy_range: np.array, plot_type = "Power", penetration_depth = 20e-3, plot = True):
+                   E_energy_range: np.array, plot_type = "Power", penetration_depth = 20e-3, plot = True,
+                   material = "Copper"):
         sigma_x = self.sigma_x
         sigma_y = self.sigma_y
         colors = ['lightskyblue', 'goldenrod', 'black', 'lightcoral']
@@ -160,10 +160,11 @@ class beamUtility:
             gamma = 1 + (E_J / (self.me * self.c**2))
             beta = np.sqrt(1 - (1 / gamma**2))
 
-            log_term = (2 * self.me * self.c**2 * beta**2) / I
-            log_term = max(log_term, 1e-6)  # Avoid log errors
+            log_term = (2 * self.me * self.c**2 * beta**2 * gamma**2) / I
+            log_term = max(log_term, 1e-6)
 
-            stopping_power = (4 * np.pi * self.e**3 * Z * n_e) / (self.me * self.c**2 * beta**2) * np.log(log_term) / 100  # MeV/cm
+            r_e = self.e**2 / (4 * np.pi * self.epsilon_0 * self.me * self.c**2)
+            stopping_power = (4 * np.pi * r_e**2 * self.me * self.c**2 * n_e) / beta**2 * (np.log(log_term) - beta**2) / 100  # MeV/cm
 
             R = E_J / (stopping_power) if stopping_power > 0 else 0  # Penetration depth in cm
 
@@ -214,7 +215,7 @@ class beamUtility:
         plt.show()
 
     # Function to plot stopping power
-    def plot_stopping_power(df, material):
+    def plot_stopping_power(self, df, material):
         plt.figure(figsize=(8, 5))
         plt.xscale("log")
         plt.yscale("log")

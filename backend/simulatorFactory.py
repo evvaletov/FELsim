@@ -119,7 +119,7 @@ class SimulatorFactory:
         checkpoints = kwargs.get('checkpoint_elements', 'all')
 
         for sim in simulators:
-            if sim.name == "FELsim":
+            if sim.name == "Python":
                 evolution = sim.collect_evolution(particles, interval)
             elif sim.name == "COSY":
                 evolution = sim.collect_evolution(particles, checkpoints)
@@ -357,7 +357,7 @@ def compare_simulators(simulators: List[SimulatorBase],
 
         comparison['simulators'][sim.name] = {
             'success': result.success,
-            'twiss': result.twiss_parameters,
+            'twiss': result.get_twiss(),
             'metadata': result.metadata
         }
 

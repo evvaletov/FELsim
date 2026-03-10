@@ -8,8 +8,9 @@ Author: Eremey Valetov
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union, Any
+from typing import Callable, Dict, List, Optional, Tuple, Union, Any
 from enum import Enum
+import time
 import numpy as np
 
 
@@ -185,7 +186,6 @@ class SimulatorBase(ABC):
         """
         pass
 
-    @abstractmethod
     def optimize(self,
                  objectives: Dict,
                  variables: Dict,
@@ -193,26 +193,220 @@ class SimulatorBase(ABC):
                  method: Optional[str] = None,
                  **kwargs) -> SimulationResult:
         """
-        Run optimization.
+        Optimize beamline parameters.
+
+        Default implementation builds an objective function from simulate()
+        and delegates to the appropriate optimizer. For method='glyfada',
+        uses GlyfadaOptimizer for evolutionary optimization. Other methods
+        use scipy.optimize.minimize.
+
+        Subclasses may override for code-specific optimization (e.g. COSY's
+        internal FIT command, FELsim's beamOptimizer).
 
         Parameters
         ----------
         objectives : dict
-            {element_idx: [objective_dicts]}
+            {element_idx: [{"measure": [axis, param], "goal": val, "weight": val}]}
+            where axis is 'x' or 'y' and param is a Twiss parameter name
+            (e.g. 'beta', 'alpha', 'emittance', 'dispersion').
         variables : dict
-            {element_idx: {param: var_name}}
+            {element_idx: [var_name, param_name, transform_func]}
+            where var_name is the optimization variable name, param_name is
+            the element attribute to set, and transform_func maps the
+            optimizer's raw value to the physical parameter.
         initial_point : dict
             {var_name: {'start': value, 'bounds': (min, max)}}
         method : str, optional
-            Optimizer (code-specific)
+            'Nelder-Mead' (default), 'Powell', 'glyfada', etc.
         **kwargs
-            Additional optimizer parameters
+            particles : ndarray — initial distribution (required for
+                particle-tracking simulators)
+            For glyfada: pop_size, max_gen, sigma, n_processes,
+                timeout_minutes, algorithm, debug, and any key in
+                glyfadaAdapter.OPTIONAL_CONFIG_KEYS.
 
         Returns
         -------
         SimulationResult
         """
-        pass
+        method = method or 'Nelder-Mead'
+        particles = kwargs.get('particles')
+
+        # Build ordered list of unique variable names
+        seen = {}
+        for idx in variables:
+            var_name = variables[idx][0]
+            if var_name not in seen:
+                seen[var_name] = True
+        variable_names = list(seen.keys())
+
+        # Extract start values and bounds in variable order
+        x0 = []
+        bounds = []
+        for name in variable_names:
+            spec = initial_point.get(name, {})
+            x0.append(spec.get('start', 1.0))
+            bounds.append(spec.get('bounds', (None, None)))
+
+        # Build the objective function
+        objective = self._build_objective(
+            objectives, variables, variable_names, particles
+        )
+
+        t0 = time.perf_counter()
+
+        if method.lower() == 'glyfada':
+            result = self._optimize_glyfada(
+                objective, variable_names, bounds, x0, **kwargs
+            )
+        else:
+            from scipy import optimize as spo
+            result = spo.minimize(
+                objective, x0, method=method,
+                bounds=bounds if any(b != (None, None) for b in bounds) else None
+            )
+
+        elapsed = time.perf_counter() - t0
+
+        if result.x is not None:
+            # Apply final optimised values to the beamline
+            opt_vars = {}
+            for idx, (var_name, param_name, transform) in variables.items():
+                var_idx = variable_names.index(var_name)
+                opt_vars[var_name] = transform(result.x[var_idx])
+
+            # Run final simulation to get result state
+            final = self.simulate(particles=particles)
+
+            return SimulationResult(
+                simulator_name=self.name,
+                success=getattr(result, 'success', True),
+                twiss_parameters_transfer_map=final.twiss_parameters_transfer_map,
+                twiss_parameters_statistical=final.twiss_parameters_statistical,
+                final_particles=final.final_particles,
+                transfer_map=final.transfer_map,
+                optimization_variables=opt_vars,
+                metadata={
+                    'method': method,
+                    'objective_value': result.fun,
+                    'num_iterations': getattr(result, 'nit', None),
+                    'num_evaluations': getattr(result, 'nfev', None),
+                    'elapsed_seconds': elapsed,
+                    **final.metadata
+                }
+            )
+        else:
+            # Multi-objective: no single optimum — return Pareto front
+            return SimulationResult(
+                simulator_name=self.name,
+                success=getattr(result, 'success', True),
+                metadata={
+                    'method': method,
+                    'pareto_front': getattr(result, 'pareto_front', None),
+                    'num_evaluations': getattr(result, 'nfev', None),
+                    'elapsed_seconds': elapsed,
+                }
+            )
+
+    def _build_objective(self,
+                         objectives: Dict,
+                         variables: Dict,
+                         variable_names: List[str],
+                         particles: Optional[np.ndarray] = None
+                         ) -> Callable:
+        """
+        Build a scalar objective function from simulate() and objective specs.
+
+        The returned callable has signature ``f(x) -> float`` compatible with
+        both scipy.optimize and GlyfadaOptimizer.
+
+        Parameters
+        ----------
+        objectives : dict
+            {element_idx: [{"measure": [axis, param], "goal": val, "weight": val}]}
+        variables : dict
+            {element_idx: [var_name, param_name, transform_func]}
+        variable_names : list[str]
+            Ordered unique variable names.
+        particles : ndarray, optional
+            Initial particle distribution.
+        """
+        # NB: closure captures `self` and mutates beamline element parameters
+        # on every evaluation — not thread-safe (same design as beamOptimizer._optiSpeed).
+        def objective(x):
+            # Apply variable values to beamline elements
+            for idx, (var_name, param_name, transform) in variables.items():
+                var_idx = variable_names.index(var_name)
+                value = transform(x[var_idx])
+                if 0 <= idx < len(self.beamline):
+                    self.beamline[idx].parameters[param_name] = value
+
+            result = self.simulate(particles=particles)
+
+            # Compute MSE over all objectives
+            mse_terms = []
+            n_goals = 0
+
+            for elem_idx, obj_list in objectives.items():
+                if isinstance(elem_idx, str):
+                    continue
+                twiss = result.get_twiss(element_idx=int(elem_idx), source='statistical')
+                for obj in obj_list:
+                    axis, param = obj['measure']
+                    goal = obj['goal']
+                    weight = obj.get('weight', 1.0)
+                    measured = twiss.get(axis, {}).get(param, 0.0)
+                    mse_terms.append(weight * (measured - goal) ** 2)
+                    n_goals += 1
+
+            return np.sum(mse_terms) / max(n_goals, 1)
+
+        return objective
+
+    @staticmethod
+    def _optimize_glyfada(objective: Callable,
+                          variable_names: List[str],
+                          bounds: List[Tuple],
+                          default_values: List[float],
+                          **kwargs):
+        """Delegate optimization to GlyfadaOptimizer.
+
+        Parameters
+        ----------
+        objective : callable
+            ``f(x) -> float``
+        variable_names : list[str]
+            Ordered variable names.
+        bounds : list[tuple]
+            (min, max) per variable.
+        default_values : list[float]
+            Starting values.
+        **kwargs
+            Forwarded glyfada parameters (pop_size, max_gen, etc.)
+        """
+        from glyfadaAdapter import GlyfadaOptimizer
+
+        core_keys = {
+            'pop_size', 'max_gen', 'sigma', 'n_processes',
+            'timeout_minutes', 'algorithm', 'debug',
+            'n_objectives', 'constraints', 'seed_from_results', 'callback',
+        }
+        glyfada_kwargs = {k: kwargs[k] for k in core_keys if k in kwargs}
+
+        # Everything else forwarded as extra_config
+        extra = {k: v for k, v in kwargs.items()
+                 if k not in core_keys and k != 'particles'}
+        if extra:
+            glyfada_kwargs['extra_config'] = extra
+
+        optimizer = GlyfadaOptimizer(
+            objective_func=objective,
+            variable_names=variable_names,
+            bounds=bounds,
+            default_values=default_values,
+            **glyfada_kwargs
+        )
+        return optimizer.optimize()
 
     @abstractmethod
     def _convert_element_to_native(self, element: BeamlineElement) -> Any:
@@ -313,7 +507,7 @@ class SimulatorBase(ABC):
             Particles in FELsim coordinates
         """
         if distribution_type == "gaussian":
-            energy = parameters.pop('energy', None)
+            energy = parameters.get('energy', None)
 
             # Use COSYParticleSimulator if available for sophisticated generation
             if hasattr(self, '_particle_sim') and self._particle_sim is not None:

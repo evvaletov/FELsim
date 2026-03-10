@@ -227,7 +227,7 @@ def apply_warm_start(stages, warm_currents):
 def run_cosy_optimization(file_path, stages, targets, max_stage=None,
                           nmax=1000, nalg=1, generate_only=False,
                           fringe_field_order=0, order=3,
-                          transfer_matrix_order=None):
+                          transfer_matrix_order=None, use_mge=False):
     """Run COSY FIT optimization for specified stages."""
     if max_stage is not None:
         stages = stages[:max_stage]
@@ -240,6 +240,7 @@ def run_cosy_optimization(file_path, stages, targets, max_stage=None,
         lattice_path=str(file_path), mode='transfer_matrix',
         config=config,
         fringe_field_order=fringe_field_order,
+        use_mge_for_dipoles=use_mge,
         debug=False
     )
     sim = adapter.get_native_simulator()
@@ -301,7 +302,7 @@ def compute_mse(twiss, targets):
 
 
 def run_multistart(file_path, stages, targets, nmax=1000, nalg=1,
-                    fringe_field_order=0, order=3):
+                    fringe_field_order=0, order=3, use_mge=False):
     """Run with multiple Stage 5 starting points, keep best result."""
     best_result = None
     best_mse = float('inf')
@@ -319,7 +320,8 @@ def run_multistart(file_path, stages, targets, nmax=1000, nalg=1,
 
         result = run_cosy_optimization(
             file_path, trial_stages, targets, nmax=nmax, nalg=nalg,
-            fringe_field_order=fringe_field_order, order=order)
+            fringe_field_order=fringe_field_order, order=order,
+            use_mge=use_mge)
 
         if not result.get('success'):
             print("  -> FAILED")
@@ -427,6 +429,8 @@ if __name__ == "__main__":
                         help='COSY DA computation order (1=linear, 3=default)')
     parser.add_argument('--warm-start', type=str, default=None,
                         help='JSON file with previous results to use as starting point')
+    parser.add_argument('--mge', action='store_true',
+                        help='Use MGE fieldmap for dipoles (requires chicane_dipole_fieldmap.dat)')
     args = parser.parse_args()
 
     file_path = (Path(__file__).resolve().parent.parent.parent
@@ -445,20 +449,20 @@ if __name__ == "__main__":
 
     print(f"UH MkV FEL — COSY FIT Optimization (S1, 2 ps)")
     print(f"Stages: {args.max_stage or 'all'}, Nmax: {args.nmax}, Alg: {args.nalg}, "
-          f"FR: {args.fr}, Order: {args.order}")
+          f"FR: {args.fr}, Order: {args.order}, MGE: {args.mge}")
     print(f"Geometric emittance: {targets['epsilon']:.4f} pi.mm.mrad")
     print(f"Initial beta_0: {targets['beta_0']:.4f} m")
 
     if args.multistart and not args.generate_only:
         results = run_multistart(
             file_path, stages, targets, nmax=args.nmax, nalg=args.nalg,
-            fringe_field_order=args.fr, order=args.order)
+            fringe_field_order=args.fr, order=args.order, use_mge=args.mge)
     else:
         results = run_cosy_optimization(
             file_path, stages, targets,
             max_stage=args.max_stage, nmax=args.nmax, nalg=args.nalg,
             generate_only=args.generate_only,
-            fringe_field_order=args.fr, order=args.order)
+            fringe_field_order=args.fr, order=args.order, use_mge=args.mge)
 
     if not args.generate_only and results:
         mse = print_results(results, targets, felsim_ref=FELSIM_S1_CURRENTS)

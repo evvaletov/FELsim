@@ -29,7 +29,7 @@ class lattice:
         '''
         self.name = name
         self.E = 45  # Kinetic energy (MeV/c^2)
-        self.E0 = 0.51099  # Electron rest energy (MeV/c^2)
+        self.E0 = 0.51099895000  # Electron rest energy (MeV/c^2)
         self.Q = 1.60217663e-19  # (C)
         self.M = 9.1093837e-31  # (kg)
         self.C = 299792458  # Celerity (m/s)
@@ -46,7 +46,7 @@ class lattice:
         self.fringeType = fringeType  # Each segment has no magnetic fringe by default
         self.startPos = None
         self.endPos = None
-        if not length <= 0:
+        if isinstance(length, (int, float)) and not math.isnan(length) and length > 0:
             self.length = length
         else:
             raise ValueError("Invalid Parameter: Please enter a positive length parameter")
@@ -127,7 +127,7 @@ class lattice:
                 A = int(isotopeData[0])
                 Z = int(isotopeData[1])
                 m_i = A * self.M_AMU
-                q_i = Z * self.Q
+                q_i = Z * 1.60217663e-19
                 meV = (m_i * self.C ** 2) * self.k_MeV
                 self.setMQE(m_i, q_i, meV)
                 self.setE(kineticE)
@@ -197,9 +197,7 @@ class lattice:
         '''
         mat = self._compute_numeric_matrix(**kwargs)
         particles = np.asarray(val, dtype=np.float64)
-        # Vectorized matrix multiplication: (6,6) @ (6,N)^T = (6,N)^T
-        transformed = (mat @ particles.T).T
-        return transformed.tolist()
+        return (mat @ particles.T).T
 
 
 class driftLattice(lattice):
@@ -562,9 +560,10 @@ class dipole(lattice):
         S = np.sin(theta)
         M16 = rho * (1 - C) * (self.gamma / (self.gamma + 1))
         M26 = S * (self.gamma / (self.gamma + 1))
-        M51 = -self.f * S / (self.beta * self.C)
-        M52 = -self.f * rho * (1 - C) / (self.beta * self.C)
-        M56 = -self.f * (l - rho * S) / (self.C * self.beta * self.gamma * (self.gamma + 1))
+        M51 = self.f * S / (self.beta * self.C)
+        M52 = self.f * rho * (1 - C) / (self.beta * self.C)
+        R56 = (l - rho * S) - l / self.gamma**2
+        M56 = self.f * R56 * self.gamma / ((self.gamma + 1) * self.beta * self.C)
         mat = np.array([
             [C, rho * S, 0.0, 0.0, 0.0, M16],
             [-S / rho, C, 0.0, 0.0, 0.0, M26],
@@ -612,9 +611,10 @@ class dipole(lattice):
         S = sp.sin(theta)
         M16 = rho * (1 - C) * (self.gamma / (self.gamma + 1))
         M26 = S * (self.gamma / (self.gamma + 1))
-        M51 = -self.f * S / (self.beta * self.C)
-        M52 = -self.f * rho * (1 - C) / (self.beta * self.C)
-        M56 = -self.f * (l - rho * S) / (self.C * self.beta * self.gamma * (self.gamma + 1))
+        M51 = self.f * S / (self.beta * self.C)
+        M52 = self.f * rho * (1 - C) / (self.beta * self.C)
+        R56 = (l - rho * S) - l / self.gamma**2
+        M56 = self.f * R56 * self.gamma / ((self.gamma + 1) * self.beta * self.C)
         mat = Matrix([
             [C, rho * S, 0, 0, 0, M16],
             [-S / rho, C, 0, 0, 0, M26],
@@ -685,7 +685,9 @@ class dipole_wedge(lattice):
         dipole_length = self.dipole_length
         # Edge kick uses |ρ|: direction depends on pole face geometry, not bending sign
         R = dipole_length / (abs(dipole_angle) * np.pi / 180)
-        eta = (a * np.pi / 180) * l / self.length
+        # Edge kick uses the full wedge angle (thin-lens effect at pole face,
+        # not distributed over the magnet length)
+        eta = a * np.pi / 180
         Tx = np.tan(eta)
         # Fringe field contribution using triangle model
         g = self.pole_gap
@@ -740,7 +742,8 @@ class dipole_wedge(lattice):
         dipole_length = self.dipole_length
         # Edge kick uses |ρ|: direction depends on pole face geometry, not bending sign
         R = dipole_length / (sp.Abs(dipole_angle) * sp.pi / 180)
-        eta = (a * sp.pi / 180) * l / self.length
+        # Edge kick uses the full wedge angle (thin-lens, not distributed)
+        eta = a * sp.pi / 180
         Tx = sp.tan(eta)
         z = sp.symbols("z", real=True)
         g = self.pole_gap
@@ -815,10 +818,10 @@ class beamline:
         def __str__(self):
             return f"Fringe field segment {self.length} m long with a magnetic field of {self.B} teslas"
 
-    def __init__(self, line=[]):
+    def __init__(self, line=None):
         self.ORIGINFACTOR = 0.99
         self.FRINGEDELTAZ = 0.01
-        self.beamline = line
+        self.beamline = line if line is not None else []
         self.totalLen = 0
         self.defineEndFrontPos()
         self._cache_fringe_parameters()

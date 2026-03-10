@@ -17,7 +17,7 @@ class Radiation:
 
     def __init__(self, eMev = 45, lambda_L_um = 3, theta_vals = 1000) -> None:
         self.E_e_MeV = eMev  # Electron energy [MeV]
-        self.gamma = self.E_e_MeV * 1e6 * self.e  / self.me_c2_J         # Lorentz factor
+        self.gamma = 1 + self.E_e_MeV * 1e6 * self.e / self.me_c2_J      # Lorentz factor
         self.theta_vals = np.linspace(0, 5/self.gamma, theta_vals)
         self.theta_mrad = self.theta_vals * 1e3
 
@@ -50,7 +50,7 @@ class Radiation:
         plt.fill_between(self.theta_mrad, d_sigma_normalized, where=(self.theta_mrad <= theta_thresh_mrad), color='blue', alpha=0.3, label="E ≥ 10 keV")
         plt.xlabel("Scattering angle θ [mrad]")
         plt.ylabel("Normalized angular distribution")
-        plt.title("ICS Angular Distribution (to be fixed)")
+        plt.title("ICS Angular Distribution")
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
@@ -107,7 +107,7 @@ class Radiation:
         plt.fill_between(E_centers, hist_vals, where=(E_centers >= 10), alpha=0.3, color='blue', label="E ≥ 10 keV")
         plt.xlabel("Photon energy [keV]")
         plt.ylabel("Normalized photon distribution")
-        plt.title("ICS Photon Energy Spectrum: to be fixed")
+        plt.title("ICS Photon Energy Spectrum")
         plt.grid(True)
         plt.legend()
         plt.tight_layout()

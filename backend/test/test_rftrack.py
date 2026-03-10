@@ -3,22 +3,17 @@ Basic tests for RF-Track adapter.
 
 Author: Eremey Valetov
 """
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import numpy as np
+import pytest
 from pathlib import Path
 
 # Check RF-Track availability
 try:
     from rftrackAdapter import RFTrackAdapter, _RFTRACK_AVAILABLE
     if not _RFTRACK_AVAILABLE:
-        print("RF-Track not installed (pip install RF-Track)")
-        sys.exit(1)
+        pytest.skip("RF-Track not installed (pip install RF-Track)", allow_module_level=True)
 except ImportError as e:
-    print(f"Import error: {e}")
-    sys.exit(1)
+    pytest.skip(f"Import error: {e}", allow_module_level=True)
 
 from simulatorBase import BeamlineElement, CoordinateSystem, SimulationMode
 from simulatorFactory import SimulatorFactory
@@ -47,7 +42,6 @@ def test_adapter_creation():
     assert sim_custom.beam_energy == 30.0
 
     print("Adapter creation: PASSED")
-    return sim
 
 
 def test_factory_registration():
@@ -181,7 +175,6 @@ def test_beamline_setup():
     assert abs(total_length - expected_length) < 1e-6
 
     print("Beamline setup: PASSED")
-    return sim
 
 
 def test_particle_generation():
@@ -303,45 +296,3 @@ def test_g_quad_modification():
     print("G_quad modification: PASSED")
 
 
-def run_all_tests():
-    """Run complete RF-Track test suite."""
-    print("=" * 60)
-    print("RF-Track Adapter Test Suite")
-    print("=" * 60)
-
-    tests = [
-        test_adapter_creation,
-        test_factory_registration,
-        test_relativistic_params,
-        test_current_to_k1,
-        test_coordinate_transforms,
-        test_beamline_setup,
-        test_particle_generation,
-        test_simulation,
-        test_twiss_calculation,
-        test_g_quad_modification,
-    ]
-
-    passed = 0
-    failed = 0
-
-    for test in tests:
-        try:
-            test()
-            passed += 1
-        except Exception as e:
-            print(f"\n{test.__name__} FAILED: {e}")
-            import traceback
-            traceback.print_exc()
-            failed += 1
-
-    print("\n" + "=" * 60)
-    print(f"Results: {passed} passed, {failed} failed")
-    print("=" * 60)
-
-    return failed == 0
-
-
-if __name__ == "__main__":
-    success = run_all_tests()
-    sys.exit(0 if success else 1)

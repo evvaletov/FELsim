@@ -34,6 +34,7 @@ class COSYAdapter(SimulatorBase):
                  config: Optional[Dict] = None,
                  transfer_matrix_order: Optional[int] = None,
                  fringe_field_order: int = 0,
+                 use_mge_for_dipoles: bool = False,
                  quad_aperture: float = 0.027,
                  dipole_aperture: float = 0.0127,
                  debug: bool = None):
@@ -69,6 +70,7 @@ class COSYAdapter(SimulatorBase):
                 config_dict=self._config,
                 transfer_matrix_order=transfer_matrix_order,
                 fringe_field_order=fringe_field_order,
+                use_mge_for_dipoles=use_mge_for_dipoles,
                 quad_aperture=quad_aperture,
                 dipole_aperture=dipole_aperture,
                 debug=debug
@@ -82,6 +84,7 @@ class COSYAdapter(SimulatorBase):
                 config_dict=self._config,
                 transfer_matrix_order=transfer_matrix_order,
                 fringe_field_order=fringe_field_order,
+                use_mge_for_dipoles=use_mge_for_dipoles,
                 quad_aperture=quad_aperture,
                 dipole_aperture=dipole_aperture,
                 debug=debug
@@ -155,9 +158,7 @@ class COSYAdapter(SimulatorBase):
             beam_energy=self._native_sim.KE
         )
 
-        evolution.s_positions.append(0.0)
-        evolution.particles[0.0] = particles.copy()
-        evolution.twiss[0.0] = self._calculate_twiss(particles)
+        evolution.add_sample(0.0, particles.copy(), self._calculate_twiss(particles))
 
         n_elements = len(native_sim.beamline)
         if checkpoint_elements == 'all':
@@ -216,11 +217,7 @@ class COSYAdapter(SimulatorBase):
                 )
 
             if n_at > 0:
-                evolution.s_positions.append(s_pos)
-                evolution.particles[s_pos] = particles_at_elem
-                evolution.twiss[s_pos] = self._calculate_twiss(particles_at_elem)
-
-        evolution.s_positions = sorted(evolution.s_positions)
+                evolution.add_sample(s_pos, particles_at_elem, self._calculate_twiss(particles_at_elem))
 
         return evolution
 
@@ -230,22 +227,44 @@ class COSYAdapter(SimulatorBase):
             from ebeam import beam
             ebeam = beam()
             _, _, twiss_df = ebeam.cal_twiss(particles_felsim, ddof=1)
+
+            # Use coord5 (ΔK/K₀×10³) for dispersion, not coord4 (ΔToF/T_RF×10³)
+            sigma_delta_sq = np.var(particles_felsim[:, 5], ddof=1)
+            if sigma_delta_sq > 0:
+                D_x = np.cov(particles_felsim[:, 0], particles_felsim[:, 5], ddof=1)[0, 1] / sigma_delta_sq
+                D_y = np.cov(particles_felsim[:, 2], particles_felsim[:, 5], ddof=1)[0, 1] / sigma_delta_sq
+            else:
+                D_x = D_y = 0.0
+
             return {
                 'x': {
                     'beta': twiss_df.loc['x', r'$\beta$ (m)'],
                     'alpha': twiss_df.loc['x', r'$\alpha$'],
                     'gamma': twiss_df.loc['x', r'$\gamma$ (rad/m)'],
-                    'emittance': twiss_df.loc['x', r'$\epsilon$ ($\pi$.mm.mrad)']
+                    'emittance': twiss_df.loc['x', r'$\epsilon$ ($\pi$.mm.mrad)'],
+                    'dispersion': D_x
                 },
                 'y': {
                     'beta': twiss_df.loc['y', r'$\beta$ (m)'],
                     'alpha': twiss_df.loc['y', r'$\alpha$'],
                     'gamma': twiss_df.loc['y', r'$\gamma$ (rad/m)'],
-                    'emittance': twiss_df.loc['y', r'$\epsilon$ ($\pi$.mm.mrad)']
+                    'emittance': twiss_df.loc['y', r'$\epsilon$ ($\pi$.mm.mrad)'],
+                    'dispersion': D_y
                 }
             }
 
-        return self._particle_sim.calculate_twiss_from_particles(particles_felsim)
+        twiss = self._particle_sim.calculate_twiss_from_particles(particles_felsim)
+        # Add dispersion from particle correlations if not already present
+        for plane, pos_idx in [('x', 0), ('y', 2)]:
+            if plane in twiss and 'dispersion' not in twiss[plane]:
+                sigma_delta_sq = np.var(particles_felsim[:, 5], ddof=1)
+                if sigma_delta_sq > 0:
+                    twiss[plane]['dispersion'] = np.cov(
+                        particles_felsim[:, pos_idx], particles_felsim[:, 5], ddof=1
+                    )[0, 1] / sigma_delta_sq
+                else:
+                    twiss[plane]['dispersion'] = 0.0
+        return twiss
 
     def _get_element_color(self, elem_type: str) -> str:
         """Map element type to display color."""
@@ -307,11 +326,14 @@ class COSYAdapter(SimulatorBase):
         mode = mode or self.simulation_mode
 
         if mode == SimulationMode.TRANSFER_MATRIX:
-            if self._native_sim.particle_tracking_mode:
-                old_state = self._native_sim.particle_tracking_mode
+            old_state = self._native_sim.particle_tracking_mode
+            if old_state:
                 self._native_sim.disable_particle_tracking()
 
             result_dict = self._native_sim.run_simulation()
+
+            if old_state:
+                self._native_sim.enable_particle_tracking()
 
             if not result_dict.get('status') == 'success':
                 return SimulationResult(
@@ -346,8 +368,9 @@ class COSYAdapter(SimulatorBase):
             if particles.shape[1] != 6:
                 raise ValueError(f"Expected 6 coordinates, got {particles.shape[1]}")
 
+            particles_cosy = self._particle_sim.transform_to_cosy_coordinates(particles)
             self._particle_sim.write_particle_file(
-                particles,
+                particles_cosy,
                 format='rray',
                 output_dir='results'
             )
@@ -434,7 +457,7 @@ class COSYAdapter(SimulatorBase):
                 simulator_name=self.name,
                 success=True,
                 twiss_parameters_transfer_map=twiss,
-                final_particles=final_particles_cosy,
+                final_particles=filtered_particles if not all_particles_lost else final_particles_cosy,
                 checkpoint_particles=checkpoint_particles,
                 metadata={
                     'num_particles': particles.shape[0],

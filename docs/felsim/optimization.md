@@ -79,6 +79,46 @@ Re-ran emittance scan ($\varepsilon_n = 1$–$20$, 20 points) with multi-start
 fallback. Resolved dips at $\varepsilon_n = 14$–$16$; all now excellent
 (MSE ~ $10^{-6}$–$10^{-9}$).
 
+### W4 — COSY INFINITY Cross-Validation
+
+COSY's gradient-based FIT reproduces the 11-stage optimization.
+FR 0 (hard-edge): MSE = $4.5 \times 10^{-9}$.
+FR 1 (1st-order fringe, warm-started from FR 0): MSE = $7.9 \times 10^{-8}$.
+Cold-starting FR 1 fails (MSE ~ 0.2) due to changed edge kicks creating
+incompatible local minima. Stage 5 consistently finds negative-polarity
+currents (valid solution inaccessible to FELsim's bounded NM).
+
+- Script: `UHM_beamline_opt_cosy.py`
+- Report: `reports/2026/Mar/04/R2_unified_comparison_report.pdf` (§4–5)
+
+### W6/W7 — Glyfada Optimizer Benchmarks
+
+W6 benchmarked glyfada (ULS algorithm, 600 evals, uniform random init)
+against NM for Stage 11. NM outperformed by 3–6 orders of magnitude at
+$\varepsilon_n = 5, 8, 14$. W7 re-benchmarked with CMA-ES, warm-starting,
+tight bounds (±3 A), and feasibility-rules constraint handling. CMA-ES
+still failed at all points (MSE $7.7 \times 10^5$ at $\varepsilon_n = 5$,
+MSE $17.8$ at $\varepsilon_n = 8$).
+
+The FELsim MSE landscape has an extremely narrow feasibility basin;
+evolutionary search cannot navigate it efficiently.
+
+- Scripts: `UHM_beamline_opt_05ps_params.py --w6` / `--w7`
+- Results: `results/params_05ps/W6/`, `results/params_05ps/W7/`
+- Report: `reports/2026/Mar/04/R2_unified_comparison_report.pdf` (§7)
+
+### W8 — RF-Track Stage 11 Optimization
+
+Hybrid FELsim/RF-Track: stages 1–10 use FELsim, stage 11 uses RF-Track
+particle tracking with prefix caching. At $\varepsilon_n = 8$:
+RFT-opt MSE = $7.0 \times 10^{-3}$ (limited by $\beta_y$ residual from
+missing triangle-rule fringe correction). At $\varepsilon_n = 5$:
+RFT-opt MSE = $2.6 \times 10^{-7}$, $110\times$ better than FELsim.
+
+- Script: `UHM_rftrack_opt.py`
+- Results: `results/rftrack_opt/`
+- Report: `reports/2026/Mar/04/R2_unified_comparison_report.pdf` (§4)
+
 ### W12 — Bunch Compression Feasibility
 
 Can the transport line compress 2 ps bunches to 0.5 ps?  Chirp sweep
@@ -87,17 +127,31 @@ extended current bounds (15 A), $T_{566}$ assessment.
 
 - $R_{56} = 27.09$ mm (geometry-locked), $T_{566} = 0$
 - Compression floor $\approx 0.45$ ps ($R_{56} \times \sigma_\delta$)
+- RF-Track Part B: at $C = 4$ chirp, RF-Track gives $\sigma_z = 1.94$ ps
+  vs COSY map 0.67 ps (aperture losses + nonlinear effects)
 - Transport line is not a compressor; compression should occur upstream
 - Script: `W12_compression_feasibility.py`
-- Report: `W12_compression_feasibility_report.tex`
 - Results: `results/W12/`
+- Report: `reports/2026/Mar/04/R3_longitudinal_report.pdf` (§5)
+
+### R2 — Cross-Code Validation Report
+
+Unified report documenting 3-code agreement (FELsim, COSY, RF-Track),
+the 9 bug fixes enabling it, quad current comparison, parameter
+sensitivity, and optimizer benchmarks.
+
+- Report: `reports/2026/Mar/04/R2_unified_comparison_report.pdf`
+
+### R3 — Longitudinal & Compression Report
+
+Combined report merging W9 (0.5 ps / 2 ps transfer map, bunch
+propagation) and W12 (compression feasibility with RF-Track validation).
+
+- Report: `reports/2026/Mar/04/R3_longitudinal_report.pdf`
 
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap. Key upcoming items:
 
 - **S5** — 2D coupled parameter scans ($\sigma_E$ vs $h$, $\sigma_E$ vs
-  $\varepsilon_n$, $h$ vs $\varepsilon_n$)
-- **W4** — COSY INFINITY cross-validation of the Python results (done)
-- **C1** — RF-Track cross-validation at key parameter points
-- Glyfada vs Nelder-Mead benchmarks on the emittance scan (W2)
+  $\varepsilon_n$, $h$ vs $\varepsilon_n$) — smoke test done, full scans pending

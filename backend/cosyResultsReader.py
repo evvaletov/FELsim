@@ -398,9 +398,9 @@ class COSYResultsReader:
 
         return coefficients_by_order
 
-    def get_aberration_coefficient(self, output_coord, input_indices, order=None):
+    def get_aberration_coefficient_by_powers(self, output_coord, input_indices, order=None):
         """
-        Extract specific aberration coefficient from transfer map.
+        Extract specific aberration coefficient from transfer map using power indices.
 
         Parameters
         ----------

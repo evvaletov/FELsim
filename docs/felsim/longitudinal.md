@@ -97,8 +97,32 @@ scenarios with increased energy spread (no chirp) show bunch
 
 - Chirp sweep: analytical + COSY map propagation (41 chirp values)
 - Compression floor $\approx 0.45$ ps prevents reaching 0.5 ps target
-- At $C = 4$ chirp: $\sigma_{z,\text{out}} \approx 0.67$ ps
-- RF-Track validation with C7 coordinate fix confirms COSY map results
+- At $C = 4$ chirp: COSY map $\sigma_{z,\text{out}} \approx 0.67$ ps
 - Extended quad bounds (15 A) do not affect $\sigma_z$
 - **Conclusion:** transport line is not a bunch compressor; compression
   should occur upstream
+
+#### RF-Track Validation (Part B, post-C7)
+
+Six compression scenarios tracked with the C7-fixed RF-Track adapter.
+RF-Track and the COSY map **disagree significantly** for chirped beams:
+
+| Scenario | $\sigma_z$ RF-Track (ps) | $\sigma_z$ COSY map (ps) | Transmission |
+|----------|--------------------------|--------------------------|--------------|
+| B1: baseline ($h = 0$) | 2.36 | 2.04 | 83.5% |
+| B3: $C = 4$ chirp | 1.94 | 0.67 | 58.8% |
+| B4: $C = 6$ chirp | 1.81 | 0.52 | 52.5% |
+| B5: $\sigma_E = 2\%$ | 2.32 | 2.68 | 56.2% |
+
+The discrepancy grows with chirp ($2.9\times$ at $C = 4$) due to:
+aperture losses removing extreme-$\delta$ particles that drive
+compression, higher-order chromatic aberrations, and model differences
+(analytical sector-bend correction vs triangle-rule fringe).
+
+### R3: Combined Report
+
+The R3 report consolidates W9 and W12 into a single document covering
+transfer map analysis, 6D bunch propagation, compression feasibility,
+and the RF-Track validation findings.
+
+- Report: `reports/2026/Mar/04/R3_longitudinal_report.pdf`

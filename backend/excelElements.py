@@ -36,7 +36,7 @@ class ExcelElements:
         # Try loading as Excel first, fall back to dictionary format
         try:
             self.load_excel_lattice(file_path)
-        except:
+        except (FileNotFoundError, ValueError, KeyError):
             self.load_dictionary_lattice(file_path)
     
     def load_dictionary_lattice(self, beamlineJson):

@@ -70,7 +70,7 @@ class beam:
                                   $\gamma (x-x_c)^2 + 2\alpha (x-x_c)(y-y_c) + \beta (y-y_c)^2 - \epsilon_{n} = 0$,
                                   where $\epsilon_{n} = n \times \epsilon$.
         '''
-        emittance = n * twiss_axis[r"$\epsilon$ ($\pi$.mm.mrad)"]
+        emittance = n**2 * twiss_axis[r"$\epsilon$ ($\pi$.mm.mrad)"]
         alpha = twiss_axis[r"$\alpha$"]
         beta = twiss_axis[r"$\beta$ (m)"]
         gamma = twiss_axis[r"$\gamma$ (rad/m)"]
@@ -133,8 +133,12 @@ class beam:
 
             if i < 2:
                  # Transverse planes with dispersion
-                D = dist_cov[idx, 5] / sigma_delta
-                D_prime = dist_cov[idx_prime, 5] / sigma_delta
+                if sigma_delta > 0:
+                    D = dist_cov[idx, 5] / sigma_delta
+                    D_prime = dist_cov[idx_prime, 5] / sigma_delta
+                else:
+                    D = 0.0
+                    D_prime = 0.0
 
                 # Dispersion-corrected variances
                 var_disp_free = var - D ** 2 * sigma_delta
@@ -142,20 +146,33 @@ class beam:
                 covar_disp_free = covar - D * D_prime * sigma_delta
 
                 # Intrinsic emittance
-                epsilon = np.sqrt(var_disp_free * var_prime_disp_free - covar_disp_free ** 2)
+                emittance_sq = var_disp_free * var_prime_disp_free - covar_disp_free ** 2
+                if emittance_sq < 0:
+                    emittance_sq = max(emittance_sq, 0.0)
+                epsilon = np.sqrt(emittance_sq)
 
-                alpha = -covar_disp_free / epsilon
-                beta = var_disp_free / epsilon
-                gamma = var_prime_disp_free / epsilon
+                if epsilon < 1e-30:
+                    alpha = beta = gamma = 0.0
+                else:
+                    alpha = -covar_disp_free / epsilon
+                    beta = var_disp_free / epsilon
+                    gamma = var_prime_disp_free / epsilon
 
                 dispersion = D
                 dispersion_prime = D_prime
             else:
                 # Longitudinal plane (no dispersion)
-                epsilon = np.sqrt(var * var_prime - covar ** 2)
-                alpha = -covar / epsilon
-                beta = var / epsilon
-                gamma = var_prime / epsilon
+                emittance_sq = var * var_prime - covar ** 2
+                if emittance_sq < 0:
+                    emittance_sq = max(emittance_sq, 0.0)
+                epsilon = np.sqrt(emittance_sq)
+
+                if epsilon < 1e-30:
+                    alpha = beta = gamma = 0.0
+                else:
+                    alpha = -covar / epsilon
+                    beta = var / epsilon
+                    gamma = var_prime / epsilon
                 dispersion = dispersion_prime = 0.0
 
             # Standardized phase advance φ calculation
@@ -230,7 +247,7 @@ class beam:
         bool
             True if the point $(x, y)$ is within or on the ellipse, False otherwise.
         '''
-        emittance = n * twiss_axis[r"$\epsilon$ ($\pi$.mm.mrad)"]
+        emittance = n**2 * twiss_axis[r"$\epsilon$ ($\pi$.mm.mrad)"]
         alpha = twiss_axis[r"$\alpha$"]
         beta = twiss_axis[r"$\beta$ (m)"]
         gamma = twiss_axis[r"$\gamma$ (rad/m)"]
@@ -359,7 +376,7 @@ class beam:
             The standard deviation of the variable.
         '''
         particleData = self.findVarValues(particles, variable)
-        return np.std(particleData)
+        return np.std(particleData, ddof=1)
 
     def alpha(self, particles, variable):
         '''

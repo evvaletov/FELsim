@@ -14,6 +14,7 @@ gpt"can you xplain the parameters of a constraint paramter in scipy.minimize"
 #  NOTE: "measure" in self.objectives has to be a function call that returns a single value with a parameter of a
 #         2d list of particles and each indice can only appear once as a key
 
+import copy
 import scipy.optimize as spo
 from beamline import *
 from ebeam import beam
@@ -71,7 +72,7 @@ class beamOptimizer():
         difference: float
             mean squared error statistic of how accurate all test objective values are to their goal
         '''
-        particles = self.matrixVariables
+        particles = self.matrixVariables.copy()
         segments = self.beamline
         mse = []
         numGoals = 0
@@ -86,11 +87,11 @@ class beamOptimizer():
                     varIndex = self.variablesToOptimize.index(self.segmentVar.get(i)[0]) #  Get the index of the x variable to use with 
                     newValue = yFunc(variableVals[varIndex])
                     param = self.segmentVar.get(i)[1]
-                    particles = np.array(segments[i].useMatrice(particles, **{param: newValue})) # Apply matrice transformation with changed segment attribute value
+                    particles = segments[i].useMatrice(particles, **{param: newValue})
                 except TypeError as e:
                     raise ValueError(f"segment {i} has no parameter {param}")
             else:
-                particles = np.array(segments[i].useMatrice(particles))  #  apply matrice transformation with static segment values
+                particles = segments[i].useMatrice(particles)
             #  Check if indice in objective dictionary
             if i in self.objectives:
                 for goalDict in self.objectives[i]:
@@ -103,6 +104,8 @@ class beamOptimizer():
                     self.trackGoals[stringForm].append(stat) #  for plotting in calc()
 
         #  Calculate MSE
+        if numGoals == 0:
+            return np.inf
         difference = (np.sum(mse))/numGoals
 
         #  For plotting purposes in calc()
@@ -151,20 +154,19 @@ class beamOptimizer():
         self.iterationTrack = 0
         self.trackGoals = {}
 
-        #  Initialize set-list of x variables to optimize
+        #  Initialize ordered list of unique x variables to optimize
         self.segmentVar = segmentVar
-        checkSet = set()
-        self.variablesToOptimize = []
+        seen = {}
         for indice in self.segmentVar:
             if (indice < 0 or indice >= len(self.beamline)):
                 raise IndexError(str(indice) + " is out of bounds for segmentVar dictionary")
-            checkSet.add(self.segmentVar.get(indice)[0])
-        #  This entire program relies on checking the indice of the variables in this list-set.
-        #  A little sketch, will work for now but better implementation is needed
-        self.variablesToOptimize = list(checkSet)
+            varName = self.segmentVar[indice][0]
+            if varName not in seen:
+                seen[varName] = True
+        self.variablesToOptimize = list(seen.keys())
 
         #  Initialize objectives dictionary with measurement methods
-        self.objectives = objectives
+        self.objectives = copy.deepcopy(objectives)
         for key, value in self.objectives.items():
             if (key not in range(len(self.beamline))):
                 raise TypeError("Invalid indice: indice " + str(key) + " in objectives dict is out of bounds" )
@@ -192,19 +194,19 @@ class beamOptimizer():
         # Time speed to minimize difference of objective function
         startTime = time.perf_counter()
         if method == 'glyfada':
-            from glyfadaAdapter import GlyfadaOptimizer, OPTIONAL_CONFIG_KEYS
-            try:
-                import cloudpickle as pickle
-            except ImportError:
-                import pickle
+            from glyfadaAdapter import GlyfadaOptimizer
 
             CORE_KEYS = (
                 'pop_size', 'max_gen', 'sigma', 'n_processes',
-                'timeout_minutes', 'algorithm', 'debug'
+                'timeout_minutes', 'algorithm', 'debug',
+                'n_objectives', 'constraints', 'seed_from_results', 'callback',
             )
             glyfada_kwargs = {k: kwargs[k] for k in CORE_KEYS if k in kwargs}
 
-            extra_config = {k: kwargs[k] for k in OPTIONAL_CONFIG_KEYS if k in kwargs}
+            # Everything else goes to extra_config
+            extra_config = {k: v for k, v in kwargs.items()
+                           if k not in CORE_KEYS and k not in
+                           ('plotProgress', 'plotBeam', 'printResults')}
             if extra_config:
                 glyfada_kwargs['extra_config'] = extra_config
 
@@ -220,26 +222,33 @@ class beamOptimizer():
             result = spo.minimize(self._optiSpeed, self.variablesValues, method=method, bounds=self.bounds)
         endTime = time.perf_counter()
 
-        # print out new values for each beam segment's attribute
-        output = "\nx variables:"
-        for indice in self.segmentVar:
-                variable = self.segmentVar.get(indice)[0]
-                index = self.variablesToOptimize.index(variable)
-                yFunc = self.segmentVar.get(indice)[2]
-                newVal = yFunc(result.x[index])
-                segAttr = self.segmentVar.get(indice)[1]
-                setattr(self.beamline[indice], segAttr, newVal)
-                if printResults:
-                    output += "\nindice " + str(indice) + " new " + segAttr + " value: " + str(newVal)
-        if printResults:
-            output += "\n\ny objectives:\n"
-            for indice, value in self.objectives.items():
-                for obj in value:
-                    output += "indice " + str(indice) + ": " + obj["measure"][0] + " "  + obj["measure"][1].__name__ + " value of " + str(obj["measured"]) + "\n"
-            output += "Final difference: " + str(result.fun) + "\n"
-            output += "\nTotal time: " + str(endTime-startTime) + " s\n"
-            output +="Total iterations: " + str(self.iterationTrack) + "\n"
-            print(output)
+        if result.x is not None:
+            # print out new values for each beam segment's attribute
+            output = "\nx variables:"
+            for indice in self.segmentVar:
+                    variable = self.segmentVar.get(indice)[0]
+                    index = self.variablesToOptimize.index(variable)
+                    yFunc = self.segmentVar.get(indice)[2]
+                    newVal = yFunc(result.x[index])
+                    segAttr = self.segmentVar.get(indice)[1]
+                    setattr(self.beamline[indice], segAttr, newVal)
+                    if printResults:
+                        output += "\nindice " + str(indice) + " new " + segAttr + " value: " + str(newVal)
+            if printResults:
+                output += "\n\ny objectives:\n"
+                for indice, value in self.objectives.items():
+                    for obj in value:
+                        output += "indice " + str(indice) + ": " + obj["measure"][0] + " "  + obj["measure"][1].__name__ + " value of " + str(obj["measured"]) + "\n"
+                output += "Final difference: " + str(result.fun) + "\n"
+                output += "\nTotal time: " + str(endTime-startTime) + " s\n"
+                output +="Total iterations: " + str(self.iterationTrack) + "\n"
+                print(output)
+        else:
+            # Multi-objective: Pareto front available in result.pareto_front
+            if printResults:
+                print("Multi-objective optimization complete. Pareto front available in result.")
+                print(f"Total time: {endTime-startTime} s")
+                print(f"Total iterations: {self.iterationTrack}")
 
         # Plot the progress of y objectives and x variables as a function of iterations
         if plotProgress:
@@ -293,75 +302,3 @@ class beamOptimizer():
 
         return result
    
-    def testSpeed(self, iterations):
-        '''
-        Test the speed of an optimization algorithm (more iterations = more accurate)
-
-        Parameters
-        ----------
-        iterations: float
-            Number of times to run calc() function with 
-
-        Returns
-        -------
-        timeResult: float
-            average number of seconds to execute calc() function once
-        '''
-        timeResult = (timeit.timeit(self.calc,number = iterations))/iterations
-        return timeResult
-    
-    def testFuncEval(self, iterations):
-        '''
-        Test the number of function evalutions an optimization algorithm performs (more iterations = more accurate)
-
-        Parameters
-        ----------
-        iterations: float
-            Number of times to run calc() function with 
-
-        Returns
-        -------
-        timeResult: float
-            average number of function evalutions per calc() call
-        evalType: str
-            type of evaluation that is being returned
-        '''
-        iterationsTotal = 0
-        evalType = ''
-        for i in range(iterations):
-            result = self.calc()
-            try: 
-                iterationsTotal += result.nfev
-                evalType = "# of function evaluations"
-            except AttributeError: 
-                try: 
-                    iterationsTotal += result.njev
-                    evalType = "# of Jacobian evaluations"
-                except AttributeError: 
-                    iterationsTotal += result.nhev
-                    evalType = "# of Hessian evaluations"
-        return iterationsTotal/iterations, evalType   
-        
-    def testFuncIt(self, iterations):
-        '''
-        Test the number of iterations of an optimization algorithm (more iterations = more accurate)
-
-        Parameters
-        ----------
-        iterations: float
-            Number of times to run calc() function with 
-        
-        Returns
-        -------
-        avIterate: float
-            average number of function iterations per calc() call
-        '''
-        iterationsTotal = 0
-        for i in range(iterations):
-            result = self.calc()
-            try: iterationsTotal += result.nit
-            except AttributeError: 
-                raise AttributeError("algorithm does not track iterations")
-        avIterate = iterationsTotal/iterations   
-        return avIterate
-    

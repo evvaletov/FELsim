@@ -555,17 +555,31 @@
   - Results: `results/rftrack_opt/`
   - TODO: Run full comparison at ε_n = 5, 8, 14 with 5 restarts.
 
-### C3. Field Map Scaling for MGE Dipoles [FIX APPLIED 2026-02-22]
-- **Root cause:** The Mathematica notebook (`fields/calculation/UH_chicane_fringe.nb`)
-  applied an erroneous 0.835× momentum scaling (P/P_45) during fieldmap generation,
-  and set DELTAS=0.0 instead of 0.001 m.
-- **Fix:** DELTAS corrected to 0.001 m; all 201 field values multiplied by
-  1/0.8351818473537908. Peak field now 0.5307 T, matching the source CSV
-  (`fields/calculation/UH_chicane_fringe.csv`). Fieldmap length = 200 × 0.001 = 0.2 m.
-- **TODO:** Re-run COSY optimization with MGE (FR 3) using the corrected fieldmap.
-  This is the most physically accurate dipole model and was previously blocked.
-- **Files:** `fields/chicane_dipole_fieldmap.dat`, `fields/calculation/chicane_dipole_fieldmap.dat`,
-  `cosySimulator.py:113-117` (MGE parameters), `cosySimulator.py:1254-1279` (MGE FOX generation)
+### C3. FR3+MGE Optimization [IN PROGRESS — CMA-ES v2 on Koa]
+- **Fieldmap fix (2026-02-22):** DELTAS 0→0.001, removed 0.835× scaling. Peak field
+  now 0.5307 T matching source CSV.
+- **COSY FIT attempts (2026-03-07/08):**
+  1. Graduated chain FR1→FR2→FR3→FR3+MGE: Steps 1-2 succeed (MSE<1e-6), Step 3
+     (FR3+MGE) fails — Stage 11 diverges (MSE=8.9e10).
+  2. Direct FR1→FR3+MGE: same failure (MSE=6.4e12).
+  3. Stage-11-only with FR3 upstream: 2D parameter scan shows NO stable solutions
+     exist with fixed Stages 1-10 under MGE.
+  4. Koa warm-start (MSE=1030→FIT): Stages 1-10 FIT re-optimized to different values,
+     destroying Koa's global consistency → Stage 11 diverged (S11_Ic=-8.67 A,
+     MSE=6.0e12).
+- **Root cause:** Sequential FIT cannot solve FR3+MGE. The stability island for all
+  23 variables is far from the per-stage local optima. DA gradients work within a
+  stage but the sequential decomposition loses global coupling.
+- **CMA-ES v1 (Koa job 11427816, 2026-03-07):** 10,020 evals, sigma=2→0.5,
+  bounds 0-10 for some vars. MSE=1030 (cos_mu≈1.03, barely unstable). Warm-start
+  refinement at any sigma (0.01-0.1) fails — stability boundary too steep.
+  Result: `test/results/koa_cosy_mge_result.json`
+- **CMA-ES v2 (Koa job 11451841, submitted 2026-03-08):** 50,000 evals, sigma=0.5,
+  all bounds [-10,10], BIPOP restarts ×9, warm-start from v1 MSE=1030.
+  Est. runtime: ~89 hours (~4 days). Script: `test/koa_cosy_mge_opt.py`
+- **Files:** `fields/chicane_dipole_fieldmap.dat`, `test/koa_cosy_mge_opt.py`,
+  `test/koa_cosy_mge_opt.slurm`, `test/results/koa_cosy_mge_result.json`,
+  `test/results/koa_cosy_mge_result_indexed.json`
 
 ### C4. Systematic Testing, Validation & Verification [HIGH PRIORITY]
 - **Motivation:** FELsim currently relies on ad-hoc cross-validation studies.
@@ -619,6 +633,7 @@
 
 ## Notes
 
+- **Frontend ownership:** The frontend (`fel-app/`) is developed exclusively by Christian Komo. QA and code changes should focus on the backend. Minor frontend improvements are acceptable, but avoid making extensive changes that step on his work.
 - All optimization scripts use `seed=42` for reproducibility
 - NewFELsim conda environment required: `/home/evaletov/.conda/envs/NewFELsim/bin/python`
 - Run commands from `backend/` with `MPLBACKEND=Agg PYTHONPATH=$(pwd)`

@@ -149,6 +149,33 @@ $\phi$ in the y-plane edge kick formula $-\tan(\eta - \phi)/\rho$.  This
 produces a small residual in $\beta_y$ compared to FELsim (which includes
 $\phi$ analytically).
 
+## Cross-Code Agreement (R2)
+
+All three codes independently match the undulator Twiss targets at
+$\varepsilon_n = 8$ after 9 bug fixes across the three adapter layers:
+
+| Code | MSE | $\beta_y$ (m) | Notes |
+|------|-----|---------------|-------|
+| FELsim NM | $1.2 \times 10^{-6}$ | 0.242 | Transfer matrix baseline |
+| COSY FR 0 | $2.3 \times 10^{-7}$ | 0.241 | DA map, no fringe |
+| COSY FR 1 | $3.7 \times 10^{-9}$ | 0.242 | DA map, 1st-order fringe (warm-started) |
+| RF-Track opt | $7.0 \times 10^{-3}$ | 0.055 | Particle tracking; $\beta_y$ limited by missing $\phi$ |
+
+Each code converges to **different quad currents** because the dipole
+models produce different edge kicks. Direct current injection between
+codes fails; each must optimise within its own model. The
+single-dipole $M_{43}$ discrepancy ranges from 4% (transport dipoles)
+to 20% (FC1 chicane) depending on bending angle and fringe setting.
+
+Key bug fixes enabling agreement:
+- FELsim: DPW edge-kick sign ($R = L/|\theta|$)
+- RF-Track: SBend P/$\delta$ workaround, edge-kick sign, DPW model,
+  coordinate conversion (C7)
+- COSY: initial Twiss from beam distribution, combined MSE objective,
+  warm-starting for FR 1
+
+Report: `reports/2026/Mar/04/R2_unified_comparison_report.pdf`
+
 ## When to Use Each Code
 
 | Scenario | Recommended Code |

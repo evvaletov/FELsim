@@ -1,146 +1,100 @@
-# test_felsim_unified.py
 """
 Test unified plotting with FELsim adapter using the real beamline from Excel.
 Limited to first N elements to avoid numerical instabilities.
-"""
-import sys
-#import os
-#sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from pathlib import Path
+Author: Eremey Valetov
+"""
 import numpy as np
+import pytest
+from pathlib import Path
+
+from felsimAdapter import FELsimAdapter
+from evolutionPlotter import EvolutionPlotter
+from ebeam import beam
 
 EXCEL_PATH = Path("../../beam_excel/Beamline_elements.xlsx")
 MAX_ELEMENTS = 50
 BEAM_ENERGY_MEV = 45.0
 
-from felsimAdapter import FELsimAdapter
-from evolutionPlotter import EvolutionPlotter
 
-
-def load_real_beamline_limited():
+def _load_beamline(max_elements=MAX_ELEMENTS):
     if not EXCEL_PATH.exists():
-        raise FileNotFoundError(f"Excel file not found: {EXCEL_PATH}")
-
-    print(f"Loading beamline from {EXCEL_PATH.name}")
-
+        pytest.skip(f"Excel file not found: {EXCEL_PATH}")
     temp_sim = FELsimAdapter(excel_path=str(EXCEL_PATH))
     temp_sim.set_beam_energy(BEAM_ENERGY_MEV)
-
-    full_beamline = temp_sim.get_native_beamline()
-    limited = full_beamline[:MAX_ELEMENTS]
-
-    cumulative = 0.0
-    for i, el in enumerate(limited):
-        l = getattr(el, 'length', 0)
-        cumulative += l
-        print(f"{i:3d}: {type(el).__name__:15s}  L={l:.6f} m  cumulative={cumulative:.4f} m")
-
-    total_l = sum(el.length for el in limited)
-    print(f"Using {MAX_ELEMENTS}/{len(full_beamline)} elements, total length: {total_l:.4f} m")
-
+    limited = temp_sim.get_native_beamline()[:max_elements]
     for el in limited:
         el.setE(BEAM_ENERGY_MEV)
-
     return limited
 
 
-def create_test_particles(n=1000):
-    from ebeam import beam
+def _create_test_particles(n=1000):
     ebeam = beam()
     std_dev = np.array([1.0, 0.1, 1.0, 0.1, 1.0, 0.5])
     return ebeam.gen_6d_gaussian(0, std_dev, n)
 
 
-def test_adapter_collect_evolution():
-    print("\n--- Adapter Evolution Collection ---")
-    beamline = load_real_beamline_limited()
-    particles = create_test_particles(500)
+@pytest.fixture(scope="module")
+def felsim_beamline():
+    return _load_beamline()
 
+
+@pytest.fixture(scope="module")
+def felsim_sim(felsim_beamline):
     sim = FELsimAdapter()
     sim.set_beam_energy(BEAM_ENERGY_MEV)
-    sim._native_beamline = beamline
-
-    evolution = sim.collect_evolution(particles, interval=0.05)
-
-    print(f"Collected {len(evolution.s_positions)} samples over {evolution.total_length:.4f} m")
-    print(f"Snapshots: {len(evolution.particles)}, Twiss calculations: {len(evolution.twiss)}")
-
-    assert len(evolution.s_positions) == len(evolution.particles) == len(evolution.twiss)
-
-    twiss_x = evolution.twiss[evolution.s_positions[0]]['x']
-    required_fields = ['beta', 'alpha', 'gamma', 'emittance', 'dispersion']
-    assert all(f in twiss_x for f in required_fields)
-
-    return evolution
+    sim._native_beamline = felsim_beamline
+    return sim
 
 
-def test_twiss_dataframe(evolution):
-    print("\n--- DataFrame Export ---")
-    df = evolution.get_twiss_evolution()
-    print(f"Shape: {df.shape}")
-    print(f"s ∈ [{df['s'].min():.4f}, {df['s'].max():.4f}] m")
-    print(f"βx ∈ [{df['beta_x'].min():.3f}, {df['beta_x'].max():.3f}] m")
-    print(f"Envelope_x ∈ [{df['envelope_x'].min():.3f}, {df['envelope_x'].max():.3f}] mm")
-
-    assert 'dispersion_x' in df.columns
-    return df
+@pytest.fixture(scope="module")
+def felsim_particles():
+    return _create_test_particles(500)
 
 
-def test_plotter(evolution):
-    print("\n--- Plotting ---")
-    plotter = EvolutionPlotter(axis_mode='local')
-    plotter.plot(
-        evolution,
-        show_phase_space=True,
-        show_envelope=True,
-        show_schematic=True,
-        interactive=True,
-        scatter=False
-    )
+@pytest.fixture(scope="module")
+def felsim_evolution(felsim_sim, felsim_particles):
+    return felsim_sim.collect_evolution(felsim_particles.copy(), interval=0.05)
 
 
-def test_axis_modes():
-    print("\n--- Axis Mode Comparison ---")
-    beamline = load_real_beamline_limited()
-    particles = create_test_particles(1000)
+class TestFELsimEvolution:
+    def test_evolution_collection(self, felsim_evolution):
+        ev = felsim_evolution
+        assert len(ev.s_positions) > 0
+        assert len(ev.s_positions) == len(ev.particles)
+        assert len(ev.s_positions) == len(ev.twiss)
 
-    sim = FELsimAdapter()
-    sim._native_beamline = beamline
-    sim.beam_energy = BEAM_ENERGY_MEV
+    def test_twiss_fields(self, felsim_evolution):
+        ev = felsim_evolution
+        s0 = ev.s_positions[0]
+        twiss_x = ev.twiss[s0]['x']
+        for field in ['beta', 'alpha', 'gamma', 'emittance', 'dispersion']:
+            assert field in twiss_x, f"Missing Twiss field: {field}"
 
-    ev = sim.collect_evolution(particles, interval=0.03)
-
-    print("Local axis mode (per-slice adaptation)...")
-    EvolutionPlotter(axis_mode='local').plot(ev)
-
-    print("Global axis mode (fixed scale)...")
-    EvolutionPlotter(axis_mode='global').plot(ev)
-
-
-def run_all_tests():
-    evolution = test_adapter_collect_evolution()
-    test_twiss_dataframe(evolution)
-    test_plotter(evolution)
-    print("\nTests completed.")
+    def test_twiss_dataframe(self, felsim_evolution):
+        df = felsim_evolution.get_twiss_evolution()
+        assert df.shape[0] > 0
+        assert 's' in df.columns
+        assert 'beta_x' in df.columns
+        assert 'dispersion_x' in df.columns
+        assert df['beta_x'].min() >= 0
 
 
-if __name__ == "__main__":
-    import argparse
+@pytest.mark.visual
+class TestFELsimPlotting:
+    def test_plotter(self, felsim_evolution):
+        plotter = EvolutionPlotter(axis_mode='local')
+        plotter.plot(
+            felsim_evolution,
+            show_phase_space=True,
+            show_envelope=True,
+            show_schematic=True,
+            interactive=True,
+            scatter=False
+        )
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--full', action='store_true',
-                        help="Use full beamline (may be numerically unstable)")
-    parser.add_argument('--max', type=int, default=20,
-                        help="Maximum number of elements")
-    args = parser.parse_args()
-
-    if args.full:
-        MAX_ELEMENTS = 999
-    else:
-        MAX_ELEMENTS = args.max
-
-    if args.full or '--axis-modes' in sys.argv:
-        test_axis_modes()
-    else:
-        run_all_tests()
+    def test_axis_modes(self, felsim_sim):
+        particles = _create_test_particles(1000)
+        ev = felsim_sim.collect_evolution(particles, interval=0.03)
+        EvolutionPlotter(axis_mode='local').plot(ev)
+        EvolutionPlotter(axis_mode='global').plot(ev)

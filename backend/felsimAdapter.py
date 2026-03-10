@@ -85,7 +85,7 @@ class FELsimAdapter(SimulatorBase):
         # Track through beamline
         current = particles.copy()
         for seg in self._native_beamline:
-            current = np.array(seg.useMatrice(current))
+            current = seg.useMatrice(current)
 
         # Calculate final Twiss
         _, _, twiss_df = self._ebeam.cal_twiss(current, ddof=1)

@@ -416,6 +416,8 @@ class draw_beamline:
                                                   show_schematic, curved_trajectory)
 
         if apiCall:
+            if not rendering:
+                return {'twiss': twiss_aggregated_df, 'x_axis': x_axis}, None
             lineAxElements = {'axis': ax5,
                               'twiss': twiss_aggregated_df,
                               'x_axis': x_axis,
@@ -465,7 +467,7 @@ class draw_beamline:
 
         for i in range(0, 2):
             axis = twiss_aggregated_df.index[i]
-            envelope = np.array(twiss_aggregated_df.at[axis, twiss_aggregated_df.keys()[7]])
+            envelope = np.array(twiss_aggregated_df.at[axis, r"Envelope $E$ (mm)"])
             ax5.plot(x_axis, envelope,
                      color=colors[i], linestyle='-',
                      label=r'$E_' + axis + '$ (mm)')
@@ -497,7 +499,7 @@ class draw_beamline:
         ax6 = ax5.twinx()
         for i in range(0, 2):
             axis = twiss_aggregated_df.index[i]
-            dispersion = np.array(twiss_aggregated_df.at[axis, twiss_aggregated_df.keys()[4]])
+            dispersion = np.array(twiss_aggregated_df.at[axis, r"$D$ (m)"])
             line, = ax6.plot(x_axis, dispersion,
                              color=colors[i], linestyle='--',
                              label=r'$D_' + axis + '$ (m)')
@@ -1043,6 +1045,7 @@ class draw_beamline:
                 plt.tight_layout()
 
                 axesDict.update({index: ax1})
+                plt.close(fig)
             deadFig, ax5 = plt.subplots(figsize=(10, 1))
             lineList, ax6, m = self.createLinePlot(ax5, twiss_aggregated_df, x_axis, spacing, showIndice,
                                                    beamSegments, show_schematic, curved_trajectory)
