@@ -297,7 +297,7 @@ class beamOptimizer():
         # Plot beam simulation with new values
         if plotBeam:
             schem = draw_beamline()
-            tempPart = self.matrixVariables
+            tempPart = self.matrixVariables.copy()
             schem.plotBeamPositionTransform(tempPart, self.beamline)
 
         return result

@@ -1335,6 +1335,7 @@ class RFTrackAdapter(SimulatorBase):
 
             # Dispersion and dispersion-corrected emittance
             dispersion = dispersion_prime = 0.0
+            disp_corrected = False
             if particles.shape[1] > 5:
                 delta = particles[:, 5]
                 var_delta = np.var(delta, ddof=1)
@@ -1345,6 +1346,7 @@ class RFTrackAdapter(SimulatorBase):
                     sig_xp2_corr = sig_xp2 - dispersion_prime**2 * var_delta
                     sig_xxp_corr = sig_xxp - dispersion * dispersion_prime * var_delta
                     emit_sq = max(0, sig_x2_corr * sig_xp2_corr - sig_xxp_corr**2)
+                    disp_corrected = True
                 else:
                     emit_sq = sig_x2 * sig_xp2 - sig_xxp**2
             else:
@@ -1352,9 +1354,13 @@ class RFTrackAdapter(SimulatorBase):
             emittance = np.sqrt(max(0, emit_sq))  # π·mm·mrad
 
             if emittance > 0:
-                beta = sig_x2 / emittance
-                alpha = -sig_xxp / emittance
-                gamma = sig_xp2 / emittance
+                # Use corrected moments when dispersion correction was applied
+                s_x2 = sig_x2_corr if disp_corrected else sig_x2
+                s_xp2 = sig_xp2_corr if disp_corrected else sig_xp2
+                s_xxp = sig_xxp_corr if disp_corrected else sig_xxp
+                beta = s_x2 / emittance
+                alpha = -s_xxp / emittance
+                gamma = s_xp2 / emittance
                 if beta > 1e6:
                     self.logger.warning(f"Unphysical beta_{plane} = {beta:.1e} m — beam may be mismatched")
             else:

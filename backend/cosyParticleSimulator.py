@@ -97,9 +97,8 @@ class COSYParticleSimulator(COSYSimulator):
             particles = np.random.normal(mean, std_dev, size=(num_particles, 6))
 
             if energy_chirp != 0:
-                T_RF = 1.0 / self.f
                 tof_dist = particles[:, 4] * 1e-3 / self.f
-                particles[:, 5] += energy_chirp * tof_dist
+                particles[:, 5] += energy_chirp * tof_dist * 1e3
 
         else:
             # Beam physics calculation

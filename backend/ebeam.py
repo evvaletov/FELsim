@@ -766,7 +766,6 @@ class beam:
             beta = float(params['beta'])
             epsilon = float(params['epsilon'])
             phi = float(params['phi'])
-            print(f"Generating covariance for plane {plane} with alpha={alpha}, beta={beta}, epsilon={epsilon}, phi={phi}")
             cov2d = self.twiss_to_cov(alpha, beta, epsilon)
             cov2d_rot = self.rotate_cov(cov2d, phi)
             cov_blocks.append(cov2d_rot)

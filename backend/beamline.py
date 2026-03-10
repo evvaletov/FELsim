@@ -137,7 +137,7 @@ class lattice:
                         seg.setMQE(m_i, q_i, meV)
                         seg.setE(kineticE)
                     return beamSegments
-            except:
+            except (KeyError, ValueError, TypeError):
                 raise TypeError("Invalid particle type/isotope")
 
     def getSymbolicMatrice(self, **kwargs):

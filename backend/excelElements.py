@@ -1,9 +1,12 @@
+import logging
 import pandas as pd
 import numpy as np
 import os
 from typing import Optional, List
-from beamline import (driftLattice, qpfLattice, qpdLattice, 
+from beamline import (driftLattice, qpfLattice, qpdLattice,
                      dipole, dipole_wedge)
+
+logger = logging.getLogger(__name__)
 
 
 class ExcelElements:
@@ -126,8 +129,8 @@ class ExcelElements:
                                             dipole_length=curvature, dipole_angle=angle,
                                             pole_gap=pole_gap, enge_fct=enge_fct, name=label))
             else:
-                # Generic drift for undefined elements
                 if (not z_end - z_sta == 0) and (not np.isnan(z_sta)) and (not np.isnan(z_end)):
+                    logger.warning(f"Unknown element type '{element}' at {label} — treating as drift")
                     beamline.append(driftLattice(z_end - z_sta, name=label))
             
             if not np.isnan(z_end):
