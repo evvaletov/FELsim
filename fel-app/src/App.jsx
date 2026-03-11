@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import './App.css';
 import Dropdown from './components/Dropdown/Dropdown';
 import DropdownItem from './components/DropdownItem/DropdownItem';
@@ -14,7 +14,7 @@ import 'rsuite/dist/rsuite.min.css';
 import ActionCell from './components/ActionCell/ActionCell';
 import EditableCell from './components/EditableCell/EditableCell';
 import NormalCell from './components/NormalCell/NormalCell';
-import { Col, Row, Card, Overlay } from 'react-bootstrap';
+import { Col, Row, Card, Overlay, Button } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Modal } from 'react-responsive-modal';
 import 'react-responsive-modal/styles.css';
@@ -23,11 +23,14 @@ import { PRIVATEVARS, API_ROUTE, TWISS_OPTIONS } from './constants';
 import { Mosaic } from 'react-loading-indicators';
 import BeamSettings from './components/BeamSettings/BeamSettings';
 import ParticleSettings from './components/ParticleSettings/ParticleSettings';
+import PlotMenu from './components/PlotMenu/PlotMenu';
+import GoToSPosition from './components/GoToSPosition/GoToSPosition';
+import SimulationModel from './components/SimulationModel/SimulationModel';
 
 function App()
 {
     console.log(API_ROUTE);
-    const [beamSegmentInfo, setData] = useState(null);
+    const [beamSegmentInfo, setBeamSegmentInfo] = useState(null);
     const [dotGraphs, setDotGraphs] = useState([]);
     const [lineGraph, setLineGraph] = useState(null);
     const [beamlistSelected, setSelectedItems] = useState([]);
@@ -58,7 +61,7 @@ function App()
             sigma_y: {x: 0, y: 0, z: 0},
         }
     );
-    const [beamSetup, setBeamSetup] = useState("twiss");
+    const [beamSetup, setBeamSetup] = useState("base_dist");
     const [showGraphSettings, setShowGraphSettings] = useState(false);
     const [graphTarget, setTarget] = useState(null);
 
@@ -90,7 +93,16 @@ function App()
 
     useEffect(() => {
         if (!showError) return ;
-        const timer = setTimeout(() => setError(false), 4000);
+        const timer = setTimeout(() => {
+            setError(false);
+            
+            const secondTimer = setTimeout(() => {
+                setErrorMessage('');
+            }, 300);
+
+            // cleanup inner timer
+            return () => clearTimeout(secondTimer);
+        }, 4000);
         return () => clearTimeout(timer); 
     }, [showError]);
 
@@ -101,7 +113,7 @@ function App()
     useEffect(() => {
         fetch(API_ROUTE + '/beamsegmentinfo')
             .then((response) => response.json())
-            .then((json) => setData(json))
+            .then((json) => setBeamSegmentInfo(json))
             .catch((err) => console.error("Error loading beam segment info:", err));
         }, []);
     //console.log(beamSegmentInfo);
@@ -145,9 +157,7 @@ function App()
     const setSelectedItemsHandler = (segList) => {
         console.log("segList from excel:", segList);
         const cleanedSegList = segList.map((segment) => {
-            const name = Object.keys(segment)[0];             
-            return handleSegmentColor({ "name": name,
-                                        ...segment[name]});
+            return handleSegmentColor(segment);
         });
         beamlistHandler(cleanedSegList);
     };
@@ -210,7 +220,6 @@ function App()
         const beamObj = handleSegmentColor({[item]: structuredClone(beamSegmentInfo[item])});
         const cleanedObj = {"name": item,
                             ...beamObj[item]};
-        console.log('cleanedObj', cleanedObj);
         const insertIndice = selectedRowId !== null ? selectedRowId : beamlistSelected.length;
         const updatedList = [...beamlistSelected.slice(0, insertIndice), cleanedObj, ...beamlistSelected.slice(insertIndice)];
         setSelectedRowId((id) => id === null ? null : id + 1);
@@ -272,7 +281,8 @@ function App()
             const lineAx = lineAxObj['axis'];
 
             handleTwiss(JSON.parse(lineAxObj['twiss']), lineAxObj['x_axis']);
-
+            
+            //  Must use map to maintain key consistency
             const cleanResult = new Map(
                 Object.entries(result).map(([key, value]) => [
                     parseFloat(key),
@@ -334,12 +344,40 @@ function App()
             setBeamSetup("twiss");
         }
         else if (data.beam_setup === "base_dist") {
-            
             setBeamSetup("base_dist");
         }
         else if (data.beam_setup === "import") {
             setBeamSetup("import");
         }
+    };
+
+    const SaveFig = () => {
+        if (!dotGraphs || dotGraphs.length === 0 || !dotGraphs.get(currentS) || dotGraphs.size === 0) {
+            showErrorWindow("No simulation loaded to save");
+            return;
+        }
+        const link = document.createElement('a');
+        link.href = dotGraphs.get(currentS);
+        link.download = `beam_plot_${currentS}.png`; // or any filename
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const goToSPos = (data) => {
+        setSelectedMenu(null);
+        if (!dotGraphs || dotGraphs.size === 0 || dotGraphs.length === 0) { showErrorWindow("No simulation loaded"); return; }
+        const target = data.s_pos;
+        if (dotGraphs.get(target)) {
+             setSValue(target);
+             return;
+        };
+
+        const arr = Array.from(dotGraphs.keys());
+        const closestS = arr.reduce((prev, curr) =>
+            Math.abs(curr - target) < Math.abs(prev - target) ? curr : prev
+        );
+        setSValue(closestS);
     };
       
     return (
@@ -393,14 +431,33 @@ function App()
                 submitHelper={ParticleSettingsSubmitHelper}
                 twissValues={twissValues}
                 base_distribution={base_distribution}
+                beamSetup={beamSetup}
+            />
+        </Modal>
+        <Modal
+            open={selectedMenu === 'simulationModel'} 
+            onClose={() => setSelectedMenu(null)} 
+            center
+        >
+            <SimulationModel></SimulationModel>
+        </Modal>
+        <Modal
+            open={selectedMenu === 's_pos_select'}
+            onClose={() => setSelectedMenu(null)}
+            center
+        >
+            <GoToSPosition
+                goToSPos={goToSPos}
             />
         </Modal>
         <div className="layout">
         <FloatingInfoButton /> 
         <div className={`sidebar`}>
             <h2>FEL simulator</h2>
-            <div>
-                <Dropdown buttonText="Add Segment" 
+            <Row>
+                <Col>
+                    <Dropdown 
+                        buttonText="Add Segment" 
                         contentText={
                             <>
                                 {items.map((item) => (
@@ -413,14 +470,16 @@ function App()
                                 ))}
                             </>
                         }
-                />
-                <button
-                    type="button"
-                    className="simButton"
-                    onClick={() => getBeamline(beamlistSelected)}>
-                    Simulate
-                </button>
-            </div>
+                    />
+                    <Button
+                        onClick={() => getBeamline(beamlistSelected)}
+                        variant="light"
+                        className="rounded-0 fw-bold border border-dark"
+                    >
+                        Simulate
+                    </Button>
+                </Col>
+            </Row>
             <h4>Beam setup</h4>
             <div className="scrollBox">
                 {/* ALLOW EDITTING OF ALL PARAMETERS LATER ON */}
@@ -433,7 +492,9 @@ function App()
                             } else 
                             setSelectedRowId(rowData.id)
                         }}
-                        rowClassName={rowData => rowData?.id === selectedRowId ? 'highlight-row' : ''}
+                        rowClassName={rowData =>
+                            `${rowData?.id === selectedRowId ? 'highlight-row' : ''} table-hover-row`
+                        }
                         >
                     <Column flexGrow={1} fullText>
                         <HeaderCell>Name</HeaderCell>
@@ -485,7 +546,7 @@ function App()
                 </Row>
                 <Row className="mb-3 g-0">
                     <button className="menu-button" onClick={() => setSelectedMenu("parameterGraphing")}>
-                        <i class="fa-solid fa-chart-area"></i>
+                        <i className="fa-solid fa-chart-area"></i>
                     </button>
                 </Row>
                 <Row className="mb-3 g-0">
@@ -496,6 +557,16 @@ function App()
                             }}
                         >
                         <i className="fas fa-atom"></i>
+                    </button>
+                </Row> 
+                <Row className="mb-3 g-0">
+                    <button 
+                        className="menu-button" 
+                        onClick={() => {
+                            setSelectedMenu("simulationModel");
+                            }}
+                    >
+                       <i class="fa-solid fa-network-wired"></i>
                     </button>
                 </Row> 
                 <Row className="g-0 mt-auto mb-3">
@@ -557,36 +628,26 @@ function App()
             )}
             </Overlay>
         </div>
-        {/* <div className="beamSettings">
-            <BeamSettings
+        <div className="main-content h-100 d-flex justify-content-center align-items-center">
+            <PlotMenu 
+                saveFig={SaveFig}
                 setSelectedMenu={setSelectedMenu}
-                excelToAPI={excelToAPI}
-                setBeamInput={setBeamInput}
-                currentBeamType={currentBeamType}
-                setBeamtypeToPass={setBeamtypeToPass}
-                beamtypeToPass={beamtypeToPass}
-                numOfParticles={numOfParticles}
-                setParticleNum={setParticleNum}
-                sInterval={sInterval}
-                setSInterval={setSInterval}
             />
-         </div>  */}
-          <div className="main-content h-100 d-flex justify-content-center align-items-center">
             {loading ? <Mosaic color="#000000" size="small" text="Loading" textColor="#000000" />
             :
             (dotGraphs.size > 0 ? <img src={dotGraphs.get(currentS)}/> : <h1>No simulation loaded</h1>)
             }
-          </div>
-          <div className="twiss-graph">
-                <LineGraph twissData={twissDf}
-                           setSValue={setSValue} 
-                           beamline={beamlistSelected}
-                           totalLen={totalLen}
-                           twissAxis={currentTwissParam}
-                           scroll={scroll}
-                           setScroll={setScroll}>
-                </LineGraph>
-          </div>
+        </div>
+        <div className="twiss-graph">
+            <LineGraph 
+            twissData={twissDf}
+            setSValue={setSValue} 
+            beamline={beamlistSelected}
+            totalLen={totalLen}
+            twissAxis={currentTwissParam}
+            scroll={scroll}
+            setScroll={setScroll} />
+        </div>
         </div>
         </>
     );

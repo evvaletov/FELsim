@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Body, HTTPException, APIRouter
-from pydantic import BaseModel
-from typing import Any, Callable, Dict, List, Optional
+from pydantic import BaseModel, ValidationError
+from typing import Any, Callable, Dict, List, Optional, Union
+from ApiSchemas import ExcelBeamlineElement, BeamSegmentsInfo
 from ebeam import beam
 from beamline import *
 from schematic import *
@@ -28,7 +29,6 @@ load_dotenv('../.env')  # Only during dev testing when not using Dockerfile...
 FRONTEND_PORT = os.getenv('FRONTEND_PORT', '5173')
 
 ORIGINS = [f'http://localhost:{FRONTEND_PORT}', f"localhost:{FRONTEND_PORT}"]
-#ORIGINS = ["http://localhost:5173", "localhost:5173"]
 moduleName = 'beamline'
 
 ALLOWED_BEAMLINE_CLASSES = {'driftLattice', 'qpfLattice', 'qpdLattice', 'dipole', 'dipole_wedge', 'lattice'}
@@ -87,14 +87,14 @@ class GraphParameters(BaseModel):
     target_parameter: str
     target_s_pos: float
     beamline_data: list[BeamlineInfo]
-    min: int | float = 0
-    max: int | float = 10
-    custom_step: int | float = 1
+    min: Union[int, float] = 0
+    max: Union[int, float] = 10
+    custom_step: Union[int, float] = 1
 
 class GraphPlotPointResponse(BaseModel):
-    x: float | None
-    y: float | None
-    z: float | None
+    x: Optional[float]
+    y: Optional[float]
+    z: Optional[float]
     twiss_parameter: str
 
 class GraphPlotData(BaseModel):
@@ -411,12 +411,15 @@ async def glyfada_status():
 
 # ---------------------------------------------------------------------------
 
-app = FastAPI()
-ebeam = beam()  # Shared instance is safe: gen_6d_gaussian/gen_6d_from_twiss are stateless
-
-# Attach glyfada state and register router
-glyfada_router.state = _GlyfadaState()
-app.include_router(glyfada_router)
+app = FastAPI(
+    title="FEL Simulation API",
+    version="1.0.0",
+    contact={
+        "name": "Christian Komo",
+        "email": "komochristian@gmail.com",
+    },
+)
+ebeam = beam()
 # Allow requests from your frontend (CORS!)
 app.add_middleware(
     CORSMiddleware,
@@ -426,12 +429,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+glyfada_router.state = _GlyfadaState()
+app.include_router(glyfada_router)
+
 def getPngObjFromBeamList(beamlist, plotParams: PlottingParameters):
+    """
+    Generates beamline simulation and returns base64 encoded images and twiss data.
+
+    Parameters
+    ----------
+    - beamlist: List of beamline segments
+    - plotParams: Object containing beamline and simulation parameters
+
+    Returns
+    -------
+    - pngObject: Object containing base64 encoded particle plot images and twiss data
+    """
     beam_dist = None
-    print(plotParams.beam_setup)
+    # print(plotParams.beam_setup)
     if plotParams.beam_setup == 'twiss': beam_dist = ebeam.gen_6d_from_twiss(plotParams.twiss.model_dump(), plotParams.num_particles)
     else: beam_dist = ebeam.gen_6d_gaussian(0,[1,1,1,1,0.1,100], plotParams.num_particles)
     schem = draw_beamline()
+    schem.DEFAULTINTERVALROUND = 10
     axList, lineAxObj = schem.plotBeamPositionTransform(beam_dist, beamlist, plot=False, apiCall=True, scatter=True, interval=plotParams.interval)
     fig = lineAxObj['axis'].figure
     buf = io.BytesIO()
@@ -453,13 +472,7 @@ def getPngObjFromBeamList(beamlist, plotParams: PlottingParameters):
         images.update({index: img_base64})
      
     lineAxObj['axis'] = lineAx_img
-    print(lineAxObj['twiss'])
     lineAxObj['twiss'] = lineAxObj['twiss'].to_json()
-    beamsegmentJson = []
-    #for segment in lineAxObj['beamsegment']:
-    #    beamsegmentJson.append(segment.__dict__)
-    lineAxObj['beamsegment'] = beamsegmentJson
-    #print(beamsegmentJson)
 
     lineAxObj = LineAxObject(**lineAxObj)
     pngObject = AxesPNGData(**{'images': images, 'line_graph': lineAxObj})
@@ -468,7 +481,7 @@ def getPngObjFromBeamList(beamlist, plotParams: PlottingParameters):
 
 @app.get("/")
 def root():
-    return {"Hello" : "World!"}
+    return {"FEL Beamline Simulation API"}
 
 @app.post("/get-dist")
 def gen_beam(particle_num : int):
@@ -477,9 +490,22 @@ def gen_beam(particle_num : int):
     return beam_dist
 
 @app.post("/excel-to-beamline")
-def excelToBeamline(excelJson: list[Dict[str, Any]]) -> list[dict[str, dict[str, Any]]]:
+def excelToBeamline(excelJson: List[ExcelBeamlineElement]) -> List[BeamSegmentsInfo]:
+    """
+    Takes JSON formatted excel data and returns beamline object
+    **Check Pydantic schema for data format
+
+    Parameters
+    ----------
+    - excelJson: List of beamline elements from excel file
+
+    Returns
+    -------
+    - beamline: List of beamline segments as dictionaries
+    """
     try:
-        excelHandler = ExcelElements(excelJson)
+        excelJson_formatted = [item.model_dump(exclude_none=True, by_alias=True) for item in excelJson]
+        excelHandler = ExcelElements(excelJson_formatted)
         beamlist = excelHandler.create_beamline()
 
         jsonBeamlist = []
@@ -497,14 +523,35 @@ def excelToBeamline(excelJson: list[Dict[str, Any]]) -> list[dict[str, dict[str,
                 paramsDict.update({name: paramVal})
                     
             jsonBeamlist.append({className: paramsDict})
-
-        return jsonBeamlist
+        beamlist_json_fixed = []
+        for item in jsonBeamlist:
+            for key, value in item.items():
+                new_dict = {'name': key}
+                new_dict.update(value)
+                beamlist_json_fixed.append(new_dict)
+        print(beamlist_json_fixed)
+        return beamlist_json_fixed
+    except ValidationError as e:
+        print("Pydantic validation error:", e)
+        return {"error": str(e)}
     except Exception as e:
-        print(e)
+        print("Error: ", e)
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/axes")
 def loadAxes(plotParams: PlottingParameters) -> AxesPNGData:
+    """
+    Endpoint to return results of beamline simulation.
+    Twiss data and particle plot images included.
+
+    Parameters
+    ----------
+    -plotParams: Object containing beamline and simulation parameters
+
+    Returns
+    -------
+    - pngObject: Object containing base64 encoded particle plot images and twiss data
+    """
     try:
         plotParams.num_particles = min(plotParams.num_particles, MAX_PARTICLES)
         beamline = importlib.import_module("beamline")
@@ -523,6 +570,13 @@ def loadAxes(plotParams: PlottingParameters) -> AxesPNGData:
 
 @app.get("/beamsegmentinfo")
 def getBeamSegmentInfo():
+    """
+    Returns most up to date beam segments available for beamline construction
+
+    Returns
+    -------
+    beanSegInfo: Dictionary containing beam segment class names and their parameters with default values
+    """
     module = importlib.import_module(moduleName)
     classes = inspect.getmembers(module, inspect.isclass)
     classes_in_module = [cls for name, cls in classes if cls.__module__ == moduleName and cls.__name__ not in ["Beamline", "lattice"]]
@@ -550,6 +604,17 @@ def getBeamSegmentInfo():
 
 @app.post("/plot-parameters")
 def plot_parameters(graphParams: GraphParameters) -> List[GraphPlotData]:
+    """
+    Returns twiss data as a function of different parameter values of a segment
+
+    Parameters
+    ----------
+    graphParams: Object containing beamline and simulation parameters
+
+    Returns
+    -------
+    plotInfo: List of objects containing twiss data plotted against parameter value
+    """
     LABELMAPPING = {
         r'$\epsilon$ ($\pi$.mm.mrad)': 'emittance',
         r'$\alpha$': 'alpha',
@@ -573,6 +638,8 @@ def plot_parameters(graphParams: GraphParameters) -> List[GraphPlotData]:
 
         schem = draw_beamline()
         ebeam = beam()
+
+        #  TODO: make the user able to configure the particle distribution
         beam_dist = ebeam.gen_6d_gaussian(0,[1,1,1,1,0.1,100], 1000)
 
         # print("Plotting initial beamline up to segment", cleanedBeamlist)
