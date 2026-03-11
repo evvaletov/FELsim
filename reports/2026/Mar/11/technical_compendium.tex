@@ -1,0 +1,569 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{epstopdf}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{enumitem}
+
+\sisetup{
+  separate-uncertainty = true,
+  per-mode = symbol,
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=blue!60!black,
+  urlcolor=blue!60!black,
+}
+
+\title{FELsim Beamline Optimisation:\\
+  Technical Compendium}
+\author{Eremey Valetov}
+\date{11 March 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present a comprehensive summary of the FELsim transport line
+optimisation programme for the UH MkV free electron laser.  The programme
+encompasses 28~completed studies across five categories: parameter
+sensitivity (S1--S9), cross-code validation (C1--C8), optimizer
+improvements (O1--O5), physics model upgrades (P1--P3), and infrastructure
+(I1--I8).  We validated the 11-stage Nelder-Mead optimisation against
+COSY~INFINITY (differential algebra) and RF-Track (particle tracking),
+achieving cross-code MSE agreement to $10^{-6}$--$10^{-9}$.  A two-phase
+NM$\to$CMA-ES polishing strategy improves Stage~11 precision by up to
+$10^{10}\times$.  Chromatic physics (per-particle momentum-dependent
+matrices for quads, dipoles, and edge kicks) and aperture loss tracking
+were integrated into the production optimizer, raising simulated
+transmission from 64.5\% to 98.1\%.  The feasibility boundary is dominated
+by emittance; energy spread and chirp have negligible impact on
+transverse matching at the baseline $\varepsilon_n = 8\;
+\pi\cdot\text{mm}\cdot\text{mrad}$.  The transport line cannot compress
+bunches below $\sim$\SI{0.45}{ps} (limited by $R_{56} \times
+\sigma_\delta$); compression must occur upstream.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+
+%=======================================================================
+\section{Introduction}
+%=======================================================================
+
+The UH Mark~V FEL transport line consists of 118~beamline elements
+(23~quadrupoles, 4~dipole chicane sections, drifts, correctors, and
+diagnostics) that transport a \SI{40}{MeV} electron beam from the linac
+exit to the undulator entrance.  The beam must be matched to the
+undulator Twiss targets specified by Weinberg, Fisher \&
+Li~\cite{weinberg2025}:
+\begin{equation}
+  \beta_x = \SI{1.400}{m},\quad
+  \alpha_x = 0.470,\quad
+  \beta_y = \SI{0.242}{m},\quad
+  \alpha_y = 0.
+  \label{eq:targets}
+\end{equation}
+
+FELsim decomposes this 23-variable matching problem into an 11-stage
+sequential optimisation, where each stage controls a physically motivated
+group of quadrupoles (singlets, doublets, triplets, chromaticity
+sections).  The objective function is the weighted mean squared error
+(MSE) between computed and target Twiss parameters.  Results are reported
+as the root mean square (RMS) $= \sqrt{\text{MSE}}$, which has the same
+units as the Twiss residuals.
+
+This compendium summarises all completed studies, organised by topic
+rather than chronology, and provides cross-references to the detailed
+scripts, reports, and result files.
+
+
+%=======================================================================
+\section{Simulation Framework}
+\label{sec:framework}
+%=======================================================================
+
+\subsection{FELsim (First-Order Transfer Matrices)}
+
+FELsim's native transport model uses $6\times6$ linear transfer matrices
+(\texttt{beamline.py}).  Each element type has an analytical matrix:
+drifts, thick quadrupoles with $\cos$/$\cosh$ focusing, sector-bend
+dipole bodies, and dipole wedges with Enge-function fringe corrections.
+The model evaluates in $\sim$\SI{1}{ms} per beamline, enabling
+$\mathcal{O}(10^4)$ optimizer evaluations per study.
+
+\paragraph{Chromatic extensions (P1--P3).}
+All elements support an opt-in \texttt{chromatic=True} mode that computes
+per-particle momentum-dependent matrices:
+\begin{itemize}[nosep]
+  \item \textbf{Quadrupoles (C8):} $k_\text{eff} = k_0 \times
+    \beta\gamma_0 / \beta\gamma(\delta)$, matching RF-Track's intrinsic
+    momentum scaling to 0.00\% across all Twiss parameters.
+  \item \textbf{Dipole body (P3):} Per-particle $\rho_p = \rho_0 \times
+    \beta\gamma_p / \beta\gamma_0$, $\theta_p = L/\rho_p$.
+  \item \textbf{Dipole wedge (P2):} Momentum-dependent $R$, $\phi$, and
+    edge kicks ($h_p = h_0 \times P_0/P$).
+\end{itemize}
+All chromatic matrices are symplectic ($\det M = 1.0$ to machine
+precision) and vectorised over particles without Python loops.
+
+\paragraph{Aperture loss tracking (P1).}
+Physical apertures are defined per element type: QPF/QPD
+$\pm$\SI{13.5}{mm} (bore), DPH/DPW $\pm$pole\_gap/2.  The optimizer
+integration adds a smooth $W \times (1-T)^2$ penalty to the MSE
+objective when aperture tracking is enabled.
+
+
+\subsection{COSY INFINITY (Differential Algebra)}
+
+COSY~INFINITY computes transfer maps to arbitrary order using
+differential algebra (DA).  The Python adapter (\texttt{cosyAdapter.py})
+generates FOX code, executes the COSY binary, and parses output.
+Quadrupoles are thick \texttt{MQ} elements; dipoles are thick
+\texttt{DIL} with integrated edge angles and optional Enge fringe fields
+(\texttt{FC}/\texttt{FD}) or measured fieldmaps (\texttt{MGE}).  The
+built-in FIT optimizer exploits DA derivatives for gradient-based matching.
+
+
+\subsection{RF-Track (Particle Tracking)}
+
+RF-Track (v2.5.5, CERN) performs element-by-element particle tracking
+with support for space charge.  The adapter (\texttt{rftrackAdapter.py})
+includes an analytical sector-bend workaround for the \texttt{SBend}
+P/$\delta$ bug (C5), thin-lens quadrupole edge kicks for DPW elements,
+and prefix caching for fast Stage~11 re-tracking.
+
+
+\subsection{Multi-Code Orchestrator (I7)}
+
+The \texttt{MultiCodeSimulator} chains multiple adapters on contiguous
+beamline sections, using FELsim coordinates as the interchange format.
+Validated configurations include FELsim$\to$RF-Track, FELsim$\to$COSY,
+COSY$\to$RF-Track, and three-way FELsim$\to$COSY$\to$RF-Track hybrids.
+
+
+%=======================================================================
+\section{Transverse Beam Matching}
+\label{sec:transverse}
+%=======================================================================
+
+\subsection{Baseline Optimisation (S1, S3)}
+
+The 11-stage Nelder-Mead (NM) optimiser achieves MSE $< 10^{-5}$ at the
+baseline operating point ($\varepsilon_n = 8\;\pi\cdot\text{mm}\cdot\text{mrad}$,
+$\sigma_E = 0.5\%$, $h = 5 \times 10^9\;\text{s}^{-1}$, 0.5~ps bunch).
+The 2~ps (S1) and 0.5~ps (S3) optimisations produce identical quadrupole
+currents, confirming transverse--longitudinal decoupling at first order
+(S9).
+
+\subsection{Cross-Code Validation (W4, C1, R2)}
+
+Table~\ref{tab:xcode} summarises the cross-code comparison at the
+baseline operating point.
+
+\begin{table}[ht]
+\centering
+\caption{Cross-code optimisation at $\varepsilon_n = 8\;
+  \pi\cdot\text{mm}\cdot\text{mrad}$.  Targets:
+  $\beta_x = \SI{1.400}{m}$, $\alpha_x = 0.470$,
+  $\beta_y = \SI{0.242}{m}$, $\alpha_y = 0$.}
+\label{tab:xcode}
+\begin{tabular}{@{} l l S[scientific-notation=true] @{}}
+\toprule
+Code & Model & {MSE} \\
+\midrule
+FELsim NM       & Transfer matrix       & 1.2e-06 \\
+COSY FR\,0      & DA map (no fringe)    & 2.3e-07 \\
+COSY FR\,1      & DA map (1st fringe)   & 3.7e-09 \\
+RF-Track opt    & Particle tracking     & 7.0e-03 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+FELsim and COSY achieve MSEs of $10^{-6}$--$10^{-9}$, matching all four
+Twiss targets to within $10^{-3}$.  COSY's gradient-based DA optimizer
+converges $\sim 10^3\times$ more precisely.  RF-Track's higher MSE
+($7.0 \times 10^{-3}$) reflects a systematic $\beta_y$ deficit from the
+thin-lens edge-kick model (missing triangle-rule fringe correction
+$\phi$), not optimizer limitations.
+
+\paragraph{Bug fixes (R2).}
+Achieving cross-code agreement required identifying and correcting
+9~implementation errors: FELsim DPW edge-kick sign inversion, five
+RF-Track adapter issues (SBend P/$\delta$ confusion, DPW modelling,
+edge-kick sign, R-matrix units, coord5 conversion), and three COSY
+adapter issues (initial $\beta_0$, FIT objective reset, warm-start for
+fringe fields).  See the R2 report for details.
+
+
+\subsection{Algorithm Comparison}
+\label{sec:algorithms}
+
+\paragraph{Nelder-Mead (NM).}
+The baseline optimizer.  Multi-start with 5~random Stage~11 initial
+conditions resolves local minimum traps at extreme emittances
+($\varepsilon_n = 14$--16).
+
+\paragraph{Glyfada (W6).}
+The glyfada evolutionary optimizer (CMA-ES, NSGA-II) via the distributed
+DH evaluator protocol.  At 600~evaluations per run, glyfada fails at all
+three test emittances ($\varepsilon_n = 5, 8, 14$); NM outperforms by
+3--6~orders of magnitude in MSE.  Root cause: uniform random
+initialisation over wide bounds wastes evaluations in infeasible regions.
+
+\paragraph{CMA-ES polishing (W7, O5).}
+pycma CMA-ES warm-started from the NM solution dramatically outperforms
+NM alone:
+
+\begin{table}[ht]
+\centering
+\caption{Two-phase NM$\to$CMA-ES vs NM-only for Stage~11 matching.}
+\label{tab:cmaes}
+\begin{tabular}{@{} l S[scientific-notation=true] S[scientific-notation=true] l @{}}
+\toprule
+$\varepsilon_n$ & {NM MSE} & {CMA-ES MSE} & Improvement \\
+\midrule
+5   & 8.2e-06 & 4.5e-16 & $\sim 10^{10}\times$ \\
+8   & 6.1e-06 & 1.2e-15 & $\sim 10^{9}\times$ \\
+14  & 8.9e-03 & 6.3e-03 & $1.4\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The two-phase strategy was integrated into the production optimizer
+(O5): after NM converges, CMA-ES refines from the NM solution with
+$\sigma = 0.1$, popsize$= 20$, maxfevals $= 3000$.  The composite
+5-goal objective (4~Twiss + dispersion) has a dispersion floor of
+$\sim 2.5 \times 10^{-6}$ that Stage~11 quads cannot reduce.
+
+\paragraph{Stage~11 unimodality (S8).}
+A multi-start robustness study (5~emittance points $\times$
+10~random starts) found that \emph{all} random starts converge to
+identical solutions at machine precision.  The Stage~11 landscape has a
+single global basin; multi-start cannot improve it.  The
+seed-dependence observed at extreme emittances (S7) originates entirely
+from stages~1--10 (random beam generation affecting upstream matching).
+
+\paragraph{Warm-starting (O1).}
+Sequential warm-starting from neighbouring scan points is
+counterproductive: the $\varepsilon_n = 1$ basin (Marginal, RMS
+$\approx 0.108$) traps the optimizer, propagating poor solutions through
+$\varepsilon_n = 2$--13.  Cold start independently finds better basins at
+each point.  Warm-start wins only 4/20~emittance points.
+
+
+%=======================================================================
+\section{Parameter Sensitivity}
+\label{sec:sensitivity}
+%=======================================================================
+
+\subsection{1D Scans (S4)}
+
+Three 1D sweeps at the 0.5~ps operating point (500~particles, seed~42):
+\begin{itemize}[nosep]
+  \item \textbf{Energy spread} ($\sigma_E = 0.1$--5\%): all Excellent
+    ($\text{MSE} < 10^{-3}$) up to $\sigma_E \approx 3\%$.
+  \item \textbf{Chirp} ($h = 0$--$40 \times 10^9$~s$^{-1}$): chirp has
+    negligible effect on transverse matching (all Excellent).
+  \item \textbf{Emittance} ($\varepsilon_n = 1$--20): the dominant
+    sensitivity parameter.  Fails at $\varepsilon_n \leq 2$ (beam too
+    small) and $\varepsilon_n \geq 17$ (requires raised bounds).
+\end{itemize}
+
+\subsection{2D Scans (S5)}
+
+Three $10\times10$ grids (100~points each, 500~particles):
+\begin{itemize}[nosep]
+  \item \textbf{S5a} ($\sigma_E \times h$) at $\varepsilon_n = 8$:
+    0~failures, 92~Excellent.  Energy spread and chirp do not compromise
+    matching.
+  \item \textbf{S5b} ($\sigma_E \times \varepsilon_n$) at $h = 5 \times
+    10^9$: 18~failures at extreme emittances.
+  \item \textbf{S5c} ($h \times \varepsilon_n$) at $\sigma_E = 0.5\%$:
+    20~failures at extreme emittances.  Chirp does not rescue
+    high-emittance failure.
+\end{itemize}
+The feasibility boundary is dominated by emittance.
+
+\subsection{Bunch Length Independence (S6, S9)}
+
+The 2~ps and 0.5~ps operating points produce identical quad currents.
+Root cause: transverse Twiss depends on $\varepsilon$ and $\sigma_\delta$,
+not $\sigma_z$; bunch length enters only column~5 (time of flight), which
+\texttt{cal\_twiss()} ignores.  A 15-point bunch-length sweep
+(\SIrange{0.1}{2.0}{ps}) confirms no degradation at any bunch length.
+
+\subsection{Verification (S7)}
+
+Re-running 7~emittance points and 3~energy-spread points at
+$N = 500, 1000, 2000$ particles reveals:
+\begin{itemize}[nosep]
+  \item Energy spread results are fully consistent across particle counts.
+  \item Emittance results at extremes ($\varepsilon_n \neq 8$) are
+    \emph{not} robust --- different particle samples lead to different NM
+    basins in stages~1--10.  Publication-quality claims at extreme
+    emittances require multi-start + multi-seed statistics.
+\end{itemize}
+
+
+%=======================================================================
+\section{Longitudinal Dynamics}
+\label{sec:longitudinal}
+%=======================================================================
+
+\subsection{Transfer Map Analysis (W9)}
+
+COSY~INFINITY 6D maps yield:
+$R_{56} = \SI{+27.09}{mm}$ (elongates unchirped beams),
+$T_{566} = 0$ (no second-order path-length dependence).
+The transport line is intrinsically non-compressing.
+
+\subsection{Bunch Compression Feasibility (W12)}
+
+Can the transport line compress 2~ps $\to$ 0.5~ps?
+\begin{itemize}[nosep]
+  \item \textbf{Analytical compression}: floor $\approx$~\SI{0.45}{ps}
+    from $R_{56} \times \sigma_\delta$ at $\sigma_E = 0.5\%$.
+  \item \textbf{Chirp}: $C = 4$ chirp gives $\sim$\SI{0.67}{ps}, still
+    above target.
+  \item \textbf{Extended bounds} (15~A, 5~restarts): improves transverse
+    MSE; $\sigma_z$ unchanged.
+  \item \textbf{Conclusion}: the transport line is not a compressor.
+    Compression must occur upstream (velocity bunching or dedicated
+    compressor).
+\end{itemize}
+
+\subsection{$\sigma_z$ Blowup Investigation (I6)}
+
+The 60--100$\times$ longitudinal blowup originally reported was
+\emph{not} reproduced with properly matched optics (MSE $\approx 2.3
+\times 10^{-7}$).  With optimised currents: ORDER~1 gives $\sigma_z =
+\SI{2.264}{ps}$ ($1.13\times$), ORDER~3 gives $\sigma_z =
+\SI{4.158}{ps}$ ($2.08\times$).  The higher-order growth is correct
+physics from nonlinear path-length terms.
+
+
+%=======================================================================
+\section{Chromatic Optimisation}
+\label{sec:chromatic}
+%=======================================================================
+
+Linear-optics matching ignores the momentum dependence of focusing
+strengths.  At $\sigma_p = 0.5\%$, linear FELsim shows $\beta_y$ errors
+up to 1466\% compared with RF-Track's intrinsic chromatic tracking (C8).
+After enabling chromatic mode for all elements (quads, dipole bodies,
+dipole wedges), a three-pass coordinate-descent re-optimisation with
+aperture losses yields:
+\begin{itemize}[nosep]
+  \item MSE $= 4.0 \times 10^{-4}$
+    ($\beta_x = 1.40$, $\alpha_x = 0.44$, $\beta_y = 0.23$,
+    $\alpha_y = 0.03$)
+  \item Transmission $= 98.1\%$ (up from 64.5\% with linear-optimised
+    currents)
+  \item Significant current changes in the chicane region (elements
+    33--43) and downstream quads (70, 87, 93--97)
+\end{itemize}
+
+
+%=======================================================================
+\section{Beam Losses and Throughput}
+\label{sec:losses}
+%=======================================================================
+
+\subsection{Loss Distribution (P1)}
+
+FELsim aperture tracking at the baseline operating point
+(2000~particles, $\sigma_p = 0.5\%$):
+\begin{itemize}[nosep]
+  \item Overall transmission: 64.5\% (with linear-optimised currents)
+  \item Dominant loss: FC1.DPW.111 (element 100, $\pm$\SI{6.3}{mm})
+    --- 395~particles (56\% of losses)
+  \item Chicane exit dipoles (72--73, 89--90): 281~particles
+  \item Quad losses minor: 34~particles total
+\end{itemize}
+
+\subsection{Throughput Optimisation (W11)}
+
+Extending the Stage~11 objective to include transmission and bunch length
+via weighted scalar cost:
+$w_t \cdot \text{MSE}_\text{Twiss} + w_T \cdot (1-T)^2 + w_\sigma
+\cdot (\sigma_t/\sigma_\text{target} - 1)^2$.
+Results (RF-Track with physical apertures):
+\begin{itemize}[nosep]
+  \item 2~ps transport: MSE $= 0.175$, $T = 42.8\%$, $\sigma_t =
+    \SI{1.83}{ps}$, $I_\text{peak} = \SI{5.6}{A}$
+  \item 0.5~ps compression: MSE $= 0.071$, $T = 28.4\%$, $\sigma_t =
+    \SI{1.31}{ps}$ (target 0.5), $I_\text{peak} = \SI{5.2}{A}$
+\end{itemize}
+Compression failed --- $\sigma_t$ target unreachable with Stage~11 quads
+alone, consistent with the W12 feasibility finding.
+
+
+%=======================================================================
+\section{FR3+MGE Optimisation (C3)}
+\label{sec:mge}
+%=======================================================================
+
+Matching the beamline with COSY~INFINITY's 3rd-order fringe fields plus
+measured fieldmaps (MGE) requires simultaneous optimisation of all
+23~quadrupole currents.  Sequential FIT fails because the per-stage local
+optima under FR3+MGE are incompatible with the global solution.
+
+Four CMA-ES campaigns on the Koa HPC cluster:
+\begin{itemize}[nosep]
+  \item \textbf{v1}: 10,020~evals, MSE$=1030$ (barely unstable,
+    $\cos\mu \approx 1.03$).
+  \item \textbf{v2}: 16,000~evals, sigma collapsed to $1.3 \times
+    10^{-5}$; no stable solution found.
+  \item \textbf{v3}: Killed after 247~evals.
+  \item \textbf{v4} (current): Capped objective ensuring any stable
+    solution beats any unstable one.  663~evals completed, best objective
+    12,009 (unstable but steadily improving).
+\end{itemize}
+Root cause: the MSE landscape has an extremely narrow stability basin in
+23D.  The capped objective (v4) directly addresses the pathology where
+unstable solutions could outcompete stable ones with poor Twiss.
+
+
+%=======================================================================
+\section{Infrastructure}
+\label{sec:infrastructure}
+%=======================================================================
+
+\paragraph{Element labels (I1).}
+All beamline elements carry human-readable names propagated from Excel
+(Label/Nomenclature columns) and JSON/YAML (\texttt{name} field) through
+the entire pipeline.
+
+\paragraph{PALS alignment (I3, I8).}
+The v3 lattice format adds PALS-aligned fields (\texttt{Bn1},
+\texttt{BendP}) with full backward compatibility.  The standalone
+\texttt{pals2cosy} converter (v0.3.0) supports both official PALS and
+FELsim v2/v3 formats.
+
+\paragraph{Test suite (C4, I6).}
+210~tests (7~skipped), covering: unit tests for transfer matrices and
+Twiss computation; frozen regression tests for the full beamline;
+cross-code benchmarks (FELsim vs RF-Track); adapter round-trips
+(Excel/JSON/YAML); chromatic physics (30~tests); attribute guards
+(AST-based typo detection).
+
+\paragraph{Multi-code framework (I7).}
+The \texttt{MultiCodeSimulator} enables hybrid simulations with per-section
+code selection and configuration passthrough (space charge, apertures).
+Validated for FELsim+RF-Track, FELsim+COSY, COSY+RF-Track, and three-way
+hybrids.
+
+
+%=======================================================================
+\section{Summary of Findings}
+\label{sec:summary}
+%=======================================================================
+
+\begin{enumerate}[nosep]
+  \item The 11-stage sequential NM optimisation reliably matches the
+    undulator Twiss targets at the baseline operating point, with
+    cross-code agreement to MSE $\sim 10^{-6}$--$10^{-9}$.
+  \item Two-phase NM$\to$CMA-ES polishing improves Stage~11 precision by
+    up to $10^{10}\times$ and is integrated as the default post-processing
+    step.
+  \item The feasibility boundary is dominated by normalised emittance
+    ($\varepsilon_n$).  Energy spread ($\sigma_E$) and chirp ($h$) have
+    negligible impact at the baseline $\varepsilon_n = 8\;
+    \pi\cdot\text{mm}\cdot\text{mrad}$.
+  \item Bunch length does not affect transverse matching (confirmed
+    analytically and numerically).
+  \item Bunch compression below $\sim$\SI{0.45}{ps} is not achievable
+    by the transport line alone ($R_{56} = +\SI{27}{mm}$, $T_{566} = 0$).
+  \item Chromatic optimisation with aperture tracking raises transmission
+    from 64.5\% to 98.1\% with MSE $= 4.0 \times 10^{-4}$.
+  \item The Stage~11 landscape is unimodal; robustness issues at extreme
+    emittances originate from upstream stages, not the final matching
+    section.
+  \item Sequential warm-starting is counterproductive for this beamline
+    (basin trapping).
+  \item FR3+MGE optimisation requires simultaneous 23-variable search
+    (in progress on HPC).
+\end{enumerate}
+
+
+%=======================================================================
+\section{Study Index}
+\label{sec:index}
+%=======================================================================
+
+\small
+\begin{longtable}{@{} l l l l @{}}
+\toprule
+ID & Title & Status & Key Result \\
+\midrule
+\endfirsthead
+\toprule
+ID & Title & Status & Key Result \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+%
+S1 & 2 ps Baseline Optimisation & Done & MSE $< 10^{-5}$ \\
+S2 & 0.5 ps Emittance Conservation & Done & Joint 4-var Stage~11 \\
+S3 & 0.5 ps Paper-Aligned & Done & Identical to S1 currents \\
+S4 & 1D Parameter Sensitivity & Done & Emittance dominates \\
+S5 & 2D Coupled Scans & Done & $\sigma_E$, $h$ negligible \\
+S6 & Bunch Length Sensitivity & Done & No effect on matching \\
+S7 & Verification Runs & Done & Extremes not robust \\
+S8 & Multi-Start Robustness & Done & Stage~11 unimodal \\
+S9 & Bunch Length Independence & Done & Linear decoupling \\
+\midrule
+W1 & Chirp Comparison & Done & $h$ negligible on Twiss \\
+W2 & Emittance Multi-Start & Done & Dips at $\varepsilon_n = 14$--16 resolved \\
+W4 & COSY Cross-Validation & Done & FR\,1 MSE $= 3.7 \times 10^{-9}$ \\
+W5 & Chirp Assessment & Done & $h = 5 \times 10^9$ is low-moderate \\
+W6 & Glyfada Benchmark & Done & NM wins by $10^{3}$--$10^{6}\times$ \\
+W7 & CMA-ES Re-Benchmark & Done & CMA-ES wins by $10^{9}$--$10^{10}\times$ \\
+W9 & COSY Longitudinal & Done & $R_{56} = +27$ mm, $T_{566} = 0$ \\
+W10 & Beam Losses Study & Done & 40--50\% loss at 0.5 ps \\
+W11 & Throughput Optimisation & Done & $T = 42.8\%$ at 2 ps \\
+W12 & Compression Feasibility & Done & Floor $\approx$ 0.45 ps \\
+\midrule
+C1 & RF-Track Cross-Validation & Done & 5-way comparison \\
+C3 & FR3+MGE Optimisation & In Progress & CMA-ES v4 on Koa \\
+C5 & RF-Track SBend Bug & Done & Analytical workaround \\
+C8 & Chromatic Quad Matrices & Done & 0.00\% vs RF-Track \\
+\midrule
+O1 & Warm-Starting & Done & Counterproductive \\
+O3 & Glyfada Adapter & Done & \texttt{method='glyfada'} \\
+O5 & CMA-ES Polishing & Done & Integrated in production \\
+\midrule
+P1 & Aperture Loss Tracking & Done & 64.5\% baseline $T$ \\
+P2 & Chromatic DPW Edges & Done & Symplectic, vectorised \\
+P3 & Chromatic Dipole Body & Done & $< 1\%$ at $\sigma_p = 0.5\%$ \\
+\midrule
+I1 & Element Labels & Done & End-to-end propagation \\
+I3 & PALS2COSY Converter & Done & v0.3.0 (55 tests) \\
+I7 & Multi-Code Framework & Done & 3-way hybrid validated \\
+I8 & v3 Lattice Format & Done & PALS-aligned fields \\
+\end{longtable}
+\normalsize
+
+
+\begin{thebibliography}{9}
+\bibitem{weinberg2025}
+  A.~Weinberg, A.~Fisher, and R.~Li,
+  ``Design of a compact FEL oscillator for the University of Hawai`i,''
+  arXiv:2510.14061v1, 2025.
+\end{thebibliography}
+
+\end{document}

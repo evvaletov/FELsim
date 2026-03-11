@@ -415,12 +415,35 @@
 - **Note:** The composite 5-goal objective (4 Twiss + dispersion) has a dispersion
   floor ~2.5e-6 that stage 11 quads cannot reduce. Pure 4-Twiss MSE reaches 1e-15
   (see W7). CMA-ES provides most value at difficult emittances (ε_n=14).
+- **Full re-scan validation (2026-03-11):** All parameter scans (S4, S5, S7) re-run
+  with CMA-ES polishing active. Key results:
+  - **S7 verification:** 8/21 points improved (up to 31.6×), 0 regressions. Notable:
+    ε_n=1,3 at N=1000 improved 25–32×; ε_n=14 at N=500,1000 improved 1.4–1.9×.
+  - **S5a (σ_E × h):** 18/100 improved (13 by >2×), 0 worse.
+    Quality: 87→96 Excellent, 11→3 Acceptable, 2→1 Marginal.
+  - **S5b (σ_E × ε_n):** 50/100 improved (34 by >2×), 0 worse.
+    Quality: 38→60 Excellent, 27→19 Acceptable, 17→7 Marginal, 18→14 Failed.
+  - **S5c (h × ε_n):** 27/100 improved (18 by >2×), 0 worse.
+    Quality: 54→65 Excellent, 12→11 Acceptable, 14→8 Marginal, 20→16 Failed.
+  - **S4 emittance:** All identical (confirms Stage 11 unimodality with fixed seed).
+  - **S4 energy spread:** 7/15 better, 2 worse (NM basin variability, all Excellent).
+  - **S4 chirp:** 5/12 better, 4 worse (NM basin variability, all Excellent).
+  - **Conclusion:** CMA-ES polishing provides zero regressions and substantial
+    improvements in the emittance-varying parameter space. The largest gains are
+    in 2D scans involving emittance (S5b: 50% of points improved). The S4 1D
+    emittance scan is fully deterministic (no change), confirming S8's unimodality
+    finding. Pre-CMA-ES results backed up to `pre_cmaes_backup/` directories.
 
-### O2. Adaptive Scan Resolution [LOW PRIORITY]
+### O2. Adaptive Scan Resolution [DONE 2026-03-11]
 - **Motivation:** Uniform spacing wastes points in flat regions and undersamples
   transition regions.
-- **Design:** Bisection refinement: run coarse scan (5 points), identify where
-  MSE changes rapidly, insert midpoints. Iterate to target resolution.
+- **Implementation:** `run_adaptive_scan()` in `UHM_beamline_opt_05ps_params.py`.
+  Starts with a coarse uniform grid (default 5 pts), computes RMS slope between
+  adjacent points, inserts midpoints where slope exceeds `slope_multiplier × median`
+  (default 1.5×). Iterates up to `max_iter` passes or `max_points` total.
+  Supports warm-start (uses nearest evaluated neighbor's quad currents).
+- **Parameters:** `param_range=(lo,hi)`, `n_coarse=5`, `max_points=30`,
+  `max_iter=4`, `slope_multiplier=1.5`.
 
 ### O3. Evolutionary Optimisation [DONE 2026-02-22]
 - Glyfada adapter implemented: `backend/glyfadaAdapter.py` (GlyfadaOptimizer class)
@@ -619,14 +642,14 @@
     count non-increasing across handoffs. Cross-validation vs full RF-Track
     passes (transverse RMS ratios 0.1–10×).
 
-### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY — NOT NEEDED FOR UH FEL]
-- **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
-- **Goal:** Extract T566 = (∂²l/∂δ²)/2 from the COSY DA polynomial map
-  and use it as a FIT objective. Requires `transfer_matrix_order >= 2`.
+### I5. T566 Objective via 2nd-Order DA Map [DONE — NOT NEEDED FOR UH FEL]
+- **Status:** Fully implemented. `("l", "t566"): "ME(5,66)"` in MEASURE_MAP
+  (`cosySimulator.py`). Validation enforces `transfer_matrix_order >= 2` and
+  `dimensions >= 3`. FOX code generation maps to `ME(5,66)` in FIT blocks.
 - **Use case:** Bunch compression optimization where both R56 and T566 matter.
 - **W12 finding:** T566 = 0 for the UH FEL transport line (W9 Part A).
-  A T566 FIT objective is redundant for this beamline. Implementation
-  may still be useful for other beamlines with non-zero T566.
+  A T566 FIT objective is redundant for this beamline but the implementation
+  is ready for other beamlines with non-zero T566.
 
 ### I8. FELsim v3 Lattice Format — PALS Alignment [DONE 2026-03-03]
 - **Goal:** Extend the v2 lattice format with optional PALS-aligned fields while
