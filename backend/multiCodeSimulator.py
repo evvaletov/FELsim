@@ -28,6 +28,13 @@ _RUNTIME_CONFIG_KEYS = frozenset({
     'physical_apertures', 'dipole_slices', 'aperture',
 })
 
+# All known per-section config keys (runtime + creation-time)
+_ALL_SECTION_CONFIG_KEYS = _RUNTIME_CONFIG_KEYS | frozenset({
+    'G_quad', 'particle_mass', 'particle_charge', 'rf_frequency',
+    'transfer_matrix_order', 'fringe_field_order', 'use_mge_for_dipoles',
+    'quad_aperture', 'dipole_aperture', 'mode', 'beam_energy',
+})
+
 # FELsim class name → generic element type
 _FELSIM_TYPE_MAP = {
     'driftLattice': 'DRIFT',
@@ -118,7 +125,16 @@ class MultiCodeSimulator(SimulatorBase):
         from simulatorFactory import SimulatorFactory
 
         for section in self.sections:
-            creation_cfg = {k: v for k, v in section.config.items()
+            cfg = section.config or {}
+
+            # Warn on unknown config keys
+            unknown = set(cfg) - _ALL_SECTION_CONFIG_KEYS
+            if unknown:
+                logger.warning(
+                    "Section '%s' (%s): unknown config key(s) %s",
+                    section.name, section.simulator_key, sorted(unknown))
+
+            creation_cfg = {k: v for k, v in cfg.items()
                            if k not in _RUNTIME_CONFIG_KEYS}
             cache_key = (section.simulator_key,
                          tuple(sorted(creation_cfg.items())))

@@ -24,16 +24,14 @@ ELEMENT_CLASSES = [driftLattice, qpfLattice, qpdLattice, dipole, dipole_wedge]
 
 
 def _collect_instance_attrs(cls):
-    """Instantiate element class and return all attribute names."""
-    constructors = {
-        driftLattice: lambda: driftLattice(0.1),
-        qpfLattice: lambda: qpfLattice(current=1.0, length=0.1),
-        qpdLattice: lambda: qpdLattice(current=1.0, length=0.1),
-        dipole: lambda: dipole(length=0.1, angle=1.5),
-        dipole_wedge: lambda: dipole_wedge(length=0.01, angle=1.0),
-    }
-    obj = constructors[cls]()
-    return set(vars(obj).keys())
+    """Collect all instance attribute names via __slots__ hierarchy."""
+    attrs = set()
+    for klass in cls.__mro__:
+        if klass is object:
+            break
+        if hasattr(klass, '__slots__'):
+            attrs.update(klass.__slots__)
+    return attrs
 
 
 def _collect_class_attrs(cls):
@@ -156,6 +154,40 @@ class TestSetAttrTargets:
             msg = "setattr targets not in element attribute whitelist:\n"
             msg += "\n".join(f"  {u}" for u in unknown)
             pytest.fail(msg)
+
+
+class TestSlotsEnforcement:
+    """Verify __slots__ prevents typo attributes at runtime."""
+
+    def test_drift_rejects_typo(self):
+        d = driftLattice(0.1)
+        with pytest.raises(AttributeError):
+            d.currnet = 5.0  # typo for 'current' (drift has no current)
+
+    def test_quad_rejects_typo(self):
+        q = qpfLattice(current=1.0, length=0.1)
+        with pytest.raises(AttributeError):
+            q.currnet = 5.0  # typo for 'current'
+
+    def test_quad_accepts_current(self):
+        q = qpfLattice(current=1.0, length=0.1)
+        q.current = 2.5  # valid attribute
+        assert q.current == 2.5
+
+    def test_dipole_rejects_typo(self):
+        d = dipole(length=0.1, angle=1.5)
+        with pytest.raises(AttributeError):
+            d.angl = 2.0  # typo for 'angle'
+
+    def test_dipole_wedge_rejects_typo(self):
+        dw = dipole_wedge(length=0.01, angle=1.0)
+        with pytest.raises(AttributeError):
+            dw.pole_gab = 0.01  # typo for 'pole_gap'
+
+    @pytest.mark.parametrize("cls", ELEMENT_CLASSES, ids=lambda c: c.__name__)
+    def test_all_classes_have_slots(self, cls):
+        """Every element class should define __slots__."""
+        assert hasattr(cls, '__slots__'), f"{cls.__name__} has no __slots__"
 
 
 class TestAttributeConsistency:

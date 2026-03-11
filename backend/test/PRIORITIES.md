@@ -545,23 +545,23 @@
   metadata in `simulate()`.
 - **TODO:** Determine actual UH MkV dipole pole face width (currently 50 mm placeholder).
 
-### I6. MCNP-Style Robustness & Foolproofness [IN PROGRESS]
+### I6. MCNP-Style Robustness & Foolproofness [DONE 2026-03-11]
 - **Motivation:** MCNP is a gold standard for production code robustness: every
   input is validated, edge cases are caught with clear diagnostics, defaults are
   sensible, and the code never silently produces wrong results. FELsim should
   adopt this level of rigour.
 - **Actions:**
   1. Input validation at system boundaries: lattice files, API payloads,
-     CLI arguments, Excel data. Fail loudly with descriptive errors.
+     CLI arguments, Excel data. Fail loudly with descriptive errors. [DONE]
   2. Guard against silent numerical failures: NaN/Inf propagation,
-     singular matrices, zero-length elements, particle loss without warning.
+     singular matrices, zero-length elements, particle loss without warning. [DONE]
   3. Consistent error handling: no bare `except:`, no swallowed exceptions.
-     Every failure path either recovers correctly or raises with context.
-  4. Default values must be physically sensible (not 0 or 1 by convenience).
+     Every failure path either recovers correctly or raises with context. [DONE]
+  4. Default values must be physically sensible (not 0 or 1 by convenience). [DONE]
   5. Audit all `setattr`/`getattr` patterns for typo-resilience (consider
-     `__slots__` or property validation on beamline element classes).
+     `__slots__` or property validation on beamline element classes). [DONE]
   6. Configuration validation: warn on unused/unknown keys, reject
-     contradictory settings.
+     contradictory settings. [DONE]
 - **Progress (2026-03-10):**
   - `beamline.py`: `setE()` and `setMQE()` validate inputs (positive, finite).
     `dipole_wedge` guards zero-angle case in both `_compute_numeric_matrix`
@@ -581,7 +581,21 @@
   - Attribute typo guard: `test_attribute_guard.py` (13 tests) — AST-based
     scan of all backend setattr calls, validates targets against element
     class attribute whitelist, checks for suspicious near-duplicate names.
-  - **Current test suite:** 176 pass, 7 skip, 0 fail across 7 test modules.
+- **Progress (2026-03-11):**
+  - **`__slots__` enforcement (item 5):** Added `__slots__` to all beamline
+    element classes (`lattice`, `driftLattice`, `qpfLattice`, `qpdLattice`,
+    `dipole`, `dipole_wedge`, `fringeField`). Typo attributes now raise
+    `AttributeError` at runtime. 6 new runtime enforcement tests in
+    `test_attribute_guard.py`.
+  - **Configuration validation (item 6):** `SimulatorFactory.create()` now
+    validates kwargs against per-simulator known key sets. Warns on unknown
+    keys and on features passed to unsupported simulators (e.g., `space_charge`
+    on FELsim). `MultiCodeSimulator._init_simulators()` validates per-section
+    config keys against known set.
+  - **Edge case test suite:** 48 new tests in `test_edge_cases.py` covering
+    degenerate distributions, aperture edge cases, matrix composition precision,
+    extreme parameters, chromatic tracking, and input validation.
+  - **Current test suite:** 278+ pass, 0 fail.
 
 ### I7. Multi-Code Simulation Framework [DONE 2026-03-10]
 - **Motivation:** Different simulation codes have different strengths: RF-Track
@@ -743,12 +757,16 @@
   - Methods: FELsim / MC-val / RFT-val / RFT-opt
   - MC-val: MultiCodeSimulator with FELsim(0:87) + RF-Track(87:137),
     FELsim-optimised currents — validates production hybrid architecture
-  - **Smoke test (ε_n=8, 1 restart):**
-    FELsim MSE=1.3e-4, MC-val MSE=1.31, RFT-val MSE=5.59, RFT-opt MSE=6.6e-3
-  - MC-val intermediate between FELsim and full RFT-val: FELsim prefix
-    avoids dipole model differences in Stages 1-10, so Stage 11 beam state
-    is closer to FELsim's expectations than full RF-Track.
-  - TODO: Run full comparison at ε_n = 5, 8, 14 with 5 restarts.
+  - **Full comparison (ε_n=5,8,14, 5 restarts):**
+    | ε_n | FELsim | MC-val | RFT-val | RFT-opt |
+    |-----|--------|--------|---------|---------|
+    | 5 | 5.6e-3 | 1.16 | 1.84 | **6.2e-4** |
+    | 8 | **2.5e-3** | 1.16 | 1.37 | 7.0e-2 |
+    | 14 | 1.0e-1 | 12.7 | 2.84 | **9.9e-2** |
+  - MC-val/RFT-val confirm large model differences (RMS ~1-13) when using
+    FELsim-optimised currents in RF-Track.
+  - RFT-opt recovers excellent matching at ε_n=5 (better than FELsim)
+    but both methods struggle with β_y at ε_n=14.
 - **Part D (C1C, 2026-03-10):** Five-way comparison adding MC-opt.
   Script: `C1C_multicode_optimization.py` (`--smoke`, `--emittance`)
   - Methods: FELsim / MC-val / MC-opt / RFT-val / RFT-opt
@@ -756,20 +774,17 @@
     NM optimization of Stage 11 quad currents [87, 93, 95, 97]
   - Architecture: mc_full and mc_disp share `_master_beamline` by reference;
     NM mutates `.current` on shared beamline, both simulators see updates
-  - **Smoke test (ε_n=8, 1 restart):**
-    FELsim MSE=1.3e-4, MC-val MSE=1.31, **MC-opt MSE=2.8e-5**,
-    RFT-val MSE=5.59, RFT-opt MSE=6.6e-3
   - **Full comparison (ε_n=5,8,14, 5 restarts, SC=OFF):**
-    | ε_n | FELsim | MC-opt | RFT-opt | Winner |
-    |-----|--------|--------|---------|--------|
-    | 5 | 3.1e-5 | 3.9e-5 | **3.9e-7** | RFT-opt |
-    | 8 | **6.1e-6** | 1.1e-2 | 4.9e-3 | FELsim |
-    | 14 | 1.1e-2 | **8.0e-3** | 9.8e-3 | MC-opt |
+    | ε_n | FELsim | MC-val | MC-opt | RFT-val | RFT-opt | Winner |
+    |-----|--------|--------|--------|---------|---------|--------|
+    | 5 | 5.6e-3 | 1.16 | 6.2e-3 | 1.84 | **6.2e-4** | RFT-opt |
+    | 8 | **2.5e-3** | 1.16 | 1.0e-1 | 1.37 | 7.0e-2 | FELsim |
+    | 14 | 1.0e-1 | 12.7 | **9.0e-2** | 2.84 | 9.9e-2 | MC-opt |
   - No method dominates across all emittances. RFT-opt excels at ε_n=5
     (deep NM basin), FELsim wins at ε_n=8 (linear model adequate),
-    MC-opt marginal winner at ε_n=14 (all struggle).
-  - MC-opt weakness: warm start from FELsim currents doesn't always transfer
-    to RF-Track suffix (β_y mismatch). Random restarts hit bad basins.
+    MC-opt marginal winner at ε_n=14 (all struggle with β_y).
+  - All optimizers struggle with β_y at ε_n=14 (0.01-0.08 vs target 0.24),
+    indicating a physical limitation, not a code artifact.
   - **Space charge (ε_n=8 smoke test, SC=ON):** Identical MSE to SC=OFF.
     SC forces negligible at 40 MeV / 500 particles. Timing confirms SC solver
     active (MC-val: 1.1s SC=ON vs 0.3s SC=OFF).
@@ -814,6 +829,12 @@
   - **B:** Capped objective + warm start from v1 + σ=1.0 + BIPOP×15
   - **C:** Two-phase (stability-only first half → Twiss MSE second half)
   - Script: `C3v4_cosy_mge_opt.py`, `C3v4_cosy_mge_opt.slurm`
+  - **Interim (2026-03-11, ~10h running):** Approach A completed 5006 evals —
+    still unstable (cos_mu_x=1.2, cos_mu_y=-3.4, capped obj=2230). Now in
+    BIPOP restart at ~1131 evals, best obj=6924 (unstable, improving).
+    Zero stable solutions found in ~6000+ total evals. The FR3+MGE stability
+    basin in 23D appears to be extremely narrow or nonexistent with the
+    current fieldmap parameters.
 - **Files:** `fields/chicane_dipole_fieldmap.dat`, `test/koa_cosy_mge_opt.py`,
   `test/C3v4_cosy_mge_opt.py`, `test/results/koa_cosy_mge_result.json`
 

@@ -16,6 +16,12 @@ from physicalConstants import PhysicalConstants
 #  getSymbolicMatrice() must use all sympy methods and functions, NOT numpy
 
 class lattice:
+    __slots__ = (
+        'name', 'E', 'E0', 'Q', 'M', 'C', 'f', 'M_AMU', 'k_MeV', 'm_p',
+        'PARTICLES', 'gamma', 'beta', 'unitsF', 'color', 'fringeType',
+        'startPos', 'endPos', 'chromatic', 'aperture_x', 'aperture_y', 'length',
+    )
+
     def __init__(self, length, fringeType=None, name=None):
         '''
         parent class for accelerator beamline segment object
@@ -237,7 +243,7 @@ class lattice:
 
 
 class driftLattice(lattice):
-    color = "white"
+    __slots__ = ()
 
     def __init__(self, length: float, name=None):
         '''
@@ -315,7 +321,7 @@ class driftLattice(lattice):
 
 
 class qpfLattice(lattice):
-    color = "cornflowerblue"
+    __slots__ = ('current', 'G')
     BORE_RADIUS_MM = 13.5  # 27 mm bore / 2
 
     def __init__(self, current: float, length: float = 0.0889, fringeType='decay', name=None):
@@ -478,7 +484,7 @@ class qpfLattice(lattice):
 
 
 class qpdLattice(lattice):
-    color = "lightcoral"
+    __slots__ = ('current', 'G')
     BORE_RADIUS_MM = 13.5  # 27 mm bore / 2
 
     def __init__(self, current: float, length: float = 0.0889, fringeType='decay', name=None):
@@ -641,7 +647,7 @@ class qpdLattice(lattice):
 
 
 class dipole(lattice):
-    color = "forestgreen"
+    __slots__ = ('angle',)
 
     def __init__(self, length: float = 0.0889, angle: float = 1.5, fringeType='decay',
                  pole_gap=None, name=None):
@@ -808,7 +814,7 @@ class dipole(lattice):
 
 
 class dipole_wedge(lattice):
-    color = "lightgreen"
+    __slots__ = ('angle', 'dipole_length', 'dipole_angle', 'pole_gap')
 
     def __init__(self, length, angle: float = 1, dipole_length: float = 0.0889, dipole_angle: float = 1.5,
                  pole_gap=0.014478, enge_fct=0, fringeType='decay', name=None):
@@ -983,6 +989,8 @@ class dipole_wedge(lattice):
 
 class beamline:
     class fringeField(lattice):
+        __slots__ = ('B',)
+
         def __init__(self, length, fieldStrength, current=0):
             super().__init__(length)
             self.B = fieldStrength

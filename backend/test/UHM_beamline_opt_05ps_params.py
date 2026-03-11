@@ -550,15 +550,28 @@ def plot_twiss_vs_param(param_vals, rows, xlabel, title_base, filepath):
         ('alpha_y', r'$\alpha_y$', alpha_ym),
     ]
     for ax, (key, ylabel, target) in zip(axes.flat, panels):
-        vals = [r[key] for r in rows]
-        ax.plot(param_vals, vals, 'ko-', markersize=5)
+        vals = np.array([r[key] for r in rows], dtype=float)
+        ylo, yhi = _robust_linear_range(list(vals) + [target])
+
+        # Mask outliers with NaN to break connecting lines (prevents
+        # ugly vertical spikes to the plot boundary)
+        mask = (vals < ylo) | (vals > yhi)
+        vals_plot = vals.copy()
+        vals_plot[mask] = np.nan
+        ax.plot(param_vals, vals_plot, 'ko-', markersize=5)
+
+        n_outliers = int(mask.sum())
+        if n_outliers:
+            ax.annotate(f'{n_outliers} pt{"s" if n_outliers > 1 else ""} outside range',
+                        xy=(0.98, 0.02), xycoords='axes fraction',
+                        ha='right', va='bottom', fontsize=7, color='red')
+
         ax.axhline(target, color='blue', linestyle='--', alpha=0.5,
-                    label=f'Target = {target}')
+                    label=f'Target = {target:.4g}')
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         ax.legend()
         ax.grid(True, alpha=0.3)
-        ylo, yhi = _robust_linear_range(vals + [target])
         ax.set_ylim(ylo, yhi)
 
     fig.suptitle(title_base, fontsize=14)
@@ -642,6 +655,142 @@ def run_scan(scan_name, param_name, param_values, outdir, nb_particles=500,
 
     csv_path = outdir / f'scan_{scan_name}.csv'
     write_csv(csv_path, header, rows)
+    print(f"  Saved {csv_path}")
+    return rows
+
+
+def run_adaptive_scan(scan_name, param_name, param_range, outdir,
+                      nb_particles=500, seed=42, warm_start=False,
+                      n_coarse=5, max_points=30, max_iter=4,
+                      slope_multiplier=1.5, **overrides):
+    """Run an adaptive 1D parameter scan with bisection refinement.
+
+    Starts with a coarse uniform grid and iteratively inserts midpoints
+    in intervals where the RMS mismatch changes most rapidly, concentrating
+    resolution where the optimizer landscape transitions between quality
+    regimes.
+
+    Parameters
+    ----------
+    param_range : tuple (lo, hi)
+        Inclusive parameter range to scan.
+    n_coarse : int
+        Number of initial uniformly-spaced points.
+    max_points : int
+        Stop refining when total evaluated points reaches this limit.
+    max_iter : int
+        Maximum number of bisection refinement passes.
+    slope_multiplier : float
+        Insert midpoint in an interval if its |ΔRMS/Δparam| exceeds
+        slope_multiplier × median slope across all intervals.
+    """
+    lo, hi = param_range
+    param_values = list(np.linspace(lo, hi, n_coarse))
+
+    print(f"\n{'='*70}")
+    print(f"Adaptive scan: {scan_name} — sweeping {param_name} [{lo}, {hi}]"
+          f"{' (warm-start)' if warm_start else ''}")
+    print(f"  Coarse grid: {n_coarse} pts, max {max_points} pts, "
+          f"slope threshold: {slope_multiplier}× median")
+    print(f"{'='*70}")
+
+    header = csv_header()
+    results = {}  # param_value → (row_list, res_dict_or_None)
+
+    def _evaluate(val):
+        """Run optimization at a single parameter value."""
+        kwargs = dict(BASELINE)
+        kwargs['nb_particles'] = nb_particles
+        kwargs['seed'] = seed
+        kwargs.update(overrides)
+        kwargs[param_name] = val
+        if warm_start:
+            # Find nearest already-evaluated neighbor for warm start
+            evaluated = sorted(results.keys())
+            nearest = min(evaluated, key=lambda v: abs(v - val),
+                          default=None) if evaluated else None
+            if nearest is not None and results[nearest][1] is not None:
+                kwargs['warm_start_currents'] = results[nearest][1]['quad_currents']
+
+        try:
+            res = run_optimization(**kwargs)
+            row = result_to_row(val, res)
+            quality = 'FAILED'
+            for label, thresh in sorted(MSE_THRESHOLDS.items(),
+                                        key=lambda x: x[1]):
+                if res['mse'] < thresh:
+                    quality = label.upper()
+                    break
+            print(f"    {param_name}={val:.4g}: "
+                  f"RMS={math.sqrt(res['mse']):.4e} [{quality}] "
+                  f"({res['time_s']:.1f}s)")
+            results[val] = (row, res)
+        except Exception as e:
+            print(f"    {param_name}={val:.4g}: FAILED — {e}")
+            row = [val] + [float('nan')] * (len(header) - 1)
+            results[val] = (row, None)
+
+    # Phase 1: coarse grid
+    print(f"\n  Phase 1: coarse grid ({n_coarse} points)")
+    for val in param_values:
+        _evaluate(val)
+
+    # Phase 2+: bisection refinement
+    for iteration in range(max_iter):
+        if len(results) >= max_points:
+            print(f"  Reached max points ({max_points}), stopping")
+            break
+
+        sorted_vals = sorted(results.keys())
+        if len(sorted_vals) < 2:
+            break
+
+        # Compute RMS slopes between adjacent points
+        slopes = []
+        for i in range(len(sorted_vals) - 1):
+            v0, v1 = sorted_vals[i], sorted_vals[i + 1]
+            r0, r1 = results[v0], results[v1]
+            if r0[1] is not None and r1[1] is not None:
+                rms0 = math.sqrt(r0[1]['mse'])
+                rms1 = math.sqrt(r1[1]['mse'])
+                dp = v1 - v0
+                slope = abs(rms1 - rms0) / dp if dp > 0 else 0
+            else:
+                slope = float('inf')  # always refine around failures
+            slopes.append((v0, v1, slope))
+
+        finite_slopes = [s for _, _, s in slopes if math.isfinite(s) and s > 0]
+        if not finite_slopes:
+            print(f"  Iteration {iteration + 1}: no gradients to refine")
+            break
+
+        median_slope = np.median(finite_slopes)
+        threshold = slope_multiplier * median_slope
+
+        # Identify intervals to refine
+        to_insert = []
+        for v0, v1, slope in slopes:
+            if slope >= threshold and len(results) + len(to_insert) < max_points:
+                midpoint = (v0 + v1) / 2
+                if midpoint not in results:
+                    to_insert.append(midpoint)
+
+        if not to_insert:
+            print(f"  Iteration {iteration + 1}: no intervals above threshold, "
+                  f"converged")
+            break
+
+        print(f"\n  Iteration {iteration + 1}: inserting {len(to_insert)} "
+              f"midpoints (threshold slope = {threshold:.4e})")
+        for val in sorted(to_insert):
+            _evaluate(val)
+
+    # Write CSV (sorted by parameter value)
+    sorted_vals = sorted(results.keys())
+    rows = [results[v][0] for v in sorted_vals]
+    csv_path = outdir / f'scan_{scan_name}.csv'
+    write_csv(csv_path, header, rows)
+    print(f"\n  Adaptive scan complete: {len(rows)} points evaluated")
     print(f"  Saved {csv_path}")
     return rows
 

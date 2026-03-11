@@ -4,6 +4,7 @@ Factory and utilities for creating and managing beamline simulators.
 Author: Eremey Valetov
 """
 
+import logging
 from typing import Dict, List, Union, Optional
 from enum import Enum
 import numpy as np
@@ -12,6 +13,8 @@ from simulatorBase import SimulatorBase, CoordinateSystem
 from felsimAdapter import FELsimAdapter
 from cosyAdapter import COSYAdapter
 from beamEvolution import BeamEvolution
+
+logger = logging.getLogger(__name__)
 
 # RF-Track is optional - import if available
 try:
@@ -48,6 +51,58 @@ class SimulatorFactory:
     if _RFTRACK_AVAILABLE:
         _registry[SimulatorType.RFTRACK.value] = RFTrackAdapter
 
+    # Known configuration keys per simulator type
+    _KNOWN_KEYS: Dict[str, frozenset] = {
+        'felsim': frozenset({
+            'lattice_path', 'excel_path', 'debug',
+        }),
+        'cosy': frozenset({
+            'lattice_path', 'excel_path', 'mode', 'config', 'debug',
+            'transfer_matrix_order', 'fringe_field_order',
+            'use_mge_for_dipoles', 'quad_aperture', 'dipole_aperture',
+        }),
+        'rftrack': frozenset({
+            'lattice_path', 'excel_path', 'mode', 'debug',
+            'space_charge', 'sc_mesh', 'beam_energy',
+            'particle_mass', 'particle_charge', 'aperture',
+            'G_quad', 'dipole_slices', 'rf_frequency',
+        }),
+        'multicode': frozenset({
+            'sections', 'lattice_path', 'beam_energy', 'debug',
+        }),
+    }
+
+    # Features only supported by specific simulators
+    _FEATURE_SUPPORT: Dict[str, frozenset] = {
+        'space_charge': frozenset({'rftrack'}),
+        'sc_mesh': frozenset({'rftrack'}),
+        'transfer_matrix_order': frozenset({'cosy'}),
+        'fringe_field_order': frozenset({'cosy'}),
+        'use_mge_for_dipoles': frozenset({'cosy'}),
+        'dipole_slices': frozenset({'rftrack'}),
+        'G_quad': frozenset({'rftrack'}),
+        'rf_frequency': frozenset({'rftrack'}),
+    }
+
+    @classmethod
+    def _validate_config(cls, sim_type: str, kwargs: dict):
+        """Warn on unknown keys and feature/simulator mismatches."""
+        known = cls._KNOWN_KEYS.get(sim_type)
+        if known is None:
+            return
+
+        unknown = set(kwargs) - known
+        if unknown:
+            logger.warning(
+                "%s: unknown config key(s) %s (known: %s)",
+                sim_type, sorted(unknown), sorted(known))
+
+        for key, supported_sims in cls._FEATURE_SUPPORT.items():
+            if key in kwargs and sim_type not in supported_sims:
+                logger.warning(
+                    "%s: '%s' is not supported (only %s); setting will be ignored",
+                    sim_type, key, ', '.join(sorted(supported_sims)))
+
     @classmethod
     def create(cls,
                simulator_type: Union[str, SimulatorType],
@@ -73,6 +128,7 @@ class SimulatorFactory:
 
         # MultiCodeSimulator uses lazy import to avoid circular dependency
         if sim_type == SimulatorType.MULTICODE.value:
+            cls._validate_config(sim_type, kwargs)
             from multiCodeSimulator import MultiCodeSimulator
             try:
                 return MultiCodeSimulator(**kwargs)
@@ -82,6 +138,8 @@ class SimulatorFactory:
         if sim_type not in cls._registry:
             available = ', '.join(list(cls._registry.keys()) + ['multicode'])
             raise ValueError(f"Unknown simulator '{sim_type}'. Available: {available}")
+
+        cls._validate_config(sim_type, kwargs)
 
         try:
             return cls._registry[sim_type](**kwargs)
