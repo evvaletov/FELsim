@@ -1,6 +1,6 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-03-03)
+**Date:** 2026-02-11 (updated 2026-03-10)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
 
 ---
@@ -259,7 +259,7 @@
 
 ## Category S: Parameter Studies
 
-### S5. 0.5 ps 2D Coupled Scans [IN PROGRESS — script done, full scans pending]
+### S5. 0.5 ps 2D Coupled Scans [DONE 2026-03-11]
 - **Motivation:** 1D scans hold other parameters fixed; realistic operation involves
   correlated changes (e.g., shorter bunch → larger energy spread). 2D scans map
   the feasibility surface.
@@ -267,11 +267,18 @@
   - S5a: (σ_E, h) grid at ε_n=8 — energy spread vs chirp coupling
   - S5b: (σ_E, ε_n) grid at h=5e9 — degradation interaction
   - S5c: (h, ε_n) grid — chirp compensation vs emittance
-- **Design:** 10×10 grids (100 points each), 500 particles, ~5 hours per scan.
-  Checkpoint/resume via CSV. Contour/heatmap plots (MSE LogNorm, Twiss deviation,
-  feasibility bands). CLI: `--s5a/--s5b/--s5c/--all/--plots-only/--grid N`.
-- **Status:** 3×3 smoke test (S5a) completed, all 9 points converge.
-  Full 10×10 scans not yet launched.
+- **Design:** 10×10 grids (100 points each), 500 particles. Checkpoint/resume via
+  CSV. Contour/heatmap plots (MSE LogNorm, Twiss deviation, feasibility bands).
+  CLI: `--s5a/--s5b/--s5c/--all/--plots-only/--grid N`.
+- **Results (2026-03-11):**
+  - S5a: 100/100, **0 failures**, 92 Excellent, 11 Acceptable, 2 Marginal.
+    Energy spread and chirp do not compromise matching at ε_n=8.
+  - S5b: 100/100, **18 failures** at extreme emittances (ε_n<5 or ε_n>17),
+    38 Excellent, 27 Acceptable, 17 Marginal. Consistent with W2 findings.
+  - S5c: 100/100, **20 failures** at extreme emittances, 54 Excellent,
+    12 Acceptable, 14 Marginal. Chirp does not rescue high-emittance failure.
+  - **Key finding:** The feasibility boundary is dominated by emittance —
+    σ_E and h have negligible impact on matchability at baseline ε_n=8.
 - Script: `S5_2d_parameter_scans.py`
 - **Output:** `results/params_05ps_2d/`, contour plots, feasibility boundary curves
 - **Prerequisite:** S4 results to identify interesting regions
@@ -487,13 +494,15 @@
   - `SimSection` dataclass: (name, simulator_key, element_range, config)
   - `SimulatorFactory.create('multicode', ...)`: lazy-imported registration
   - `from_config()`: dict-based construction for YAML/JSON configuration
-  - Test suite (test_multicode.py): 33 tests — SimSection, init, coord
+  - Test suite (test_multicode.py): 38 tests — SimSection, init, coord
     roundtrips (all 3 pairs), FELsim split equivalence (2/3-section),
     element conversion (drift, quad, DPW params), factory registration,
     FELsim→RF-Track hybrid (successful run, cross-validation, DPW params,
     physical apertures config), per-section config (runtime key filtering,
     separate vs shared instances), COSY adapter set_beamline (generic elements,
-    dicts, DPW conversion, FELsim slice, transfer matrix), hybrid FELsim+COSY
+    dicts, DPW conversion, FELsim slice, transfer matrix), hybrid FELsim+COSY,
+    COSY→RF-Track (chain, cross-validation), 3-way FELsim+COSY+RF-Track
+    (chain, metadata, cross-validation)
   - CI: test_multicode.py + test_attribute_guard.py added to pipeline
 - **Per-section config passthrough:** Runtime keys (space_charge, sc_mesh,
   physical_apertures, aperture) applied via setter methods before each
@@ -516,12 +525,14 @@
     avoids index mismatch from `_detect_dipole_triplets()`.
   - Verified: `MultiCode(felsim:0-10 + cosy:10-20)` runs to completion
     with particle handoff through COSY particle tracking.
-- **TODO:**
-  - ~~**COSY adapter integration:**~~ [DONE] see above.
-  - ~~**Space charge in hybrid:**~~ [DONE] SC=ON tested in C1C; negligible at
-    40 MeV / 500 particles. Per-section config wiring verified working.
-  - ~~**Merge `multisim` → `main`:**~~ [DONE] Fast-forward merge + upstream
-    merge (Christian's 9 frontend commits).
+  - COSY→RF-Track hybrid: `MultiCode(cosy:0-60 + rftrack:60-137)` runs to
+    completion. Cross-validation vs full RF-Track: transverse RMS within
+    order of magnitude — expected differences from COSY (DA maps + fringe
+    fields) vs RF-Track (analytical sector-bend).
+  - 3-way hybrid: `MultiCode(felsim:0-10 + cosy:10-60 + rftrack:60-137)`
+    runs to completion. Metadata correctly records all 3 sections. Particle
+    count non-increasing across handoffs. Cross-validation vs full RF-Track
+    passes (transverse RMS ratios 0.1–10×).
 
 ### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY — NOT NEEDED FOR UH FEL]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
@@ -551,7 +562,7 @@
 - **Deferred:** Full PALS root key (`PALS:`) support in FELsim loaders, `line:`
   composition, implicit positioning from lengths.
 
-### I2. Engage with PALS as a Real-World Use Case [HIGH PRIORITY]
+### I2. Engage with PALS as a Real-World Use Case [IN PROGRESS — brief drafted 2026-03-10]
 - **Context:** The PALS (Particle Accelerator Lattice Standard) group is looking
   for ~10 real-world use cases of their evolving standard before proceeding to
   the next stage. FELsim's v2 lattice format already uses PALS-aligned type
@@ -577,6 +588,16 @@
      type, signaling that individual lattice files using it should migrate
      toward folding edge parameters into the parent dipole element
   4. Submit as a use case
+- **Progress (2026-03-10):**
+  - Use case brief drafted: `reports/pals_use_case_brief.md`
+  - PALS contact: Jean-Luc Vay (@jlvay on GitHub)
+  - Submission channel: GitHub discussion on pals-project/pals + email
+  - Currently 3 participating codes (BMAD, BLAST ImpactX, BLAST WarpX);
+    FELsim would be the first multi-code adapter-based participant
+  - PALS confirms: no DIPOLE_WEDGE element, edge angles are BendP.e1/e2
+    (matches our v3 implementation). Fringe via edge1_int/edge2_int.
+  - **Remaining:** Open GitHub discussion, provide example v3 lattice file,
+    join weekly meetings
 
 ---
 

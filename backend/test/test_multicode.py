@@ -579,3 +579,174 @@ class TestHybridFELsimCOSY:
         assert result.final_particles is not None
         assert result.final_particles.shape[1] == 6
         assert result.metadata['num_sections'] == 2
+
+
+@pytest.mark.skipif(not (_COSY_AVAILABLE and _RFTRACK_AVAILABLE),
+                    reason="COSY and RF-Track both required")
+class TestHybridCOSYRFTrack:
+    """COSY→RF-Track hybrid simulation via MultiCodeSimulator."""
+
+    COSY_END = 60
+    ENERGY = 40.0
+
+    def test_cosy_rftrack_chain(self, beamline, particles):
+        """MultiCode(cosy:0-60 + rftrack:60-end) runs to completion."""
+        n_elem = len(beamline)
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("cosy_part", "cosy", (0, self.COSY_END),
+                           config={'mode': 'particle_tracking'}),
+                SimSection("rftrack_part", "rftrack",
+                           (self.COSY_END, n_elem),
+                           config={'beam_energy': self.ENERGY}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        result = mc.simulate(particles=particles)
+        assert result.success, f"COSY→RF-Track failed: {result.metadata}"
+        assert result.final_particles is not None
+        assert result.final_particles.shape[1] == 6
+        assert result.metadata['num_sections'] == 2
+
+    def test_cosy_rftrack_vs_full_rftrack(self, beamline, particles):
+        """COSY→RF-Track hybrid vs full RF-Track: qualitatively similar."""
+        n_elem = len(beamline)
+
+        # Hybrid: COSY prefix + RF-Track suffix
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("cosy_part", "cosy", (0, self.COSY_END),
+                           config={'mode': 'particle_tracking'}),
+                SimSection("rftrack_part", "rftrack",
+                           (self.COSY_END, n_elem),
+                           config={'beam_energy': self.ENERGY}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        hybrid = mc.simulate(particles=particles)
+        assert hybrid.success
+
+        # Full RF-Track reference
+        from rftrackAdapter import RFTrackAdapter
+        rt = RFTrackAdapter(beam_energy=self.ENERGY)
+        generic_bl = [_felsim_to_generic(e) for e in beamline]
+        rt.set_beamline(generic_bl)
+        ref = rt.simulate(particles=particles)
+        assert ref.success
+
+        h = hybrid.final_particles
+        r = ref.final_particles
+        assert np.all(np.isfinite(h))
+        assert np.all(np.isfinite(r))
+
+        # Transverse RMS within order of magnitude
+        for col in [0, 2]:
+            h_rms = np.std(h[:, col])
+            r_rms = np.std(r[:, col])
+            ratio = h_rms / r_rms if r_rms > 0 else float('inf')
+            assert 0.1 < ratio < 10, (
+                f"Col {col}: hybrid RMS={h_rms:.4g} vs RF-Track RMS={r_rms:.4g}"
+            )
+
+
+@pytest.mark.skipif(not (_COSY_AVAILABLE and _RFTRACK_AVAILABLE),
+                    reason="COSY and RF-Track both required")
+class TestThreeWayHybrid:
+    """3-way FELsim→COSY→RF-Track hybrid simulation."""
+
+    FELSIM_END = 10
+    COSY_END = 60
+    ENERGY = 40.0
+
+    def test_felsim_cosy_rftrack_chain(self, beamline, particles):
+        """MultiCode(felsim:0-10 + cosy:10-60 + rftrack:60-end) runs to completion."""
+        n_elem = len(beamline)
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("felsim_part", "felsim", (0, self.FELSIM_END)),
+                SimSection("cosy_part", "cosy",
+                           (self.FELSIM_END, self.COSY_END),
+                           config={'mode': 'particle_tracking'}),
+                SimSection("rftrack_part", "rftrack",
+                           (self.COSY_END, n_elem),
+                           config={'beam_energy': self.ENERGY}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        result = mc.simulate(particles=particles)
+        assert result.success, f"3-way hybrid failed: {result.metadata}"
+        assert result.final_particles is not None
+        assert result.final_particles.shape[1] == 6
+        assert result.metadata['num_sections'] == 3
+
+    def test_three_way_metadata(self, beamline, particles):
+        """3-way metadata records all three sections correctly."""
+        n_elem = len(beamline)
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("felsim_part", "felsim", (0, self.FELSIM_END)),
+                SimSection("cosy_part", "cosy",
+                           (self.FELSIM_END, self.COSY_END),
+                           config={'mode': 'particle_tracking'}),
+                SimSection("rftrack_part", "rftrack",
+                           (self.COSY_END, n_elem),
+                           config={'beam_energy': self.ENERGY}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        result = mc.simulate(particles=particles)
+        assert result.success
+        meta = result.metadata
+        assert meta['num_sections'] == 3
+        assert meta['sections'][0]['simulator'] == 'felsim'
+        assert meta['sections'][1]['simulator'] == 'cosy'
+        assert meta['sections'][2]['simulator'] == 'rftrack'
+        # Particle count should be preserved or decrease (no creation)
+        for s in meta['sections']:
+            assert s['num_particles_out'] > 0
+            assert s['num_particles_out'] <= s['num_particles_in']
+
+    def test_three_way_vs_full_rftrack(self, beamline, particles):
+        """3-way hybrid vs full RF-Track: qualitatively similar."""
+        n_elem = len(beamline)
+
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("felsim_part", "felsim", (0, self.FELSIM_END)),
+                SimSection("cosy_part", "cosy",
+                           (self.FELSIM_END, self.COSY_END),
+                           config={'mode': 'particle_tracking'}),
+                SimSection("rftrack_part", "rftrack",
+                           (self.COSY_END, n_elem),
+                           config={'beam_energy': self.ENERGY}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        hybrid = mc.simulate(particles=particles)
+        assert hybrid.success
+
+        # Full RF-Track reference
+        from rftrackAdapter import RFTrackAdapter
+        rt = RFTrackAdapter(beam_energy=self.ENERGY)
+        generic_bl = [_felsim_to_generic(e) for e in beamline]
+        rt.set_beamline(generic_bl)
+        ref = rt.simulate(particles=particles)
+        assert ref.success
+
+        h = hybrid.final_particles
+        r = ref.final_particles
+        assert np.all(np.isfinite(h))
+        assert np.all(np.isfinite(r))
+
+        for col in [0, 2]:
+            h_rms = np.std(h[:, col])
+            r_rms = np.std(r[:, col])
+            ratio = h_rms / r_rms if r_rms > 0 else float('inf')
+            assert 0.1 < ratio < 10, (
+                f"Col {col}: 3-way RMS={h_rms:.4g} vs RF-Track RMS={r_rms:.4g}"
+            )
