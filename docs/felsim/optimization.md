@@ -78,8 +78,9 @@ $h = 5 \times 10^9$ /s achieve RMS $< 5.5 \times 10^{-3}$.
 ### W2 — Emittance Scan with Multi-Start
 
 Re-ran emittance scan ($\varepsilon_n = 1$–$20$, 20 points) with multi-start
-fallback. Resolved dips at $\varepsilon_n = 14$–$16$; all now excellent
-(RMS ~ $10^{-3}$–$10^{-5}$).
+fallback and CMA-ES polishing.  Current results: 14 Excellent, 3 Acceptable,
+3 Marginal, 0 Failed.  Both original Failed points ($\varepsilon_n = 2, 5$)
+eliminated.
 
 ### W4 — COSY INFINITY Cross-Validation
 

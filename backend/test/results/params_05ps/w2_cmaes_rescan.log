@@ -1,0 +1,48 @@
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+
+======================================================================
+W2: Emittance Scan — Fallback Multi-Start (5 restarts, 15 A chrom. bound)
+======================================================================
+  [1/20] ε_n = 1.0
+    RMS = 1.0816e-01  [MARGINAL]  β_x=1.4000  β_y=0.0000  q10=4.20  strat=default  (93.7 s)
+  [2/20] ε_n = 2.0
+    RMS = 1.0815e-01  [MARGINAL]  β_x=1.4000  β_y=0.0000  q10=4.42  strat=default  (75.1 s)
+  [3/20] ε_n = 3.0
+    RMS = 1.0789e-01  [MARGINAL]  β_x=1.4000  β_y=0.0010  q10=4.65  strat=15A+ms  (100.0 s)
+  [4/20] ε_n = 4.0
+    RMS = 3.5753e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2418  q10=4.90  strat=default  (55.5 s)
+  [5/20] ε_n = 5.0
+    RMS = 5.5772e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2417  q10=5.17  strat=default  (47.7 s)
+  [6/20] ε_n = 6.0
+    RMS = 5.7625e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2417  q10=5.44  strat=default  (47.2 s)
+  [7/20] ε_n = 7.0
+    RMS = 5.3549e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2417  q10=5.64  strat=default  (41.8 s)
+  [8/20] ε_n = 8.0
+    RMS = 4.9852e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2417  q10=5.57  strat=default  (39.9 s)
+  [9/20] ε_n = 9.0
+    RMS = 5.0904e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2417  q10=6.12  strat=default  (46.1 s)
+  [10/20] ε_n = 10.0
+    RMS = 5.1276e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2417  q10=6.84  strat=default  (55.4 s)
+  [11/20] ε_n = 11.0
+    RMS = 2.9791e-02  [EXCELLENT]  β_x=1.3923  β_y=0.1780  q10=7.83  strat=default  (53.5 s)
+  [12/20] ε_n = 12.0
+    RMS = 5.2616e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2417  q10=9.23  strat=15A+ms  (63.6 s)
+  [13/20] ε_n = 13.0
+    RMS = 5.0933e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2418  q10=10.00  strat=10A+ms  (58.6 s)
+  [14/20] ε_n = 14.0
+    RMS = 6.6313e-02  [ACCEPTABLE]  β_x=1.4080  β_y=0.0945  q10=10.00  strat=default  (74.4 s)
+  [15/20] ε_n = 15.0
+    RMS = 1.5500e-02  [EXCELLENT]  β_x=1.3902  β_y=0.2719  q10=10.00  strat=10A+ms  (58.5 s)
+  [16/20] ε_n = 16.0
+    RMS = 7.1142e-02  [ACCEPTABLE]  β_x=1.3875  β_y=0.0838  q10=10.00  strat=10A+ms  (71.5 s)
+  [17/20] ε_n = 17.0
+    RMS = 6.0615e-02  [ACCEPTABLE]  β_x=1.3942  β_y=0.1072  q10=10.00  strat=10A+ms  (99.1 s)
+  [18/20] ε_n = 18.0
+    RMS = 2.7194e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2418  q10=0.00  strat=10A+ms  (65.5 s)
+  [19/20] ε_n = 19.0
+    RMS = 2.0486e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2418  q10=0.00  strat=10A+ms  (69.2 s)
+  [20/20] ε_n = 20.0
+    RMS = 2.8699e-03  [EXCELLENT]  β_x=1.4000  β_y=0.2418  q10=0.00  strat=default  (42.0 s)
+
+Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/params_05ps/scan_emittance_w2.csv
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/params_05ps/mse_vs_emittance_w2_comparison.eps

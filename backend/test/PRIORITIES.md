@@ -1,6 +1,6 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-03-10)
+**Date:** 2026-02-11 (updated 2026-03-11)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
 
 ---
@@ -28,6 +28,15 @@
 - Results: `results/params_05ps/scan_emittance_w2.csv`,
   `mse_vs_emittance_w2_comparison.eps`
 - Implementation: `--w2` flag in `UHM_beamline_opt_05ps_params.py`
+- **Re-run with CMA-ES polishing (2026-03-11):** 20 emittance points re-run with
+  current code (post-QA fixes) + CMA-ES polishing. Key changes vs original (Feb 15):
+  - **ε_n = 2:** Failed → Marginal (5.9× improvement)
+  - **ε_n = 5:** Failed → Excellent (114× improvement — the NM trap is resolved)
+  - **ε_n = 14, 16:** Excellent → Acceptable (regressions from QA code fixes
+    changing the objective landscape, not CMA-ES)
+  - Quality distribution: 14 Excellent, 3 Acceptable, 3 Marginal, **0 Failed**
+    (was 15E, 1A, 2M, 2F). Both Failed points eliminated.
+  - Backup: `results/params_05ps/pre_cmaes_backup/scan_emittance_w2.csv`
 
 ### W3. Confirm ε_n = 8 μm Baseline [DONE 2026-02-11]
 - All scripts confirmed using `epsilon_n = 8` with comment `# pi.mm.mrad`.

@@ -539,9 +539,18 @@ def plot_mse_vs_param(param_vals, mse_vals, xlabel, title, filepath):
     print(f"  Saved {filepath}")
 
 
-def plot_twiss_vs_param(param_vals, rows, xlabel, title_base, filepath):
+def plot_twiss_vs_param(param_vals, rows, xlabel, title_base, filepath,
+                        mse_vals=None):
     beta_xm, alpha_xm, beta_ym, alpha_ym, _ = compute_twiss_targets()
     fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+
+    # Identify well-optimized points for y-axis scaling. Failed optimizations
+    # (high MSE) produce meaningless Twiss values that shouldn't set the range.
+    mse_threshold = list(MSE_THRESHOLDS.values())[-1]  # Marginal threshold
+    if mse_vals is not None:
+        good = np.array([m <= mse_threshold for m in mse_vals])
+    else:
+        good = np.ones(len(rows), dtype=bool)
 
     panels = [
         ('beta_x', r'$\beta_x$ (m)', beta_xm),
@@ -551,10 +560,12 @@ def plot_twiss_vs_param(param_vals, rows, xlabel, title_base, filepath):
     ]
     for ax, (key, ylabel, target) in zip(axes.flat, panels):
         vals = np.array([r[key] for r in rows], dtype=float)
-        ylo, yhi = _robust_linear_range(list(vals) + [target])
 
-        # Mask outliers with NaN to break connecting lines (prevents
-        # ugly vertical spikes to the plot boundary)
+        # Compute y-range from good points only (+ target)
+        good_vals = list(vals[good]) + [target] if good.any() else list(vals) + [target]
+        ylo, yhi = _robust_linear_range(good_vals)
+
+        # Mask out-of-range points with NaN to break connecting lines
         mask = (vals < ylo) | (vals > yhi)
         vals_plot = vals.copy()
         vals_plot[mask] = np.nan
@@ -844,7 +855,8 @@ def generate_plots(outdir):
 
         plot_twiss_vs_param(
             param_vals_display, rows, info['xlabel'],
-            info['title_twiss'], outdir / f'twiss_vs_{name}.eps')
+            info['title_twiss'], outdir / f'twiss_vs_{name}.eps',
+            mse_vals=mse_vals)
 
         if name == 'energy_spread':
             plot_currents_vs_param(
