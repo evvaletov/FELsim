@@ -1041,6 +1041,32 @@ Items are ordered by estimated impact on the UH MkV FEL beamline
 - **Conclusion:** No element replacement needed in COSY. The DIL + FC/FD approach
   is the most accurate available representation.
 
+### P8. Order-by-Order DA Convergence Study [DONE 2026-03-11]
+- Runs COSY at DA orders 1, 2, 3, 5 with fixed quad currents.
+  Two current sets: FR0 (hard-edge) and FR3 (3rd-order fringe).
+- **FR=0 (hard-edge):**
+  - Linear map and Twiss rigorously identical across all DA orders
+  - FELsim's first-order model is exact for hard-edge elements
+  - Aberration coefficients well-converged by O2 (no change at O3, O5)
+  - Key chromatic terms: T_116 = 50.6, T_126 = 624, T_336 = -77.7
+  - RMS = 4.8e-4 at all orders (Excellent)
+- **FR=3 (3rd-order fringe):**
+  - Linear map elements change by up to 0.3% with DA order
+    (fringe-field nonlinearities feed into the linear map)
+  - Twiss match best at O3 (RMS=5.9e-5) where currents were optimized;
+    O1 gives RMS=6.4e-4 (still Excellent)
+  - Key chromatic terms: T_116 = -205.5, T_126 = -1800,
+    T_336 = 24.3, T_346 = -330.7
+  - Large geometric aberration U_1111 = 21577
+- **Cross-cutting findings:**
+  - COSY particle tracker (via adapter) is order-independent — uses
+    first-order element maps for tracking regardless of DA computation order
+  - To assess nonlinear beam dynamics, must apply DA map to particles
+    manually or use RF-Track
+  - Map complexity: 15 coefficients (O1) → ~594 (O5)
+- Script: `P8_order_convergence.py`
+- Results: `results/P8/`
+
 ---
 
 ## Workflow
@@ -1085,7 +1111,7 @@ Items are ordered by estimated impact on the UH MkV FEL beamline
 Source: 4-perspective expert review (FEL scientist, Berz-style computational physicist, SWE, UX/UI)
 
 ### Physics & Validation
-- [ ] **Order-by-order convergence study**: Run COSY at orders 1, 2, 3, 5 — quantify how optimized currents and final phase space change with map order
+- [x] **Order-by-order convergence study**: See P8 — first-order sufficient for hard-edge, ~0.3% linear map variation with fringe fields
 - [ ] **Emittance preservation plot**: ε_n(s) through the chicane to quantify CSR-driven emittance growth
 - [ ] **Chromaticity analysis**: Twiss parameters and beam size as a function of energy deviation δ
 - [ ] **Fringe field treatment in FELsim**: Currently fringe_field_order=0; currents are optimized for the wrong model. Add fringe field support or at least quantify the impact

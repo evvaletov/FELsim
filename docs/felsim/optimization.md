@@ -251,6 +251,28 @@ IQR-based robust y-axis limits.
 - Script: `R1_parameter_explorer.py`
 - Run: `python R1_parameter_explorer.py` → http://localhost:8050
 
+### P8 — Order-by-Order DA Convergence
+
+COSY INFINITY DA orders 1, 2, 3, 5 with fixed quad currents at FR=0 and FR=3.
+
+**Hard-edge (FR=0):** Linear transfer map and Twiss parameters are rigorously
+identical across all DA orders.  FELsim's first-order model is exact.
+Key chromatic aberrations: $T_{116} = 50.6$, $T_{126} = 624$.
+RMS $= 4.8 \times 10^{-4}$ at all orders.
+
+**3rd-order fringe (FR=3):** Linear map elements change by up to 0.3\% with DA
+order (fringe-field nonlinearities feed into linear map).  Twiss match best at
+$O = 3$ (RMS $= 5.9 \times 10^{-5}$) where currents were optimized; $O = 1$
+gives RMS $= 6.4 \times 10^{-4}$ (still Excellent).  Large geometric
+aberration $U_{1111} = 21577$.
+
+**Finding:** First-order optics is sufficient for Twiss matching.  Higher-order
+DA terms do not affect the COSY adapter's particle tracking (first-order
+element maps used regardless of DA computation order).
+
+- Script: `P8_order_convergence.py`
+- Results: `results/P8/`
+
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap.
