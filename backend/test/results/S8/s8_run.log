@@ -107,3 +107,27 @@ S8: Multi-Start Robustness Study
   [46/50] ε_n=16, start 5
            MSE=1.12e-02 (Marginal), t=15.9s
   [47/50] ε_n=16, start 6
+           MSE=1.12e-02 (Marginal), t=16.8s
+  [48/50] ε_n=16, start 7
+           MSE=1.12e-02 (Marginal), t=20.1s
+  [49/50] ε_n=16, start 8
+           MSE=1.12e-02 (Marginal), t=17.7s
+  [50/50] ε_n=16, start 9
+           MSE=1.12e-02 (Marginal), t=14.6s
+/home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/S8_multistart_robustness.py:148: MatplotlibDeprecationWarning: The 'labels' parameter of boxplot() has been renamed 'tick_labels' since Matplotlib 3.9; support for the old name will be dropped in 3.11.
+  # Convert MSE → RMS for display
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+  Saved: S8_multistart_robustness.{eps,png,pdf}
+
+── S8 Summary ──
+   ε_n     Best MSE       Median        Worst  Exc  Acc  Mar Fail
+----------------------------------------------------------------------
+     1     1.17e-02     1.17e-02     1.17e-02    0    0   10    0
+     3     1.93e+04     1.93e+04     1.93e+04    0    0    0   10
+     5     3.11e-05     3.11e-05     3.11e-05   10    0    0    0
+    14     9.08e-03     9.08e-03     9.08e-03    0   10    0    0
+    16     1.12e-02     1.12e-02     1.12e-02    0    0   10    0
+
+============================================================
+  S8 Complete
+============================================================

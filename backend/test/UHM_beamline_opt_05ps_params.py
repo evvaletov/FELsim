@@ -348,6 +348,34 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
             line[idx].current = cur
         result = best_result
 
+        # CMA-ES polishing from NM result
+        try:
+            import cma
+            nm_x = list(result.x)
+            nm_bounds = list(opti.bounds)
+            cma_opts = {
+                'maxfevals': 3000,
+                'bounds': [[b[0] for b in nm_bounds], [b[1] for b in nm_bounds]],
+                'seed': seed + 7,
+                'verb_disp': 0,
+                'verb_log': 0,
+                'tolfun': 1e-15,
+                'popsize': 20,
+            }
+            es = cma.CMAEvolutionStrategy(nm_x, 0.1, cma_opts)
+            es.optimize(opti._optiSpeed)
+            if es.result.fbest < result.fun:
+                from scipy.optimize import OptimizeResult
+                nm_nfev = getattr(result, 'nfev', 0) or 0
+                result = OptimizeResult(
+                    x=es.result.xbest, fun=es.result.fbest,
+                    nfev=nm_nfev + es.result.evaluations,
+                    success=True, message='CMA-ES polished')
+                for idx, val in zip([87, 93, 95, 97], result.x):
+                    line[idx].current = val
+        except ImportError:
+            pass
+
     elapsed = time.perf_counter() - t0
 
     # Extract Twiss at undulator entrance

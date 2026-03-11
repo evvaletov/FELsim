@@ -112,7 +112,7 @@ def run_multistart(nb_particles=500, seed=42):
                        res['quad_currents'][87], res['quad_currents'][93],
                        res['quad_currents'][95], res['quad_currents'][97],
                        res['time_s'], res.get('nfev', 0)]
-                _print(f"           MSE={res['mse']:.2e} ({classify(res['mse'])}), "
+                _print(f"           RMS={math.sqrt(res['mse']):.2e} ({classify(res['mse'])}), "
                        f"t={res['time_s']:.1f}s")
             except Exception as e:
                 _print(f"           FAILED: {e}")

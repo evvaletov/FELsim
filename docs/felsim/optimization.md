@@ -201,19 +201,55 @@ statistical robustness of the 500-particle results.
 
 **Key finding:** S4/S5 emittance results at extreme values are **not
 statistically robust** — they depend on the specific random particle
-realization, not solely on physics.  The optimizer landscape has multiple
-local minima that the beam sample selects.  Publication-quality claims at
-extreme emittances require multi-start + multi-seed statistics (see S8).
+realization, not solely on physics.  S8 later showed that Stage 11 is
+unimodal, so the variability originates from stages 1–10 (upstream beam
+sampling), not from multiple local minima in the final stage.
 
 - Script: `S7_verification_runs.py`
 - Results: `results/S7/`
 
+### S8 — Multi-Start Robustness (Stage 11)
+
+10 random Stage 11 starting points at 5 extreme emittance values.
+
+| $\varepsilon_n$ | RMS | Quality | $\beta_y$ (m) | 10/10 identical? |
+|-----------------|-----|---------|---------------|-----------------|
+| 1 | $1.08 \times 10^{-1}$ | Marginal | $\approx 0$ | Yes |
+| 3 | $138.8$ | Failed | 264 | Yes |
+| 5 | $5.58 \times 10^{-3}$ | Excellent | 0.242 | Yes |
+| 14 | $9.53 \times 10^{-2}$ | Acceptable | 0.030 | Yes |
+| 16 | $1.06 \times 10^{-1}$ | Marginal | 0.005 | Yes |
+
+**Key finding:** Stage 11's objective landscape is **unimodal** — all 10 random
+starts converge to exactly the same solution (identical MSE, quad currents, and
+Twiss to machine precision).  The S7 seed-dependence at extreme emittances
+originates from stages 1–10 (random beam generation), not Stage 11's search.
+Multi-start Stage 11 cannot improve results.
+
+- Script: `S8_multistart_robustness.py`
+- Results: `results/S8/`
+
+### O1 — Warm-Starting from Neighbors (Negative Result)
+
+Sequential warm-starting: pass previous scan point's optimized currents as
+initial guess for all 11 stages.
+
+**Result:** Warm start wins only 4/20 emittance points.  The $\varepsilon_n = 1$
+basin (Marginal) traps the optimizer — once locked in, the Marginal solution
+propagates through $\varepsilon_n = 2$–$13$.  Cold start independently finds
+better basins at each point.
+
+- Script: `O1_warm_start_validation.py`
+- Results: `results/O1/`
+
+### R1 — Interactive Parameter Explorer
+
+Plotly/Dash dashboard for S4 1D scans and S5 2D heatmaps.  Displays RMS with
+IQR-based robust y-axis limits.
+
+- Script: `R1_parameter_explorer.py`
+- Run: `python R1_parameter_explorer.py` → http://localhost:8050
+
 ## Planned Work
 
-See `backend/test/PRIORITIES.md` for the full roadmap. Key upcoming items:
-
-- **S8** — Multi-start robustness study: 10 random starts at 5 extreme
-  emittance points to characterize the optimizer landscape
-- **O1** — Warm-starting from neighbors: pass previous scan point's
-  optimized currents as initial guess for improved convergence
-- **R1** — Interactive parameter explorer (Plotly/Dash dashboard)
+See `backend/test/PRIORITIES.md` for the full roadmap.

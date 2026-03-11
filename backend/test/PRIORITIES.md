@@ -261,7 +261,8 @@
 - Report: `UHM_beamline_opt_05ps_params_report.md`
 - Results: `results/params_05ps/`
 - Three 1D sweeps at 0.5 ps: energy spread (0.1–5%), chirp (0–40e9), emittance (1–20)
-- MSE quality thresholds: <1e-3 excellent, <0.01 acceptable, <0.1 marginal
+- Quality thresholds (MSE): <1e-3 excellent, <0.01 acceptable, <0.1 marginal
+  (RMS equivalents: <3.2e-2, <1e-1, <3.2e-1)
 
 ---
 
@@ -329,15 +330,32 @@
 - Script: `S7_verification_runs.py`
 - Results: `results/S7/`
 
-### S8. Multi-Start Robustness Study [IMPLEMENTED — pending run]
+### S8. Multi-Start Robustness Study [DONE 2026-03-11]
 - **Motivation:** S7 showed that single-start emittance results at extremes are not
   statistically robust. This study directly characterizes the optimizer landscape.
 - **Design:** 5 emittance points (ε_n = 1, 3, 5, 14, 16) × 10 random Stage 11 starts.
-  Reports: best/worst/median MSE, quality classification histogram, box-and-whisker plot.
+  Reports: best/worst/median RMS, quality classification histogram, box-and-whisker plot.
 - **Implementation:** `S8_multistart_robustness.py`. Uses `stage11_startPoint` to inject
   random starting currents for the 4 Stage 11 quads (q87, q93, q95, q97). Checkpoint/resume
-  via CSV. Expected runtime ~25 min.
-- **Key question:** Is the optimization landscape convex enough for single-start?
+  via CSV. Runtime ~17 min.
+- **Key finding: Stage 11 is unimodal.** All 10 random starts at each ε_n converge to
+  exactly the same solution (identical MSE, quad currents, and Twiss to machine precision).
+  The Stage 11 objective landscape has a single global basin — multi-start cannot improve it.
+- **Consequence:** The S7 seed-dependence at extreme emittances originates entirely from
+  stages 1–10 (random beam generation affecting upstream matching), not from Stage 11's
+  Nelder-Mead search. Improving extreme-emittance robustness requires addressing the
+  upstream stages (e.g., multi-seed averaging, deterministic beam generation).
+- **Results:**
+
+  | ε_n | RMS | Quality | β_y (m) |
+  |-----|-----|---------|---------|
+  | 1 | 1.08e-1 | Marginal | ~0 |
+  | 3 | 138.8 | Failed | 264 |
+  | 5 | 5.58e-3 | Excellent | 0.242 |
+  | 14 | 9.53e-2 | Acceptable | 0.030 |
+  | 16 | 1.06e-1 | Marginal | 0.005 |
+
+- **Results dir:** `results/S8/`
 
 ### S9. Bunch Length Independence Study [DONE 2026-02-22]
 - **Motivation:** S1 (2 ps) and S3 (0.5 ps) produce identical quad currents.
@@ -363,7 +381,7 @@
 
 ## Category O: Optimizer Improvements
 
-### O1. Warm-Starting from Neighboring Points [IMPLEMENTED — pending run]
+### O1. Warm-Starting from Neighboring Points [DONE 2026-03-11 — negative result]
 - **Motivation:** Each scan point starts from the same fixed initial guess. Using
   the optimized currents from the previous (neighboring) scan point as the start
   could improve convergence speed and robustness at extreme parameter values.
@@ -372,8 +390,31 @@
   previous point's `quad_currents` result as starting guess for all 11 stages
   (clamped to bounds). Failed points do not propagate warm-start.
 - **Validation:** `O1_warm_start_validation.py` — re-runs S4 emittance sweep with
-  warm_start=True and compares MSE, convergence speed, and current continuity.
-- **Expected benefit:** 2–5× faster scans, better convergence at boundaries.
+  warm_start=True and compares RMS, convergence speed, and current continuity.
+- **Result: Naive sequential warm-starting is counterproductive.**
+  Warm start wins only 4/20 emittance points. The ε_n=1 basin (Marginal, RMS≈0.108)
+  traps the optimizer: once locked into those currents, stages 1–10 propagate the
+  Marginal solution through ε_n=2–13. Cold start independently finds better basins
+  at each point.
+- **Possible improvements (not yet implemented):**
+  - Run both cold and warm starts, keep the best
+  - Warm-start only Stage 11 (not stages 1–10)
+  - Bidirectional scan (low→high and high→low, merge best)
+- **Results dir:** `results/O1/`
+
+### O5. CMA-ES Polishing in Production Optimizer [DONE 2026-03-11]
+- **Motivation:** W7 showed pycma CMA-ES warm-started from NM dramatically outperforms
+  NM alone. Integrated as automatic post-NM polishing step in `run_optimization()`.
+- **Implementation:** After Stage 11 NM multi-start finds the best result, pycma
+  CMA-ES refines from that point (σ=0.1, popsize=20, maxfevals=3000). Falls back
+  gracefully if pycma not installed (`except ImportError: pass`).
+- **Validation (ε_n=5,8,14, 5 restarts):**
+  - ε_n=5: MSE 8.18e-06 → 7.76e-06 (1.1× better)
+  - ε_n=8: MSE 6.13e-06 → 6.13e-06 (dispersion-limited, NM already optimal)
+  - ε_n=14: MSE 8.93e-03 → 5.05e-03 (1.8× better)
+- **Note:** The composite 5-goal objective (4 Twiss + dispersion) has a dispersion
+  floor ~2.5e-6 that stage 11 quads cannot reduce. Pure 4-Twiss MSE reaches 1e-15
+  (see W7). CMA-ES provides most value at difficult emittances (ε_n=14).
 
 ### O2. Adaptive Scan Resolution [LOW PRIORITY]
 - **Motivation:** Uniform spacing wastes points in flat regions and undersamples
@@ -403,8 +444,9 @@
 - **Motivation:** Static EPS plots are good for papers; interactive plots help
   with exploration.
 - **Design:** Plotly/Dash dashboard reading CSV data. Two tabs: S4 1D scans
-  (MSE + Twiss subplots with hover showing quad currents), S5 2D heatmaps
-  (log₁₀ MSE with threshold contours).
+  (RMS + Twiss subplots with hover showing quad currents), S5 2D heatmaps
+  (log₁₀ RMS with threshold contours). IQR-based robust y-axis limits for
+  outlier handling.
 - **Script:** `R1_parameter_explorer.py`. Run: `python R1_parameter_explorer.py`
   → opens at http://localhost:8050.
 - **Dependencies:** `pip install dash plotly`
@@ -414,7 +456,7 @@
   and 3 summary plots.
 - **Tables:** (1) Baseline cross-code optimization, (2) Parameter sensitivity summary,
   (3) Bunch length & transmission, (4) Compression feasibility, (5) Quad currents.
-- **Plots:** 3-panel MSE vs parameter, cross-code Twiss bar chart, compression curve.
+- **Plots:** 3-panel RMS vs parameter, cross-code Twiss bar chart, compression curve.
 - Script: `R2_unified_comparison.py`
 - Report: `R2_unified_comparison_report.tex`
 - Results: `results/R2/`
