@@ -71,7 +71,8 @@ def _print(msg):
 
 # ── MultiCodeSimulator evaluation ───────────────────────────────────────
 
-def evaluate_multicode(felsim_result, beam_dist, targets):
+def evaluate_multicode(felsim_result, beam_dist, targets,
+                       space_charge=False, aperture=0.5):
     """Evaluate FELsim-optimised currents via MultiCodeSimulator hybrid.
 
     FELsim(0:87) + RF-Track(87:137) — demonstrates production multi-code
@@ -80,11 +81,18 @@ def evaluate_multicode(felsim_result, beam_dist, targets):
     ebeam_obj = beam()
     all_currents = dict(felsim_result['quad_currents'])
 
+    rt_config = {}
+    if space_charge:
+        rt_config['space_charge'] = True
+    if aperture != 0.5:
+        rt_config['aperture'] = aperture
+
     # Create MultiCodeSimulator with FELsim prefix + RF-Track suffix
     mc = MultiCodeSimulator(
         sections=[
             SimSection("prefix", "felsim", (0, PREFIX_END)),
-            SimSection("stage11", "rftrack", (PREFIX_END, SEGMENTS)),
+            SimSection("stage11", "rftrack", (PREFIX_END, SEGMENTS),
+                       config=rt_config if rt_config else None),
         ],
         lattice_path=str(JSON_PATH),
         beam_energy=ENERGY,

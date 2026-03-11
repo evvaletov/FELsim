@@ -68,16 +68,23 @@ def _print(msg):
 
 # ── MC-opt: MultiCodeSimulator Stage 11 optimization ────────────────────
 
-def _setup_multicode_pair(all_currents):
+def _setup_multicode_pair(all_currents, space_charge=False, aperture=0.5):
     """Create mc_full and mc_disp sharing the same master beamline.
 
     mc_full: FELsim(0:87) + RF-Track(87:SEGMENTS) → undulator Twiss
     mc_disp: FELsim(0:93) → dispersion at element 92
     """
+    rt_config = {}
+    if space_charge:
+        rt_config['space_charge'] = True
+    if aperture != 0.5:
+        rt_config['aperture'] = aperture
+
     mc_full = MultiCodeSimulator(
         sections=[
             SimSection("prefix", "felsim", (0, PREFIX_END)),
-            SimSection("stage11", "rftrack", (PREFIX_END, SEGMENTS)),
+            SimSection("stage11", "rftrack", (PREFIX_END, SEGMENTS),
+                       config=rt_config if rt_config else None),
         ],
         lattice_path=str(JSON_PATH),
         beam_energy=ENERGY,
@@ -148,14 +155,16 @@ def _mc_nm_objective(x, mc_full, mc_disp, beam_dist, targets, ebeam_obj, counter
 
 
 def run_mc_stage11(felsim_result, beam_dist, targets,
-                   n_restarts=5, chrom_upper_bound=15):
+                   n_restarts=5, chrom_upper_bound=15,
+                   space_charge=False, aperture=0.5):
     """Optimize Stage 11 via MultiCodeSimulator, warm-started from FELsim."""
     qb = 10
     cb = chrom_upper_bound
     ebeam_obj = beam()
 
     all_currents = dict(felsim_result['quad_currents'])
-    mc_full, mc_disp = _setup_multicode_pair(all_currents)
+    mc_full, mc_disp = _setup_multicode_pair(
+        all_currents, space_charge=space_charge, aperture=aperture)
 
     # Multi-start: FELsim solution (warm) + random restarts
     felsim_s11 = [all_currents[i] for i in S11_QUAD_INDICES]
@@ -254,7 +263,8 @@ def run_comparison(emittance_points, nb_particles=500, seed=42,
         # ── 2. MC-val ────────────────────────────────────────────────
         _print(f"  [2/5] MultiCode validation (FELsim currents)...")
         t0 = time.perf_counter()
-        mc_val = evaluate_multicode(felsim, beam_dist, targets)
+        mc_val = evaluate_multicode(felsim, beam_dist, targets,
+                                    space_charge=space_charge, aperture=aperture)
         mc_val_time = time.perf_counter() - t0
 
         if mc_val:
@@ -274,7 +284,8 @@ def run_comparison(emittance_points, nb_particles=500, seed=42,
         _print(f"  [3/5] MultiCode optimization ({n_restarts} restarts)...")
         mc_opt = run_mc_stage11(
             felsim, beam_dist, targets,
-            n_restarts=n_restarts, chrom_upper_bound=chrom_upper_bound)
+            n_restarts=n_restarts, chrom_upper_bound=chrom_upper_bound,
+            space_charge=space_charge, aperture=aperture)
 
         if mc_opt:
             oc = mc_opt['quad_currents']

@@ -617,11 +617,23 @@
   - **Smoke test (ε_n=8, 1 restart):**
     FELsim MSE=1.3e-4, MC-val MSE=1.31, **MC-opt MSE=2.8e-5**,
     RFT-val MSE=5.59, RFT-opt MSE=6.6e-3
-  - **MC-opt achieves 4.7× lower MSE than FELsim** and 238× lower than RFT-opt.
-    Nearly perfect Twiss match (β_y=0.242 vs target 0.242). RFT-opt struggles
-    with β_y (0.060 vs 0.242) — RF-Track dipole model creates different optics.
+  - **Full comparison (ε_n=5,8,14, 5 restarts, SC=OFF):**
+    | ε_n | FELsim | MC-opt | RFT-opt | Winner |
+    |-----|--------|--------|---------|--------|
+    | 5 | 3.1e-5 | 3.9e-5 | **3.9e-7** | RFT-opt |
+    | 8 | **6.1e-6** | 1.1e-2 | 4.9e-3 | FELsim |
+    | 14 | 1.1e-2 | **8.0e-3** | 9.8e-3 | MC-opt |
+  - No method dominates across all emittances. RFT-opt excels at ε_n=5
+    (deep NM basin), FELsim wins at ε_n=8 (linear model adequate),
+    MC-opt marginal winner at ε_n=14 (all struggle).
+  - MC-opt weakness: warm start from FELsim currents doesn't always transfer
+    to RF-Track suffix (β_y mismatch). Random restarts hit bad basins.
+  - **Space charge (ε_n=8 smoke test, SC=ON):** Identical MSE to SC=OFF.
+    SC forces negligible at 40 MeV / 500 particles. Timing confirms SC solver
+    active (MC-val: 1.1s SC=ON vs 0.3s SC=OFF).
+  - SC wiring added: `--space-charge` now applies to MC-val/MC-opt via
+    per-section config on RF-Track suffix (FELsim prefix unaffected).
   - Results: `results/C1C/`
-  - TODO: Run full comparison at ε_n = 5, 8, 14 with 5 restarts.
 
 ### C3. FR3+MGE Optimization [IN PROGRESS — CMA-ES v2 on Koa]
 - **Fieldmap fix (2026-02-22):** DELTAS 0→0.001, removed 0.835× scaling. Peak field
