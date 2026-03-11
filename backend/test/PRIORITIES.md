@@ -506,9 +506,9 @@
 - **TODO:**
   - **COSY adapter integration:** Test COSY→FELsim and COSY→RF-Track handoffs
     with real DA map tracking through partial beamlines.
-  - **Space charge in hybrid:** Test `config={'space_charge': True}` on
-    RF-Track suffix to assess 3D SC impact on Stage 11 matching.
-  - **Merge `multisim` → `main`:** PR after MC-opt validation.
+  - ~~**Space charge in hybrid:**~~ [DONE] SC=ON tested in C1C; negligible at
+    40 MeV / 500 particles. Per-section config wiring verified working.
+  - **Merge `multisim` → `main`:** PR after validation.
 
 ### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY — NOT NEEDED FOR UH FEL]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
