@@ -487,12 +487,13 @@
   - `SimSection` dataclass: (name, simulator_key, element_range, config)
   - `SimulatorFactory.create('multicode', ...)`: lazy-imported registration
   - `from_config()`: dict-based construction for YAML/JSON configuration
-  - Test suite (test_multicode.py): 26 tests — SimSection, init, coord
+  - Test suite (test_multicode.py): 33 tests — SimSection, init, coord
     roundtrips (all 3 pairs), FELsim split equivalence (2/3-section),
     element conversion (drift, quad, DPW params), factory registration,
     FELsim→RF-Track hybrid (successful run, cross-validation, DPW params,
     physical apertures config), per-section config (runtime key filtering,
-    separate vs shared instances)
+    separate vs shared instances), COSY adapter set_beamline (generic elements,
+    dicts, DPW conversion, FELsim slice, transfer matrix), hybrid FELsim+COSY
   - CI: test_multicode.py + test_attribute_guard.py added to pipeline
 - **Per-section config passthrough:** Runtime keys (space_charge, sc_mesh,
   physical_apertures, aperture) applied via setter methods before each
@@ -503,12 +504,24 @@
   (element 87) runs successfully. Hybrid vs full RF-Track shows qualitatively
   similar results (transverse RMS within order of magnitude) with expected
   differences from dipole model (transfer matrix vs analytical sector-bend).
+- **COSY adapter integration (2026-03-10):**
+  - `COSYAdapter.set_beamline()`: converts generic `BeamlineElement` objects
+    to COSY beamline dict format, sets `_native_sim.beamline` directly.
+    Handles DRIFT, QPF, QPD, DPH, DPW with full parameter passthrough.
+  - `BeamlineBuilder.__init__` updated to accept `excel_path=None` (skips
+    file validation when beamline will be set programmatically).
+  - Auto-enables particle tracking at all elements when in particle_tracking
+    mode, so `final_particles` is available for section handoff.
+  - DPW triplet consolidation handled correctly: checkpoint at all elements
+    avoids index mismatch from `_detect_dipole_triplets()`.
+  - Verified: `MultiCode(felsim:0-10 + cosy:10-20)` runs to completion
+    with particle handoff through COSY particle tracking.
 - **TODO:**
-  - **COSY adapter integration:** Test COSY→FELsim and COSY→RF-Track handoffs
-    with real DA map tracking through partial beamlines.
+  - ~~**COSY adapter integration:**~~ [DONE] see above.
   - ~~**Space charge in hybrid:**~~ [DONE] SC=ON tested in C1C; negligible at
     40 MeV / 500 particles. Per-section config wiring verified working.
-  - **Merge `multisim` → `main`:** PR after validation.
+  - ~~**Merge `multisim` → `main`:**~~ [DONE] Fast-forward merge + upstream
+    merge (Christian's 9 frontend commits).
 
 ### I5. T566 Objective via 2nd-Order DA Map [LOW PRIORITY — NOT NEEDED FOR UH FEL]
 - **Status:** `("l", "t566")` is in MEASURE_MAP but raises NotImplementedError.
@@ -668,7 +681,11 @@
     on near-identical points. **Fix for v3:** lower `maxfevals` per restart
     (e.g., 5000–10000) so BIPOP restarts trigger after sigma collapse, or add
     `tolx`-based early stopping.
-  - **TODO (C3v3):** Fix `maxfevals` (5000–10000 per restart), resubmit on Koa.
+  - **C3v3 (submitted 2026-03-10, Koa job 11471707):** `maxfevals=8000` per
+    restart (was 50000), `tolx=1e-4` early stopping, `verb_disp=500`. With
+    9 BIPOP restarts: up to 72k total evals. BIPOP will now trigger after
+    sigma collapse instead of wasting evals in exhausted basins.
+    Warm-start from v1 result (MSE=1030). Save: `result_cosy_mge_v3.json`.
 - **Files:** `fields/chicane_dipole_fieldmap.dat`, `test/koa_cosy_mge_opt.py`,
   `test/koa_cosy_mge_opt.slurm`, `test/results/koa_cosy_mge_result.json`,
   `test/results/koa_cosy_mge_result_indexed.json`

@@ -29,6 +29,12 @@ try:
 except ImportError:
     _RFTRACK_AVAILABLE = False
 
+try:
+    from cosyAdapter import COSYAdapter
+    _COSY_AVAILABLE = True
+except ImportError:
+    _COSY_AVAILABLE = False
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -454,3 +460,122 @@ class TestPerSectionConfig:
         )
         # Both have only runtime config, no creation-time differences
         assert len(mc._simulators) == 1
+
+
+# ── COSY adapter integration tests ──────────────────────────────────────
+
+class TestCOSYAdapterSetBeamline:
+    """COSYAdapter.set_beamline() for partial beamline tracking."""
+
+    @pytest.mark.skipif(not _COSY_AVAILABLE, reason="COSY not available")
+    def test_set_beamline_from_generic_elements(self):
+        """set_beamline accepts generic BeamlineElement objects."""
+        adapter = COSYAdapter(mode='transfer_matrix')
+        elements = [
+            BeamlineElement(element_type='DRIFT', length=0.1),
+            BeamlineElement(element_type='QUAD_F', length=0.089,
+                            current=2.5),
+            BeamlineElement(element_type='DRIFT', length=0.2),
+        ]
+        adapter.set_beamline(elements)
+        bl = adapter.get_native_simulator().beamline
+        assert len(bl) == 3
+        assert bl[0]['type'] == 'DRIFT'
+        assert bl[0]['length'] == 0.1
+        assert bl[1]['type'] == 'QPF'
+        assert bl[1]['current'] == 2.5
+        assert bl[2]['type'] == 'DRIFT'
+
+    @pytest.mark.skipif(not _COSY_AVAILABLE, reason="COSY not available")
+    def test_set_beamline_from_dicts(self):
+        """set_beamline accepts native COSY dict elements."""
+        adapter = COSYAdapter(mode='transfer_matrix')
+        elements = [
+            {'type': 'DRIFT', 'length': 0.5},
+            {'type': 'QPD', 'length': 0.089, 'current': 3.0},
+        ]
+        adapter.set_beamline(elements)
+        bl = adapter.get_native_simulator().beamline
+        assert len(bl) == 2
+        assert bl[1]['current'] == 3.0
+
+    @pytest.mark.skipif(not _COSY_AVAILABLE, reason="COSY not available")
+    def test_set_beamline_dpw_conversion(self):
+        """DPW elements preserve pole_gap and dipole parameters."""
+        adapter = COSYAdapter(mode='transfer_matrix')
+        elements = [
+            BeamlineElement(element_type='DIPOLE_WEDGE', length=0.0,
+                            angle=8.5, pole_gap=0.014478,
+                            dipole_length=0.0889, dipole_angle=17.0),
+        ]
+        adapter.set_beamline(elements)
+        bl = adapter.get_native_simulator().beamline
+        assert bl[0]['type'] == 'DPW'
+        assert bl[0]['pole_gap'] == 0.014478
+        assert bl[0]['dipole_angle'] == 17.0
+
+    @pytest.mark.skipif(not _COSY_AVAILABLE, reason="COSY not available")
+    def test_set_beamline_marks_parsed(self):
+        """After set_beamline, _beamline_parsed should be True."""
+        adapter = COSYAdapter(mode='transfer_matrix')
+        assert not adapter._beamline_parsed
+        adapter.set_beamline([
+            BeamlineElement(element_type='DRIFT', length=1.0),
+        ])
+        assert adapter._beamline_parsed
+
+    @pytest.mark.skipif(not _COSY_AVAILABLE, reason="COSY not available")
+    def test_set_beamline_from_felsim_slice(self, beamline):
+        """set_beamline works with elements converted from FELsim native via _felsim_to_generic."""
+        adapter = COSYAdapter(mode='transfer_matrix')
+        # Take a small slice and convert
+        felsim_slice = beamline[:10]
+        generic_slice = [_felsim_to_generic(e) for e in felsim_slice]
+        adapter.set_beamline(generic_slice)
+        bl = adapter.get_native_simulator().beamline
+        assert len(bl) == 10
+
+    @pytest.mark.skipif(not _COSY_AVAILABLE, reason="COSY not available")
+    def test_transfer_matrix_with_set_beamline(self):
+        """Transfer matrix simulation works with a set_beamline partial beamline."""
+        adapter = COSYAdapter(mode='transfer_matrix')
+        # Simple FODO-like cell
+        adapter.set_beamline([
+            BeamlineElement(element_type='DRIFT', length=0.5),
+            BeamlineElement(element_type='QUAD_F', length=0.089, current=2.0),
+            BeamlineElement(element_type='DRIFT', length=1.0),
+            BeamlineElement(element_type='QUAD_D', length=0.089, current=2.0),
+            BeamlineElement(element_type='DRIFT', length=0.5),
+        ])
+        result = adapter.simulate()
+        assert result.success
+        assert result.transfer_map is not None
+        M = result.transfer_map
+        assert M.shape == (6, 6)
+        # Drift-quad-drift system: diagonal elements should be finite
+        assert np.all(np.isfinite(M))
+
+
+@pytest.mark.skipif(not _COSY_AVAILABLE, reason="COSY not available")
+class TestHybridFELsimCOSY:
+    """FELsim→COSY hybrid simulation via MultiCodeSimulator."""
+
+    SPLIT = 10  # Small prefix for fast test
+    ENERGY = 40.0
+
+    def test_cosy_section_via_multicode(self, beamline, particles):
+        """MultiCode(felsim:0-10 + cosy:10-20) runs to completion."""
+        mc = MultiCodeSimulator(
+            sections=[
+                SimSection("prefix", "felsim", (0, self.SPLIT)),
+                SimSection("suffix", "cosy", (self.SPLIT, 20),
+                           config={'mode': 'particle_tracking'}),
+            ],
+            lattice_path=str(JSON_PATH),
+            beam_energy=self.ENERGY,
+        )
+        result = mc.simulate(particles=particles)
+        assert result.success, f"Hybrid FELsim+COSY failed: {result.metadata}"
+        assert result.final_particles is not None
+        assert result.final_particles.shape[1] == 6
+        assert result.metadata['num_sections'] == 2

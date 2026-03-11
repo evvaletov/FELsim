@@ -52,16 +52,16 @@ class COSYAdapter(SimulatorBase):
         self.lattice_path = path
         self.excel_path = excel_path  # backward compat
 
-        # COSY's native simulator requires an excel_path for BeamlineBuilder.
-        # For JSON/YAML lattices, use the explicit excel_path as a scaffold,
-        # or fall back to 'dummy.xlsx'.
+        # COSY's native simulator uses BeamlineBuilder which can take an
+        # excel_path. For JSON/YAML lattices or set_beamline() usage, pass
+        # None (BeamlineBuilder skips file validation when path is None).
         _is_excel = path and path.lower().endswith(('.xlsx', '.xls'))
         if _is_excel:
             sim_excel_path = path
         elif excel_path and excel_path.lower().endswith(('.xlsx', '.xls')):
             sim_excel_path = excel_path
         else:
-            sim_excel_path = 'dummy.xlsx'
+            sim_excel_path = None
 
         if mode == 'transfer_matrix':
             self.simulation_mode = SimulationMode.TRANSFER_MATRIX
@@ -532,6 +532,63 @@ class COSYAdapter(SimulatorBase):
                 'objectives': objectives
             }
         )
+
+    def set_beamline(self, elements: List[Union[BeamlineElement, Any]]):
+        """Set beamline from generic BeamlineElement objects or native dicts.
+
+        Used by MultiCodeSimulator for partial beamline tracking.
+        Converts BeamlineElement objects to the dict format expected by
+        COSYSimulator.beamline, then updates the native simulator.
+
+        When in particle_tracking mode, automatically enables a checkpoint
+        at the last element so that final_particles is available for handoff.
+        """
+        native_beamline = []
+        for elem in elements:
+            if isinstance(elem, BeamlineElement):
+                native_beamline.append(self._beamline_element_to_dict(elem))
+            elif isinstance(elem, dict):
+                native_beamline.append(elem)
+            else:
+                native_beamline.append(self._beamline_element_to_dict(
+                    self._convert_element_from_native(elem)))
+
+        self._native_sim.beamline = native_beamline
+        self._beamline_parsed = True
+
+        # Auto-enable particle checkpoints at all elements for handoff.
+        # We track all because DPW triplet consolidation changes the
+        # element count, making it hard to predict the last index.
+        if self._particle_sim is not None:
+            self._particle_sim.enable_particle_tracking(
+                checkpoint_elements=None)  # None = all elements
+
+    @staticmethod
+    def _beamline_element_to_dict(element: BeamlineElement) -> Dict:
+        """Convert a generic BeamlineElement to COSY beamline dict format."""
+        elem_type = element.element_type.upper()
+        # Map generic types to COSY types
+        type_map = {
+            'QUAD_F': 'QPF', 'QUAD_D': 'QPD',
+            'DIPOLE': 'DPH', 'DIPOLE_WEDGE': 'DPW',
+        }
+        cosy_type = type_map.get(elem_type, elem_type)
+
+        d = {
+            'type': cosy_type,
+            'length': element.length,
+            'current': element.parameters.get('current', 0),
+            'angle': element.parameters.get('angle', 0),
+            'wedge_angle': element.parameters.get('wedge_angle',
+                           element.parameters.get('angle', 0)),
+            'pole_gap': element.parameters.get('pole_gap', 0.014478),
+            'enge_fct': element.parameters.get('enge_fct', ''),
+        }
+        if cosy_type == 'DPW':
+            d['gap_wedge'] = element.length
+            d['dipole_length'] = element.parameters.get('dipole_length', 0)
+            d['dipole_angle'] = element.parameters.get('dipole_angle', 0)
+        return d
 
     def _convert_element_to_native(self, element: BeamlineElement) -> Dict:
         """Convert BeamlineElement to COSY Excel format."""
