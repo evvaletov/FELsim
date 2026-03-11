@@ -283,19 +283,43 @@
 - **Output:** `results/params_05ps_2d/`, contour plots, feasibility boundary curves
 - **Prerequisite:** S4 results to identify interesting regions
 
-### S6. Bunch Length Sensitivity (0.1–2 ps) [MEDIUM PRIORITY]
+### S6. Bunch Length Sensitivity (0.1–2 ps) [DONE 2026-03-11]
 - **Motivation:** The FELsim request asks about 0.5 ps specifically, but understanding
   the full bunch length range is valuable context.
 - **Design:** Sweep bunch_spread from 0.1 to 2.0 ps (15 points) at two parameter
   sets: (a) baseline (σ_E=0.5%, h=5e9) and (b) emittance-conservation scaled.
-- **Key question:** At what bunch length does the optimizer start to degrade?
+- **Results:**
+  - Baseline: 15/15 Excellent. Bunch length has **no effect** on transverse matching.
+    Confirms S9's linear decoupling prediction: transverse Twiss depends only on
+    the 4×4 block + dispersion column, not the longitudinal (column 5) distribution.
+  - Emittance-conserved (σ_E=2%, h=20e9): 11/15 Excellent, 3 Acceptable, 1 Marginal.
+    Dips are NM noise (not bunch-length-correlated), consistent with S4's finding
+    that σ_E=2% introduces some optimizer sensitivity.
+  - **Conclusion:** No bunch length threshold exists — the optimizer does not degrade.
+- Script: `S6_bunch_length_sensitivity.py`
+- Results: `results/S6/`
 
-### S7. Verification Runs at Key Points [MEDIUM PRIORITY]
+### S7. Verification Runs at Key Points [DONE 2026-03-11]
 - **Motivation:** The 500-particle sweeps trade accuracy for speed. Key points
   (boundaries, transitions) need 1000–2000 particle confirmation.
-- **Design:** From S4 results, identify 5–8 key points per scan where MSE crosses
-  thresholds. Re-run with 1000 and 2000 particles, compare.
-- **Output:** Verification table in report, error bars on sensitivity plots
+- **Design:** From S4 results, re-run 7 emittance points (ε_n = 1,3,5,8,14,16,20)
+  and 3 energy spread points (σ_E = 0.4,0.55,0.7%) at N=500, 1000, 2000.
+- **Results:**
+  - **Energy spread: fully consistent.** All 9 runs (3 points × 3 particle counts)
+    are Excellent. The σ_E=0.55% Acceptable dip in S4 was a statistical artifact
+    (different seed or NM basin).
+  - **Emittance: highly inconsistent at extremes.** Only ε_n=8 (baseline) is
+    consistent across particle counts. At ε_n=1,3,5,14,16,20, quality classification
+    varies wildly between N=500/1000/2000 — same emittance, different particle
+    samples → different NM local minima.
+  - **Key finding:** S4/S5 emittance results at extreme values are **not robust** —
+    they depend on the specific random particle realization, not solely on physics.
+    The optimizer landscape has multiple local minima that the beam sample selects.
+    Publication-quality claims require multi-start + multi-seed statistics.
+  - ε_n=14,16: N=2000 achieves Excellent (MSE~2e-5) while N=500,1000 give
+    Acceptable/Marginal — suggests the problem is NM basin selection, not physics.
+- Script: `S7_verification_runs.py`
+- Results: `results/S7/`
 
 ### S8. Multi-Start Robustness Study [LOW PRIORITY]
 - **Motivation:** Nelder-Mead is a local optimizer. Different starting points may
