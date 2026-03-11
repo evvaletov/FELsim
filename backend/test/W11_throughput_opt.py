@@ -18,6 +18,7 @@ Author: Eremey Valetov
 
 import sys
 import json
+import math
 import time
 import argparse
 import csv
@@ -160,7 +161,7 @@ def throughput_objective(x, sim, beam_rft_cached, targets, ebeam_obj,
 
     if counter[0] % 50 == 0:
         _print(f"    eval {counter[0]}: cost={cost:.4e} "
-               f"(MSE={mse_twiss:.4e}, T={T:.3f}, σ_t={sigma_t_ps:.3f} ps)")
+               f"(RMS={math.sqrt(mse_twiss):.4e}, T={T:.3f}, σ_t={sigma_t_ps:.3f} ps)")
 
     return cost
 
@@ -303,7 +304,7 @@ def run_scenario(scenario_name, felsim_currents, h_chirp, sigma_t_target_ps,
 
     _print(f"\n  ── Result ──")
     _print(f"  Cost = {best_result.fun:.4e}")
-    _print(f"  MSE_Twiss = {mse_twiss:.4e}")
+    _print(f"  RMS_Twiss = {math.sqrt(mse_twiss):.4e}")
     _print(f"  Transmission = {T:.4f} ({n_surviving}/{beam_rft_cached.shape[0]})")
     _print(f"  σ_t = {sigma_t_ps:.3f} ps (target: {sigma_t_target_ps})")
     _print(f"  I_peak = {I_peak:.1f} A")
@@ -473,7 +474,7 @@ def plot_summary(all_results, filename):
     x = np.arange(len(scenarios))
 
     metrics = [
-        ('mse_twiss', 'MSE Twiss', True),
+        ('mse_twiss', 'RMS Twiss', True),
         ('transmission', 'Transmission', False),
         ('sigma_t_ps', 'σ_t (ps)', False),
         ('I_peak_A', 'I_peak (A)', False),
@@ -481,6 +482,8 @@ def plot_summary(all_results, filename):
 
     for ax, (key, ylabel, use_log) in zip(axes, metrics):
         vals = [all_results[s][key] for s in scenarios]
+        if key == 'mse_twiss':
+            vals = [math.sqrt(v) for v in vals]
         ax.bar(x, vals, color=['#4477AA', '#EE6677'], alpha=0.8, edgecolor='k')
         ax.set_xticks(x)
         ax.set_xticklabels([s.replace('_', '\n') for s in scenarios], fontsize=9)
@@ -540,7 +543,7 @@ def main():
             bunch_spread=2.0, energy_std_percent=0.5, h=0,
             epsilon_n=8, nb_particles=args.particles, seed=SEED,
             n_restarts=args.n_restarts, chrom_upper_bound=args.chrom_bound)
-        _print(f"  FELsim MSE = {res['mse']:.4e} ({time.perf_counter()-t0:.1f} s)")
+        _print(f"  FELsim RMS = {math.sqrt(res['mse']):.4e} ({time.perf_counter()-t0:.1f} s)")
         felsim_currents = {int(k): float(v) for k, v in res['quad_currents'].items()}
         with open(OUTDIR / 'currents_felsim.json', 'w') as f:
             json.dump({str(k): v for k, v in felsim_currents.items()}, f, indent=2)
@@ -608,11 +611,11 @@ def main():
         _print("  W11 Summary")
         _print(f"{'='*72}")
 
-        _print(f"\n{'Scenario':<20s}  {'MSE':>10s}  {'T':>6s}  {'σ_t':>8s}  "
+        _print(f"\n{'Scenario':<20s}  {'RMS':>10s}  {'T':>6s}  {'σ_t':>8s}  "
                f"{'I_pk':>8s}  {'Cost':>10s}  {'nfev':>6s}")
         _print("-" * 72)
         for skey, r in all_results.items():
-            _print(f"{skey:<20s}  {r['mse_twiss']:10.4e}  {r['transmission']:6.3f}  "
+            _print(f"{skey:<20s}  {math.sqrt(r['mse_twiss']):10.4e}  {r['transmission']:6.3f}  "
                    f"{r['sigma_t_ps']:8.3f}  {r['I_peak_A']:8.1f}  "
                    f"{r['cost']:10.4e}  {r['nfev']:6d}")
 

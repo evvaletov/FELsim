@@ -14,6 +14,7 @@ Author: Eremey Valetov
 
 import sys
 import json
+import math
 import argparse
 import time
 from pathlib import Path
@@ -147,7 +148,7 @@ def get_optimized_currents():
         epsilon_n=8, nb_particles=500, seed=42,
     )
     elapsed = time.perf_counter() - t0
-    _print(f"  MSE = {res['mse']:.4e}, time = {elapsed:.1f} s")
+    _print(f"  RMS = {math.sqrt(res['mse']):.4e}, time = {elapsed:.1f} s")
     _print(f"  β_x={res['beta_x']:.4f}, α_x={res['alpha_x']:.4f}, "
            f"β_y={res['beta_y']:.4f}, α_y={res['alpha_y']:.4f}")
     return res['quad_currents']

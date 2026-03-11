@@ -10,6 +10,7 @@ Author: Eremey Valetov
 
 import sys
 import os
+import math
 import time
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -509,7 +510,7 @@ def test_T2_4_w8_smoke():
 
     result = run_optimization(epsilon_n=8, n_restarts=1, seed=SEED)
     mse = result['mse']
-    details = f"MSE = {mse:.4f} (threshold: 0.1), nfev = {result['nfev']}"
+    details = f"RMS = {math.sqrt(mse):.4f} (threshold: {math.sqrt(0.1):.4f}), nfev = {result['nfev']}"
     return mse < 0.1, details
 
 

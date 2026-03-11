@@ -12,6 +12,7 @@ Author: Eremey Valetov
 
 import sys
 import json
+import math
 import argparse
 from pathlib import Path
 import numpy as np
@@ -259,7 +260,7 @@ def run_cosy_optimization(file_path, fr, cosy_json=None):
         with open(cosy_json) as fh:
             data = json.load(fh)
         print(f"  Loaded COSY results from {cosy_json}")
-        print(f"  FR {data.get('fringe_field_order', '?')}, MSE = {data['mse']:.2e}")
+        print(f"  FR {data.get('fringe_field_order', '?')}, RMS = {math.sqrt(data['mse']):.2e}")
         currents = {int(k): v for k, v in data['currents'].items()}
         twiss = data['twiss_undulator']
         return twiss, currents, data['mse']
@@ -321,7 +322,7 @@ def plot_comparison(felsim_twiss, matrix_twiss, cosy_twiss, cosy_mse,
     axes[0].legend(fontsize=7, ncol=2)
     axes[0].set_title(
         f"FELsim vs COSY Twiss (each code\'s own optimised currents)\n"
-        f"FELsim MSE = {felsim_mse:.2e}, COSY MSE = {cosy_mse:.2e}"
+        f"FELsim RMS = {math.sqrt(felsim_mse):.2e}, COSY RMS = {math.sqrt(cosy_mse):.2e}"
     )
 
     # Alpha
@@ -481,8 +482,8 @@ if __name__ == "__main__":
     print_current_comparison(felsim_currents, cosy_currents)
     print_twiss_comparison(felsim_final, cosy_twiss, targets)
 
-    print(f"\n  FELsim MSE = {felsim_mse:.6e}")
-    print(f"  COSY MSE   = {cosy_mse:.6e}")
+    print(f"\n  FELsim RMS = {math.sqrt(felsim_mse):.6e}")
+    print(f"  COSY RMS   = {math.sqrt(cosy_mse):.6e}")
 
     # ── Plot ──────────────────────────────────────────────────────────────
     suffix = f"_fr{fr}" if fr > 0 else ""
@@ -495,7 +496,7 @@ if __name__ == "__main__":
     print("Key Findings")
     print("=" * 60)
     print("  1. Both codes independently achieve the Table I Twiss targets")
-    print(f"     (FELsim MSE={felsim_mse:.1e}, COSY MSE={cosy_mse:.1e})")
+    print(f"     (FELsim RMS={math.sqrt(felsim_mse):.1e}, COSY RMS={math.sqrt(cosy_mse):.1e})")
     neg_chicane = [i for i in [33, 35, 37, 39, 41, 43]
                    if cosy_currents.get(i, 0) < 0]
     if neg_chicane:

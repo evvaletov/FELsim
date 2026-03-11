@@ -12,6 +12,7 @@ Author: Eremey Valetov
 import sys
 import json
 import copy
+import math
 import argparse
 from pathlib import Path
 import numpy as np
@@ -329,7 +330,7 @@ def run_multistart(file_path, stages, targets, nmax=1000, nalg=1,
 
         mse = compute_mse(result['twiss'], targets)
         has_neg = any(v < 0 for v in result['currents'].values())
-        print(f"  -> MSE = {mse:.6e}"
+        print(f"  -> RMS = {math.sqrt(mse):.6e}"
               f"{'  (has negative currents)' if has_neg else ''}")
 
         if mse < best_mse:
@@ -374,7 +375,7 @@ def print_results(results, targets, felsim_ref=None):
         print(f"  D_x     = {twiss['eta_x']*1000:8.4f} mm  (target: 0)")
 
     mse = compute_mse(twiss, targets)
-    print(f"\n  MSE (final Twiss) = {mse:.6e}")
+    print(f"\n  RMS (final Twiss) = {math.sqrt(mse):.6e}")
     print("=" * 70)
     return mse
 

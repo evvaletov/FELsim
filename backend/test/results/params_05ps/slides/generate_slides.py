@@ -7,6 +7,7 @@ Date: 2026-02-27
 
 import json
 import csv
+import math
 from pathlib import Path
 import numpy as np
 import matplotlib
@@ -98,35 +99,35 @@ plt.close(fig)
 print("Saved: bunch_lengthening.png/eps")
 
 
-# ── Figure 2: Parameter sensitivity (MSE vs energy spread + emittance) ───────
+# ── Figure 2: Parameter sensitivity (RMS vs energy spread + emittance) ───────
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
 
-# Left: MSE vs energy spread
+# Left: RMS vs energy spread
 sigma_e = [float(r['param_value']) for r in energy_spread]
-mse_e = [float(r['mse']) for r in energy_spread]
-axes[0].semilogy(sigma_e, mse_e, 'o-', color='#2196F3', markersize=5, lw=1.5)
-axes[0].axhline(1e-3, color='green', ls='--', lw=0.8, label='Excellent')
-axes[0].axhline(1e-2, color='orange', ls='--', lw=0.8, label='Acceptable')
-axes[0].axhline(1e-1, color='red', ls='--', lw=0.8, label='Marginal')
+rms_e = [math.sqrt(float(r['mse'])) for r in energy_spread]
+axes[0].semilogy(sigma_e, rms_e, 'o-', color='#2196F3', markersize=5, lw=1.5)
+axes[0].axhline(math.sqrt(1e-3), color='green', ls='--', lw=0.8, label='Excellent')
+axes[0].axhline(math.sqrt(1e-2), color='orange', ls='--', lw=0.8, label='Acceptable')
+axes[0].axhline(math.sqrt(1e-1), color='red', ls='--', lw=0.8, label='Marginal')
 axes[0].set_xlabel(r'Energy Spread $\sigma_E$ (%)')
-axes[0].set_ylabel('MSE')
+axes[0].set_ylabel('RMS')
 axes[0].set_title(r'Twiss Matching vs $\sigma_E$ (0.5 ps)')
 axes[0].legend(loc='upper left', fontsize=8)
-axes[0].set_ylim(1e-7, 1)
+axes[0].set_ylim(math.sqrt(1e-7), 1)
 
-# Right: MSE vs emittance
+# Right: RMS vs emittance
 eps_n = [float(r['param_value']) for r in emittance]
-mse_em = [float(r['mse']) for r in emittance]
-axes[1].semilogy(eps_n, mse_em, 's-', color='#E65100', markersize=5, lw=1.5)
-axes[1].axhline(1e-3, color='green', ls='--', lw=0.8, label='Excellent')
-axes[1].axhline(1e-2, color='orange', ls='--', lw=0.8, label='Acceptable')
-axes[1].axhline(1e-1, color='red', ls='--', lw=0.8, label='Marginal')
+rms_em = [math.sqrt(float(r['mse'])) for r in emittance]
+axes[1].semilogy(eps_n, rms_em, 's-', color='#E65100', markersize=5, lw=1.5)
+axes[1].axhline(math.sqrt(1e-3), color='green', ls='--', lw=0.8, label='Excellent')
+axes[1].axhline(math.sqrt(1e-2), color='orange', ls='--', lw=0.8, label='Acceptable')
+axes[1].axhline(math.sqrt(1e-1), color='red', ls='--', lw=0.8, label='Marginal')
 axes[1].set_xlabel(r'Normalised Emittance $\varepsilon_n$ ($\pi\cdot$mm$\cdot$mrad)')
-axes[1].set_ylabel('MSE')
+axes[1].set_ylabel('RMS')
 axes[1].set_title(r'Twiss Matching vs $\varepsilon_n$ (0.5 ps)')
 axes[1].legend(loc='upper left', fontsize=8)
-axes[1].set_ylim(1e-10, 10)
+axes[1].set_ylim(math.sqrt(1e-10), math.sqrt(10))
 
 fig.tight_layout()
 fig.savefig(OUT / 'parameter_sensitivity.png')
@@ -151,8 +152,8 @@ w1_2_h0 = next(r for r in w1 if '2 ps' in r['label'] and 'h=0' in r['label'])
 w1_05_h5 = next(r for r in w1 if '0.5' in r['label'] and 'h=5' in r['label'])
 w1_2_h5 = next(r for r in w1 if '2 ps' in r['label'] and 'h=5' in r['label'])
 
-table_lines.append(f"{'Transverse Twiss MSE (h=0)':<35} {float(w1_2_h0['mse']):>18.2e} {float(w1_05_h0['mse']):>18.2e}")
-table_lines.append(f"{'Transverse Twiss MSE (h=5e9)':<35} {float(w1_2_h5['mse']):>18.2e} {float(w1_05_h5['mse']):>18.2e}")
+table_lines.append(f"{'Transverse Twiss RMS (h=0)':<35} {math.sqrt(float(w1_2_h0['mse'])):>18.2e} {math.sqrt(float(w1_05_h0['mse'])):>18.2e}")
+table_lines.append(f"{'Transverse Twiss RMS (h=5e9)':<35} {math.sqrt(float(w1_2_h5['mse'])):>18.2e} {math.sqrt(float(w1_05_h5['mse'])):>18.2e}")
 
 # Quad currents comparison (h=0 — identical)
 q_05 = [float(w1_05_h0[k]) for k in sorted(w1_05_h0) if k.startswith('quad_')]
@@ -193,27 +194,30 @@ table2.append("=" * 78)
 table2.append("  0.5 ps Parameter Sensitivity Summary")
 table2.append("=" * 78)
 table2.append("")
-table2.append(f"{'Scan':<25} {'Range':<20} {'MSE Range':<25} {'Verdict':<15}")
+table2.append(f"{'Scan':<25} {'Range':<20} {'RMS Range':<25} {'Verdict':<15}")
 table2.append("-" * 78)
 
 mse_e_vals = [float(r['mse']) for r in energy_spread]
+rms_e_range = f'{math.sqrt(min(mse_e_vals)):.1e} – {math.sqrt(max(mse_e_vals)):.1e}'
 table2.append(f"{'Energy spread σ_E':<25} {'0.1 – 5.0 %':<20} "
-              f"{f'{min(mse_e_vals):.1e} – {max(mse_e_vals):.1e}':<25} "
+              f"{rms_e_range:<25} "
               f"{'All Excellent':<15}")
 
 mse_c_vals = [float(r['mse']) for r in chirp]
+rms_c_range = f'{math.sqrt(min(mse_c_vals)):.1e} – {math.sqrt(max(mse_c_vals)):.1e}'
 table2.append(f"{'Chirp h':<25} {'0 – 40×10⁹/s':<20} "
-              f"{f'{min(mse_c_vals):.1e} – {max(mse_c_vals):.1e}':<25} "
+              f"{rms_c_range:<25} "
               f"{'All Excellent':<15}")
 
 mse_em_vals = [float(r['mse']) for r in emittance]
 n_exc = sum(1 for m in mse_em_vals if m < 1e-3)
+rms_em_range = f'{math.sqrt(min(mse_em_vals)):.1e} – {math.sqrt(max(mse_em_vals)):.1e}'
 table2.append(f"{'Emittance ε_n':<25} {'1 – 20 π·mm·mrad':<20} "
-              f"{f'{min(mse_em_vals):.1e} – {max(mse_em_vals):.1e}':<25} "
+              f"{rms_em_range:<25} "
               f"{f'{n_exc}/{len(mse_em_vals)} Excellent':<15}")
 
 table2.append("-" * 78)
-table2.append("Quality thresholds: Excellent < 10⁻³, Acceptable < 10⁻², Marginal < 10⁻¹")
+table2.append("Quality thresholds: Excellent < √(10⁻³), Acceptable < √(10⁻²), Marginal < √(10⁻¹)")
 table2.append("=" * 78)
 
 table2_text = "\n".join(table2)
@@ -239,13 +243,13 @@ Key points:
   the longitudinal (time-of-flight) column of the transfer matrix.
 
 • Confirmed by three independent codes:
-  – FELsim (transfer matrices): MSE = 1.3×10⁻⁶ at both 2 ps and 0.5 ps (h=0)
-  – COSY INFINITY (6D differential algebra): MSE = 2.3×10⁻⁷
+  – FELsim (transfer matrices): RMS = 1.1×10⁻³ at both 2 ps and 0.5 ps (h=0)
+  – COSY INFINITY (6D differential algebra): RMS = 4.8×10⁻⁴
   – RF-Track (3D particle tracking): validates model, identifies dipole
     edge-kick sensitivity for precision tuning
 
 • Chirp (h = 5×10⁹/s) has negligible effect on transverse matching
-  (MSE increases from 1.3×10⁻⁶ to 2.6×10⁻⁵ — still Excellent quality).
+  (RMS increases from 1.1×10⁻³ to 5.1×10⁻³ — still Excellent quality).
 
 Figures: comparison_table.txt, parameter_sensitivity.png
 
@@ -261,7 +265,7 @@ Key points:
   – With chirp (h = 5×10⁹/s): 71% lengthening at 0.5 ps, 47% at 2 ps
 
 • Beam parameter sensitivity (at 0.5 ps, 500-particle sweeps):
-  – Energy spread: full 0.1–5% range produces Excellent matching (MSE < 10⁻³)
+  – Energy spread: full 0.1–5% range produces Excellent matching (RMS < √(10⁻³))
   – Emittance: 6–20 π·mm·mrad all Excellent; ε_n < 5 challenging (physics limit)
   – Chirp: full 0–40×10⁹/s range produces Excellent matching
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Generate a 2-slide summary of FELsim beamline optimization studies."""
 
+import math
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
@@ -110,17 +111,17 @@ def slide1(prs):
     # ── Main comparison table ────────────────────────────────────────────────
     y0 = Inches(1.05)
     cols = ["Study", "σ_t", "σ_E", "h (chirp)", "Twiss targets",
-            "β_x achieved", "β_y achieved", "MSE"]
+            "β_x achieved", "β_y achieved", "RMS"]
     data = [
         # Study 1: 0.5 ps, symmetric targets, emittance-conservation scaling
         ("0.5 ps  emit. cons.", "0.5 ps", "2.0%", "20×10⁹",
-         "β = 0.24, α = 0  (both planes)", "0.2419", "0.2419", "1.3e-5"),
+         "β = 0.24, α = 0  (both planes)", "0.2419", "0.2419", f"{math.sqrt(1.3e-5):.1e}"),
         # Study 2: 2 ps, paper targets
         ("2 ps  paper", "2 ps", "0.5%", "5×10⁹",
-         "β_x=1.4 α_x=0.47 / β_y=0.24 α_y=0", "1.3999", "0.2419", "2.9e-5"),
+         "β_x=1.4 α_x=0.47 / β_y=0.24 α_y=0", "1.3999", "0.2419", f"{math.sqrt(2.9e-5):.1e}"),
         # Study 3: 0.5 ps, paper targets
         ("0.5 ps  paper", "0.5 ps", "0.5%", "5×10⁹",
-         "β_x=1.4 α_x=0.47 / β_y=0.24 α_y=0", "1.4000", "0.2420", "2.6e-5"),
+         "β_x=1.4 α_x=0.47 / β_y=0.24 α_y=0", "1.4000", "0.2420", f"{math.sqrt(2.6e-5):.1e}"),
         # Study 4: 0.5 ps parameter sensitivity
         ("0.5 ps  sweep", "0.5 ps", "0.1–5%", "0–40×10⁹",
          "β_x=1.4 α_x=0.47 / β_y=0.24 α_y=0", "(see slide 2)", "", ""),
@@ -168,7 +169,7 @@ def slide1(prs):
 
     # ── Bottom: all studies match ─────────────────────────────────────────────
     y2 = y1 + Inches(1.55)
-    add_note(slide, ("All four studies achieve excellent undulator Twiss matching (MSE < 3×10⁻⁵). "
+    add_note(slide, ("All four studies achieve excellent undulator Twiss matching (RMS < 6×10⁻³). "
                      "The optimizer handles both 0.5 ps and 2 ps, symmetric and asymmetric targets, "
                      "and a wide range of energy spread and chirp."),
              Inches(0.35), y2, size=10, color=DARK)
@@ -181,7 +182,7 @@ def slide2(prs):
     add_title(slide, "0.5 ps Parameter Sensitivity — Sweep Results")
     add_note(slide, ("1D scans: hold all parameters at baseline (σ_E = 0.5%, h = 5×10⁹, ε_n = 8), "
                      "sweep one.  500 particles, seed=42.  "
-                     "MSE thresholds: Excellent < 10⁻³, Acceptable < 10⁻², Failed > 10⁻¹."),
+                     "RMS thresholds: Excellent < 3×10⁻², Acceptable < 10⁻¹, Failed > 3×10⁻¹."),
              Inches(0.35), Inches(0.55), size=9)
 
     # ── Sweep summary table ──────────────────────────────────────────────────
@@ -220,13 +221,13 @@ def slide2(prs):
     add_label(slide, "Emittance scan — the only parameter with a feasibility limit",
               Inches(0.35), y1, width=Inches(6))
 
-    em_cols = ["ε_n", "MSE", "Quality", "β_x (m)", "β_y (m)"]
+    em_cols = ["ε_n", "RMS", "Quality", "β_x (m)", "β_y (m)"]
     em_data = [
-        ("1", "2.4e+1", "Failed", "6.15", "0.00"),
-        ("3", "1.7e-3", "Acceptable", "1.39", "0.15"),
-        ("5–12", "~10⁻⁵", "Excellent", "1.40", "0.24"),
-        ("14–16", "~10⁻²", "Acceptable", "1.40", "0.02–0.06"),
-        ("18–20", "~10⁻⁵", "Excellent", "1.40", "0.24"),
+        ("1", f"{math.sqrt(2.4e+1):.1f}", "Failed", "6.15", "0.00"),
+        ("3", f"{math.sqrt(1.7e-3):.1e}", "Acceptable", "1.39", "0.15"),
+        ("5–12", "~3×10⁻³", "Excellent", "1.40", "0.24"),
+        ("14–16", "~10⁻¹", "Acceptable", "1.40", "0.02–0.06"),
+        ("18–20", "~3×10⁻³", "Excellent", "1.40", "0.24"),
     ]
     q_colors = [RED, ORANGE, GREEN, ORANGE, GREEN]
 

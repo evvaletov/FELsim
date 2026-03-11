@@ -5,7 +5,7 @@ when starting from a 2 ps linac bunch?
 
 Part A: Analytical compression + chirp sweep via COSY map propagation
 Part B: RF-Track validation (post-C7 coord5 fix, re-run of W10 Part B)
-Part C: Extended current bounds (15 A) — transverse MSE vs σ_z
+Part C: Extended current bounds (15 A) — transverse RMS vs σ_z
 Part D: Notes and feasibility summary
 
 Key prior results:

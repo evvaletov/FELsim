@@ -18,6 +18,7 @@ Date: 2026-02-06
 """
 
 import sys
+import math
 import time
 from pathlib import Path
 import numpy as np
@@ -219,7 +220,7 @@ def print_result(label, r, bx_t, by_t, ax_t, ay_t):
     print(f"  y alpha = {r['y_alpha']:+.6f}  (target {ay_t:+.4f})")
     print(f"  x beta  = {r['x_beta']:.4f} m  (target {bx_t:.4f})")
     print(f"  y beta  = {r['y_beta']:.4f} m  (target {by_t:.4f})")
-    print(f"  MSE     = {r['mse']:.6e}")
+    print(f"  RMS     = {math.sqrt(r['mse']):.6e}")
     print(f"  Currents: I87={r['I87']:.4f}, I93={r['currents'][0]:.4f}, "
           f"I95={r['currents'][1]:.4f}, I97={r['currents'][2]:.4f}")
 
@@ -439,7 +440,7 @@ results["5"] = r5
 print("\n" + "=" * 90)
 print("  SUMMARY")
 print("=" * 90)
-print(f"  {'#':<3s} {'Strategy':<45s} {'MSE':>12s} {'x_beta':>8s} {'y_beta':>8s} "
+print(f"  {'#':<3s} {'Strategy':<45s} {'RMS':>12s} {'x_beta':>8s} {'y_beta':>8s} "
       f"{'x_alpha':>9s} {'y_alpha':>9s} {'Time':>7s}")
 print("-" * 90)
 
@@ -452,7 +453,7 @@ for key in sorted(results.keys()):
         "4": "DiffEvo 3-var, asymmetric targets",
         "5": "DiffEvo 4-var joint, asymmetric targets",
     }[key]
-    print(f"  {key:<3s} {lbl:<45s} {r['mse']:12.3e} {r['x_beta']:8.4f} {r['y_beta']:8.4f} "
+    print(f"  {key:<3s} {lbl:<45s} {math.sqrt(r['mse']):12.3e} {r['x_beta']:8.4f} {r['y_beta']:8.4f} "
           f"{r['x_alpha']:+9.5f} {r['y_alpha']:+9.5f} {r['time']:6.1f}s")
 
 print(f"\n  Symmetric target:  beta_x = beta_y = {beta_sym:.4f} m, alpha_x = alpha_y = 0")

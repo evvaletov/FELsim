@@ -14,6 +14,7 @@ Author: Eremey Valetov
 
 import sys
 import json
+import math
 import time
 from pathlib import Path
 import numpy as np
@@ -408,7 +409,7 @@ if __name__ == "__main__":
         twiss = compute_final_twiss(line, beam_dist, targets)
         transmission = compute_transmission(line, beam_dist)
 
-        print(f"\n  Pass {p + 1} summary: MSE={twiss['mse']:.6e}, T={transmission*100:.1f}%")
+        print(f"\n  Pass {p + 1} summary: RMS={math.sqrt(twiss['mse']):.6e}, T={transmission*100:.1f}%")
 
         if twiss['mse'] < best_mse:
             best_mse = twiss['mse']
@@ -434,7 +435,7 @@ if __name__ == "__main__":
     print(f"  beta_y  = {best_twiss['beta_y']:8.4f} m   (target: {targets['beta_ym']:.4f})")
     print(f"  alpha_x = {best_twiss['alpha_x']:8.4f}     (target: {targets['alpha_xm']:.4f})")
     print(f"  alpha_y = {best_twiss['alpha_y']:8.4f}     (target: {targets['alpha_ym']:.4f})")
-    print(f"  MSE     = {best_mse:.6e}")
+    print(f"  RMS     = {math.sqrt(best_mse):.6e}")
     print(f"\n  Transmission: {best_transmission*100:.1f}%")
     print("=" * 70)
 

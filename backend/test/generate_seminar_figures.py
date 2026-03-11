@@ -580,7 +580,7 @@ def figure_convergence(convergence):
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 7.5),
                                     gridspec_kw={'height_ratios': [3, 1.2], 'hspace': 0.35})
 
-    # ── Top: MSE vs iteration with stage boundaries ──
+    # ── Top: RMS vs iteration with stage boundaries ──
     iterations = np.arange(1, len(mse) + 1)
     ax1.semilogy(iterations, mse, color=C_BLUE, lw=0.8, alpha=0.6)
 

@@ -315,7 +315,7 @@ def main():
     t0 = time.time()
     test_mse = evaluate(template, cosy_bin, run_dir, *x0)
     dt = time.time() - t0
-    print(f"  Test eval: MSE={test_mse:.4e} ({dt:.1f}s)")
+    print(f"  Test eval: RMS={math.sqrt(test_mse):.4e} ({dt:.1f}s)")
     print(f"  Est. time: {dt * args.max_eval / 3600:.1f}h for {args.max_eval} evals")
 
     n_eval = [0]
@@ -331,7 +331,7 @@ def main():
             best_x[0] = list(x)
             elapsed = time.time() - t_start
             stable = "STABLE" if mse < 1000 else "unstable"
-            print(f"  [{n_eval[0]:5d}] MSE={mse:.6e} ({stable}) "
+            print(f"  [{n_eval[0]:5d}] RMS={math.sqrt(mse):.6e} ({stable}) "
                   f"Ic={x[0]:.3f} I={x[1]:.3f} I2={x[2]:.3f} I3={x[3]:.3f} "
                   f"t={elapsed:.0f}s")
         return mse
@@ -355,7 +355,7 @@ def main():
         es.optimize(objective)
         xopt = es.result.xbest
 
-    print(f"\nDone: {n_eval[0]} evaluations, best MSE={best_mse[0]:.6e}")
+    print(f"\nDone: {n_eval[0]} evaluations, best RMS={math.sqrt(best_mse[0]):.6e}")
     print(f"  S11_Ic = {best_x[0][0]:.6f}")
     print(f"  S11_I  = {best_x[0][1]:.6f}")
     print(f"  S11_I2 = {best_x[0][2]:.6f}")

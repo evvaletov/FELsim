@@ -460,6 +460,63 @@ MSE_THRESHOLDS = {
 TWISS_TARGETS = None  # set at runtime
 
 
+def _robust_log_range(values, pad_decades=0.5):
+    """Shortest Covering Interval for log-scale y-axis limits.
+
+    Finds the shortest interval in log10 space covering ≥80% of the data,
+    extends by 50% of its span on each side. Excludes extreme outliers
+    without relying on IQR (which fails for N<15 with heavy tails).
+    """
+    clean = sorted(v for v in values if np.isfinite(v) and v > 0)
+    if not clean:
+        return [1e-10, 1]
+    if len(clean) < 3:
+        lo, hi = min(clean), max(clean)
+        margin = max(math.log10(hi / lo) * 0.3 if hi > lo else 1.0, 1.0)
+        return [lo * 10**(-margin), hi * 10**(margin)]
+    lv = np.log10(clean)
+    n = len(lv)
+    k = max(math.ceil(0.8 * n), min(n, 4))
+    best_span, best_lo, best_hi = np.inf, lv[0], lv[k - 1]
+    for i in range(n - k + 1):
+        span = lv[i + k - 1] - lv[i]
+        if span < best_span:
+            best_span = span
+            best_lo, best_hi = lv[i], lv[i + k - 1]
+    ext = max(best_span * 0.5, 0.5)
+    lo, hi = best_lo - ext, best_hi + ext
+    if hi - lo < 1.0:
+        mid = (lo + hi) / 2
+        lo, hi = mid - 0.5, mid + 0.5
+    return [10**(lo - pad_decades), 10**(hi + pad_decades)]
+
+
+def _robust_linear_range(values, pad_frac=0.15):
+    """Shortest Covering Interval for linear-scale y-axis limits."""
+    clean = sorted(v for v in values if np.isfinite(v))
+    if not clean:
+        return [-1, 1]
+    if len(clean) < 3:
+        lo, hi = min(clean), max(clean)
+        margin = max((hi - lo) * 0.3, 0.5)
+        return [lo - margin, hi + margin]
+    n = len(clean)
+    k = max(math.ceil(0.8 * n), min(n, 4))
+    best_span, best_lo, best_hi = np.inf, clean[0], clean[k - 1]
+    for i in range(n - k + 1):
+        span = clean[i + k - 1] - clean[i]
+        if span < best_span:
+            best_span = span
+            best_lo, best_hi = clean[i], clean[i + k - 1]
+    ext = max(best_span * 0.5, 0.1)
+    lo, hi = best_lo - ext, best_hi + ext
+    if hi - lo < 1e-10:
+        mid = (lo + hi) / 2
+        lo, hi = mid - 0.5, mid + 0.5
+    pad = (hi - lo) * pad_frac
+    return [lo - pad, hi + pad]
+
+
 def plot_mse_vs_param(param_vals, mse_vals, xlabel, title, filepath):
     fig, ax = plt.subplots(figsize=(8, 5))
     rms_vals = [math.sqrt(m) for m in mse_vals]
@@ -474,6 +531,8 @@ def plot_mse_vs_param(param_vals, mse_vals, xlabel, title, filepath):
     ax.set_title(title.replace('MSE', 'RMS'))
     ax.legend()
     ax.grid(True, alpha=0.3)
+    ylo, yhi = _robust_log_range(rms_vals)
+    ax.set_ylim(ylo, yhi)
     fig.tight_layout()
     fig.savefig(filepath, format='eps')
     plt.close(fig)
@@ -499,6 +558,8 @@ def plot_twiss_vs_param(param_vals, rows, xlabel, title_base, filepath):
         ax.set_ylabel(ylabel)
         ax.legend()
         ax.grid(True, alpha=0.3)
+        ylo, yhi = _robust_linear_range(vals + [target])
+        ax.set_ylim(ylo, yhi)
 
     fig.suptitle(title_base, fontsize=14)
     fig.tight_layout()

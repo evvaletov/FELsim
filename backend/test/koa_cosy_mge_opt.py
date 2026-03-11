@@ -350,7 +350,7 @@ def main():
     t0 = time.time()
     test_mse = evaluate(fox_template, var_names, run_dir, defaults)
     dt = time.time() - t0
-    print(f"  Test evaluation: MSE={test_mse:.4e} ({dt:.1f}s)")
+    print(f"  Test evaluation: RMS={math.sqrt(test_mse):.4e} ({dt:.1f}s)")
     est_hours = dt * args.max_eval / 3600
     print(f"  Estimated time: {est_hours:.1f} hours for {args.max_eval} evaluations")
 
@@ -367,7 +367,7 @@ def main():
             best_x[0] = list(x)
             elapsed = time.time() - t_start
             stable = "STABLE" if mse < 1000 else "unstable"
-            print(f"  [{n_eval[0]:5d}] MSE={mse:.6e} ({stable}) t={elapsed:.0f}s")
+            print(f"  [{n_eval[0]:5d}] RMS={math.sqrt(mse):.6e} ({stable}) t={elapsed:.0f}s")
         return mse
 
     opts = {
@@ -391,7 +391,7 @@ def main():
 
     result = es.result
     print(f"\nOptimization complete: {n_eval[0]} evaluations")
-    print(f"  Best MSE: {best_mse[0]:.6e}")
+    print(f"  Best RMS: {math.sqrt(best_mse[0]):.6e}")
     print(f"  Stable: {'YES' if best_mse[0] < 1000 else 'NO'}")
 
     print("\nOptimal currents:")

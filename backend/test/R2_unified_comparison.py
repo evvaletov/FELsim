@@ -18,6 +18,7 @@ Author: Eremey Valetov
 import sys
 import json
 import csv
+import math
 import argparse
 from pathlib import Path
 import numpy as np
@@ -159,12 +160,12 @@ def table_1_baseline():
 
     # Print table
     if rows:
-        _print(f"\n  {'Code':<16s} {'Model':<24s} {'MSE':>10s} {'β_x':>8s} {'α_x':>8s} "
+        _print(f"\n  {'Code':<16s} {'Model':<24s} {'RMS':>10s} {'β_x':>8s} {'α_x':>8s} "
                f"{'β_y':>8s} {'α_y':>8s} {'Quality':<12s}")
         _print("  " + "-" * 94)
         for r in rows:
             q = classify_mse(r['MSE'])
-            _print(f"  {r['Code']:<16s} {r['Model']:<24s} {r['MSE']:10.2e} {r['β_x']:8.4f} "
+            _print(f"  {r['Code']:<16s} {r['Model']:<24s} {math.sqrt(r['MSE']):10.2e} {r['β_x']:8.4f} "
                    f"{r['α_x']:8.4f} {r['β_y']:8.4f} {r['α_y']:8.4f} {q:<12s}")
 
         _print(f"\n  Targets: β_x = 1.400 m, α_x = 0.470, β_y = 0.2418 m, α_y ≈ 0")
@@ -397,7 +398,7 @@ def table_5_currents():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def plot_mse_comparison():
-    """3-panel MSE vs parameter plot combining all S4 scans."""
+    """3-panel RMS vs parameter plot combining all S4 scans."""
     scans = [
         ('scan_energy_spread.csv', r'$\sigma_E$ (%)', 'Energy Spread'),
         ('scan_chirp.csv', r'$h$ (1/s)', 'Chirp'),
@@ -423,7 +424,7 @@ def plot_mse_comparison():
             ax.axhline(thresh, ls='--', color=colors[label], lw=1, alpha=0.7, label=label)
 
         ax.set_xlabel(xlabel)
-        ax.set_ylabel('MSE')
+        ax.set_ylabel('RMS')
         ax.set_title(title)
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=7)
@@ -591,13 +592,13 @@ def generate_latex(t1_data, t2_data, t3_data, t4_data, t5_data):
             r"\begin{tabular}{llS[scientific-notation=true]S[round-precision=4]S[round-precision=4]"
             r"S[round-precision=4]S[round-precision=4]l}",
             r"\toprule",
-            r"Code & Model & {MSE} & {$\beta_x$ (m)} & {$\alpha_x$} & {$\beta_y$ (m)} & {$\alpha_y$} & Quality \\",
+            r"Code & Model & {RMS} & {$\beta_x$ (m)} & {$\alpha_x$} & {$\beta_y$ (m)} & {$\alpha_y$} & Quality \\",
             r"\midrule",
         ])
         for r in t1_data:
             q = classify_mse(r['MSE'])
             lines.append(
-                f"  {r['Code']} & {r['Model']} & {r['MSE']:.2e} & {r['β_x']:.4f} & "
+                f"  {r['Code']} & {r['Model']} & {math.sqrt(r['MSE']):.2e} & {r['β_x']:.4f} & "
                 f"{r['α_x']:.4f} & {r['β_y']:.4f} & {r['α_y']:.4f} & {q} \\\\"
             )
         lines.extend([
@@ -635,7 +636,7 @@ def generate_latex(t1_data, t2_data, t3_data, t4_data, t5_data):
         r"\section{Figures}",
         r"\begin{figure}[htbp]\centering",
         r"  \includegraphics[width=\textwidth]{R2/R2_mse_vs_parameter.eps}",
-        r"  \caption{MSE vs.\ parameter for three S4 sensitivity scans.}",
+        r"  \caption{RMS vs.\ parameter for three S4 sensitivity scans.}",
         r"\end{figure}",
         "",
         r"\begin{figure}[htbp]\centering",

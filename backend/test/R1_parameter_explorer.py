@@ -103,63 +103,79 @@ RMS_THRESHOLDS = {k: math.sqrt(v) for k, v in MSE_THRESHOLDS.items()}
 # ── Robust y-axis limits ─────────────────────────────────────────────────────
 
 def _robust_range(values, pad_frac=0.15):
-    """Determine y-axis range excluding outliers via IQR fencing.
+    """Shortest Covering Interval for linear-scale y-axis limits.
 
-    Uses Tukey's method: inlier fence at Q1 - k*IQR, Q3 + k*IQR with k=2.5.
-    Falls back to the median ± a minimum half-width when IQR is near zero
-    (e.g. all values similar) to avoid degenerate ranges.
+    Finds the shortest interval covering ≥80% of the data, extends by
+    50% of its span on each side. Consistent with the SCI approach used
+    in _robust_log_range and the static matplotlib plots.
     """
     clean = sorted(v for v in values if np.isfinite(v))
-    if len(clean) < 4:
-        lo = min(clean) if clean else -1
-        hi = max(clean) if clean else 1
-        margin = max((hi - lo) * 0.2, 0.5)
+    if not clean:
+        return [-1, 1]
+    if len(clean) < 3:
+        lo, hi = min(clean), max(clean)
+        margin = max((hi - lo) * 0.3, 0.5)
         return [lo - margin, hi + margin]
-    q1, q3 = np.percentile(clean, [25, 75])
-    iqr = q3 - q1
-    median = np.median(clean)
-    # Minimum half-width: 10% of |median| or 0.5, whichever is larger
-    min_half = max(abs(median) * 0.1, 0.5)
-    fence = max(iqr * 2.5, min_half)
-    lo = q1 - fence
-    hi = q3 + fence
-    inliers = [v for v in clean if lo <= v <= hi]
-    if not inliers:
-        inliers = clean
-    vmin, vmax = min(inliers), max(inliers)
-    span = vmax - vmin
-    if span < 1e-10:
-        span = max(abs(vmin) * 0.2, 0.5)
-    pad = span * pad_frac
-    return [vmin - pad, vmax + pad]
+    n = len(clean)
+    k = max(math.ceil(0.8 * n), min(n, 4))
+    best_span, best_lo, best_hi = np.inf, clean[0], clean[k - 1]
+    for i in range(n - k + 1):
+        span = clean[i + k - 1] - clean[i]
+        if span < best_span:
+            best_span = span
+            best_lo, best_hi = clean[i], clean[i + k - 1]
+    ext = max(best_span * 0.5, 0.1)
+    lo, hi = best_lo - ext, best_hi + ext
+    if hi - lo < 1e-10:
+        mid = (lo + hi) / 2
+        lo, hi = mid - 0.5, mid + 0.5
+    pad = (hi - lo) * pad_frac
+    return [lo - pad, hi + pad]
 
 
 def _robust_log_range(values, pad_decades=0.5):
-    """Determine log-scale y-axis range excluding outliers.
+    """Determine log-scale y-axis range via Shortest Covering Interval.
 
-    Works in log10 space. Guarantees at least 2 decades of range
-    to avoid degenerate views when all values are similar.
+    Finds the shortest interval in log10 space that covers ≥80% of the
+    data, then extends by 50% of its span on each side.  This naturally
+    identifies the densest region and excludes extreme stragglers without
+    relying on IQR (which fails for N<15 with heavy tails).
     """
-    clean = [v for v in values if np.isfinite(v) and v > 0]
-    if len(clean) < 4:
-        lo = np.log10(min(clean)) if clean else -10
-        hi = np.log10(max(clean)) if clean else 0
-        margin = max((hi - lo) * 0.2, 1.0)
+    clean = sorted(v for v in values if np.isfinite(v) and v > 0)
+    if not clean:
+        return [-10, 0]
+    if len(clean) < 3:
+        lo = np.log10(min(clean))
+        hi = np.log10(max(clean))
+        margin = max((hi - lo) * 0.3, 1.0)
         return [lo - margin, hi + margin]
-    log_vals = np.log10(clean)
-    q1, q3 = np.percentile(log_vals, [25, 75])
-    iqr = q3 - q1
-    fence = max(iqr * 2.5, 2.0)  # at least 2 decades
-    lo = q1 - fence
-    hi = q3 + fence
-    inliers = [v for v in log_vals if lo <= v <= hi]
-    if not inliers:
-        inliers = list(log_vals)
-    vmin, vmax = min(inliers), max(inliers)
-    if vmax - vmin < 1.0:
-        mid = (vmin + vmax) / 2
-        vmin, vmax = mid - 1.0, mid + 1.0
-    return [vmin - pad_decades, vmax + pad_decades]
+
+    lv = np.log10(clean)
+    n = len(lv)
+    k = max(math.ceil(0.8 * n), min(n, 4))
+
+    # Sliding window: find shortest interval covering k points
+    best_span = np.inf
+    best_lo = lv[0]
+    best_hi = lv[k - 1]
+    for i in range(n - k + 1):
+        span = lv[i + k - 1] - lv[i]
+        if span < best_span:
+            best_span = span
+            best_lo = lv[i]
+            best_hi = lv[i + k - 1]
+
+    # Extend core by 50% of its span on each side
+    ext = max(best_span * 0.5, 0.5)  # minimum 0.5 decade extension
+    lo = best_lo - ext
+    hi = best_hi + ext
+
+    # Enforce minimum 1-decade total span
+    if hi - lo < 1.0:
+        mid = (lo + hi) / 2
+        lo, hi = mid - 0.5, mid + 0.5
+
+    return [lo - pad_decades, hi + pad_decades]
 
 
 # ── 1D scan figure ──────────────────────────────────────────────────────────

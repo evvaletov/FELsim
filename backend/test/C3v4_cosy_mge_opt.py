@@ -378,7 +378,7 @@ def main():
         if args.approach == 'C' and n_eval[0] >= phase1_budget:
             if objective_fn is compute_objective_stability_only:
                 objective_fn = compute_objective_capped
-                print(f"\n  === Phase 2: switching to capped Twiss MSE objective ===\n")
+                print(f"\n  === Phase 2: switching to capped Twiss RMS objective ===\n")
 
         obj = evaluate(fox_template, var_names, run_dir, list(x), objective_fn)
         n_eval[0] += 1
@@ -424,7 +424,7 @@ def main():
     from koa_cosy_mge_opt import compute_objective as compute_objective_uncapped
     final_mse = evaluate(fox_template, var_names, run_dir, best_x[0],
                          compute_objective_uncapped)
-    print(f"  True (uncapped) MSE: {final_mse:.6e}")
+    print(f"  True (uncapped) RMS: {math.sqrt(final_mse):.6e}")
 
     # Read final Twiss
     M = read_transfer_map(run_dir)
