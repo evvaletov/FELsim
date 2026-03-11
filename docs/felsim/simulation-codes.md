@@ -154,12 +154,12 @@ $\phi$ analytically).
 All three codes independently match the undulator Twiss targets at
 $\varepsilon_n = 8$ after 9 bug fixes across the three adapter layers:
 
-| Code | MSE | $\beta_y$ (m) | Notes |
+| Code | RMS | $\beta_y$ (m) | Notes |
 |------|-----|---------------|-------|
-| FELsim NM | $1.2 \times 10^{-6}$ | 0.242 | Transfer matrix baseline |
-| COSY FR 0 | $2.3 \times 10^{-7}$ | 0.241 | DA map, no fringe |
-| COSY FR 1 | $3.7 \times 10^{-9}$ | 0.242 | DA map, 1st-order fringe (warm-started) |
-| RF-Track opt | $7.0 \times 10^{-3}$ | 0.055 | Particle tracking; $\beta_y$ limited by missing $\phi$ |
+| FELsim NM | $1.1 \times 10^{-3}$ | 0.242 | Transfer matrix baseline |
+| COSY FR 0 | $4.8 \times 10^{-4}$ | 0.241 | DA map, no fringe |
+| COSY FR 1 | $6.1 \times 10^{-5}$ | 0.242 | DA map, 1st-order fringe (warm-started) |
+| RF-Track opt | $8.4 \times 10^{-2}$ | 0.055 | Particle tracking; $\beta_y$ limited by missing $\phi$ |
 
 Each code converges to **different quad currents** because the dipole
 models produce different edge kicks. Direct current injection between
@@ -175,6 +175,41 @@ Key bug fixes enabling agreement:
   warm-starting for FR 1
 
 Report: `reports/2026/Mar/04/R2_unified_comparison_report.pdf`
+
+## Multi-Code Hybrid Simulation
+
+`MultiCodeSimulator` (`multiCodeSimulator.py`) chains different simulation
+codes on contiguous beamline sections.  For example, a production study can
+use FELsim's fast transfer matrices for upstream matching stages and
+RF-Track's full particle tracking for the final triplet, or COSY for
+high-order DA maps in the chicane and RF-Track for space charge downstream.
+
+All adapters use FELsim coordinates as I/O format, so no inter-section
+coordinate conversion is needed.  Particles are handed off between sections
+as 6D NumPy arrays.
+
+Validated configurations include:
+- FELsim → RF-Track (Stage 11 hybrid optimization, W8/C1)
+- FELsim → COSY (DA map cross-validation)
+- COSY → RF-Track (high-order + tracking)
+- FELsim → COSY → RF-Track (3-way hybrid)
+
+```python
+from multiCodeSimulator import MultiCodeSimulator, SimSection
+
+mc = MultiCodeSimulator(
+    sections=[
+        SimSection("prefix", "felsim", (0, 87)),
+        SimSection("suffix", "rftrack", (87, 137),
+                   config={'beam_energy': 40.0}),
+    ],
+    lattice_path="var/UH_FEL_beamline.yaml",
+    beam_energy=40.0,
+)
+result = mc.simulate(particles=beam)
+```
+
+Test suite: 38 tests in `test_multicode.py`.
 
 ## When to Use Each Code
 

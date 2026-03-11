@@ -1,0 +1,18 @@
+Hi Niels,
+
+Here is a set of plots for your seminar. These show FELsim and COSY
+INFINITY results for the undulator Twiss matching optimisation.
+
+One limitation not shown: the three codes (COSY, FELsim, RF-Track)
+converge to different quadrupole currents despite reaching similar Twiss
+parameters at the undulator. This is expected given the different physics
+models (1st-order matrices vs 3rd-order DA maps). The alignment between
+codes has recently improved, mainly due to bug fixes in the RF-Track
+adapter. RF-Track results are not included as that model is still a work
+in progress -- let me know if you'd like me to add them.
+
+I'll be checking email over the next few hours and again tomorrow morning
+in case you'd like any plots revised or need additional figures.
+
+Cheers,
+Eremey

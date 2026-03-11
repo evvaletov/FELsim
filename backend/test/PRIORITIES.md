@@ -66,21 +66,29 @@
   `mse_comparison.eps`, `time_comparison.eps`
 - Implementation: `--w6` flag in `UHM_beamline_opt_05ps_params.py`
 
-### W7. Glyfada Config Optimization & Re-Benchmark [IN PROGRESS]
-- Re-benchmarks Glyfada against NM with optimized configurations leveraging
-  CMA-ES, constraint handling (feasibility_rules), warm-starting from NM
-  solution, and tighter bounds (±3A around NM result).
-- **Config A (CMA-ES):** pop_size=20, max_gen=150, initial_sigma=0.3,
-  feasibility_rules constraint handling. 3000 evals.
-- **Config B (NSGA-II Phased):** pop_size=30, max_gen=100, two phases
-  (σ=0.05 → σ=0.01 at gen 50). 3000 evals.
-- **Key improvements over W6:** warm-starting, CMA-ES algorithm, constraint
-  handling replaces blunt 1e6 penalty, informed bounds, 5× more evals.
-- glyfadaAdapter updated with extra_config pass-through for new Glyfada
-  features (CMA-ES, phased optimization, constraints).
-- glyfada_eval updated with stability constraint output.
+### W7. Glyfada Config Optimization & Re-Benchmark [DONE 2026-03-11]
+- Re-benchmarks Glyfada against NM with corrected CMA-ES configurations.
+- **Bugs found in original W7 (2026-03-11):**
+  1. `cma_es.initial_mean` was never set — CMA-ES used population centroid
+     instead of NM warm-start point
+  2. `feasibility_rules` constraint handling silently ignored for CMA-ES
+     (only works with NSGA-II). Changed to `death_penalty`.
+  3. Evaluator constraint was binary (0/1) — changed to continuous for
+     gradient information
+- **Re-benchmark results (2026-03-11):** pycma CMA-ES warm-started from NM
+  dramatically outperforms NM alone at all emittance points:
+  - ε_n=5: pycma MSE=4.5e-16 vs NM 8.2e-06 (~10¹⁰× better, 11s vs 32s)
+  - ε_n=8: pycma MSE=1.2e-15 vs NM 6.1e-06 (~10⁹× better, 11s vs 33s)
+  - ε_n=14: pycma MSE=6.3e-03 vs NM 8.9e-03 (~1.4× better, 25s vs 30s)
+  - Glyfada binary configs (G-A/B/C) not tested — binary not built locally.
+    Key result: CMA-ES algorithm is highly effective; glyfada's distributed
+    infrastructure is not needed for this 4-variable problem.
+- **Conclusion:** Two-phase NM→CMA-ES is the recommended Stage 11 strategy.
+  NM finds the right basin; CMA-ES polishes to near-machine-precision.
+- glyfadaAdapter rewritten to use `glyfada.optimize()` Python API (was subprocess+CSV)
+- glyfada_eval: continuous constraint values, multi-objective support
 - Results: `results/params_05ps/W7/`
-- Implementation: `--w7` flag in `UHM_beamline_opt_05ps_params.py`
+- Script: `W7_glyfada_rebenchmark.py`
 
 ### W9. COSY Longitudinal Study [DONE 2026-02-25]
 - Full 3D (6D phase space) COSY simulation with longitudinal diagnostics
@@ -321,11 +329,14 @@
 - Script: `S7_verification_runs.py`
 - Results: `results/S7/`
 
-### S8. Multi-Start Robustness Study [LOW PRIORITY]
-- **Motivation:** Nelder-Mead is a local optimizer. Different starting points may
-  find different local minima, especially at extreme parameter values.
-- **Design:** At 5 extreme parameter points, run 10 random starts per point.
-  Report: best/worst/median MSE, current spread.
+### S8. Multi-Start Robustness Study [IMPLEMENTED — pending run]
+- **Motivation:** S7 showed that single-start emittance results at extremes are not
+  statistically robust. This study directly characterizes the optimizer landscape.
+- **Design:** 5 emittance points (ε_n = 1, 3, 5, 14, 16) × 10 random Stage 11 starts.
+  Reports: best/worst/median MSE, quality classification histogram, box-and-whisker plot.
+- **Implementation:** `S8_multistart_robustness.py`. Uses `stage11_startPoint` to inject
+  random starting currents for the 4 Stage 11 quads (q87, q93, q95, q97). Checkpoint/resume
+  via CSV. Expected runtime ~25 min.
 - **Key question:** Is the optimization landscape convex enough for single-start?
 
 ### S9. Bunch Length Independence Study [DONE 2026-02-22]
@@ -352,12 +363,16 @@
 
 ## Category O: Optimizer Improvements
 
-### O1. Warm-Starting from Neighboring Points [MEDIUM PRIORITY]
+### O1. Warm-Starting from Neighboring Points [IMPLEMENTED — pending run]
 - **Motivation:** Each scan point starts from the same fixed initial guess. Using
   the optimized currents from the previous (neighboring) scan point as the start
   could improve convergence speed and robustness at extreme parameter values.
-- **Implementation:** Pass previous `quad_currents` dict as initial guess to
-  `run_optimization()`. Add `warm_start=` parameter.
+- **Implementation:** `warm_start_currents` parameter added to `run_optimization()`,
+  `warm_start=True` flag added to `run_scan()`. When enabled, each point passes the
+  previous point's `quad_currents` result as starting guess for all 11 stages
+  (clamped to bounds). Failed points do not propagate warm-start.
+- **Validation:** `O1_warm_start_validation.py` — re-runs S4 emittance sweep with
+  warm_start=True and compares MSE, convergence speed, and current continuity.
 - **Expected benefit:** 2–5× faster scans, better convergence at boundaries.
 
 ### O2. Adaptive Scan Resolution [LOW PRIORITY]
@@ -384,11 +399,15 @@
 
 ## Category R: Reporting & Visualization
 
-### R1. Interactive Parameter Explorer [LOW PRIORITY]
+### R1. Interactive Parameter Explorer [IMPLEMENTED]
 - **Motivation:** Static EPS plots are good for papers; interactive plots help
   with exploration.
-- **Design:** Plotly/Dash dashboard reading CSV data. Sliders for parameter
-  selection, hover for quad currents.
+- **Design:** Plotly/Dash dashboard reading CSV data. Two tabs: S4 1D scans
+  (MSE + Twiss subplots with hover showing quad currents), S5 2D heatmaps
+  (log₁₀ MSE with threshold contours).
+- **Script:** `R1_parameter_explorer.py`. Run: `python R1_parameter_explorer.py`
+  → opens at http://localhost:8050.
+- **Dependencies:** `pip install dash plotly`
 
 ### R2. Comparison Table Across All Studies [DONE 2026-03-02]
 - Aggregates data from W4, S4, W8, W9, W10, W11, W12 into 5 cross-code tables
@@ -693,7 +712,7 @@
     per-section config on RF-Track suffix (FELsim prefix unaffected).
   - Results: `results/C1C/`
 
-### C3. FR3+MGE Optimization [IN PROGRESS — CMA-ES v2 on Koa]
+### C3. FR3+MGE Optimization [IN PROGRESS — C3v4 on Koa]
 - **Fieldmap fix (2026-02-22):** DELTAS 0→0.001, removed 0.835× scaling. Peak field
   now 0.5307 T matching source CSV.
 - **COSY FIT attempts (2026-03-07/08):**
@@ -714,26 +733,24 @@
   Result: `test/results/koa_cosy_mge_result.json`
 - **CMA-ES v2 (Koa job 11451841, submitted 2026-03-08):** 50,000 evals, sigma=0.5,
   all bounds [-10,10], BIPOP restarts ×9, warm-start from v1 MSE=1030.
-  Est. runtime: ~89 hours (~4 days). Script: `test/koa_cosy_mge_opt.py`
-  - **Status (2026-03-10, 44.5 hrs):** 15,392/50,000 evals (31%), MSE=1000.005
-    (best, barely unstable). Sigma collapsed to 4.7e-05 (from 0.5), axis ratio
-    530:1. First BIPOP restart imminent — sigma exhausted around current best.
-    No stable solution found in this basin; restart will explore larger volume.
-  - **Cancelled (2026-03-10):** Job cancelled (`scancel 11451841`). BIPOP never
-    triggered because `maxfevals=50000` is the per-restart budget — the first
-    CMA-ES run must exhaust all 50k evals before BIPOP activates a restart.
-    With sigma collapsed to 1.3e-05, the remaining ~35k evals would be wasted
-    on near-identical points. **Fix for v3:** lower `maxfevals` per restart
-    (e.g., 5000–10000) so BIPOP restarts trigger after sigma collapse, or add
-    `tolx`-based early stopping.
-  - **C3v3 (submitted 2026-03-10, Koa job 11471707):** `maxfevals=8000` per
-    restart (was 50000), `tolx=1e-4` early stopping, `verb_disp=500`. With
-    9 BIPOP restarts: up to 72k total evals. BIPOP will now trigger after
-    sigma collapse instead of wasting evals in exhausted basins.
-    Warm-start from v1 result (MSE=1030). Save: `result_cosy_mge_v3.json`.
+  - **Cancelled (2026-03-10):** ~16k evals, best MSE=1000.005 (barely unstable).
+    Sigma collapsed to 1.3e-05 — search exhausted, no stable solution found.
+  - **C3v3 (Koa job 11471707):** maxfevals=8000/restart, BIPOP×9, tolx=1e-4.
+    Killed after 247 evals. No improvement over warm start.
+- **Root cause analysis (2026-03-11):** The objective function allows unstable
+  solutions (penalty ~1000) to beat barely-stable solutions with bad Twiss
+  (MSE >> 1000). CMA-ES *prefers* the unstable side of the boundary because
+  the Twiss MSE for random stable solutions can be worse than the instability
+  penalty. ~26k total evals across v1-v3, zero stable solutions.
+- **C3v4 (Koa job 11473642, submitted 2026-03-11):** Three approaches:
+  - **A (most likely):** Capped objective (stable MSE capped at 999, ensuring
+    ANY stable solution beats ANY unstable one) + cold start [0]*23 + σ=2.0 +
+    BIPOP×15 (up to 80k evals). Addresses the root cause directly.
+  - **B:** Capped objective + warm start from v1 + σ=1.0 + BIPOP×15
+  - **C:** Two-phase (stability-only first half → Twiss MSE second half)
+  - Script: `C3v4_cosy_mge_opt.py`, `C3v4_cosy_mge_opt.slurm`
 - **Files:** `fields/chicane_dipole_fieldmap.dat`, `test/koa_cosy_mge_opt.py`,
-  `test/koa_cosy_mge_opt.slurm`, `test/results/koa_cosy_mge_result.json`,
-  `test/results/koa_cosy_mge_result_indexed.json`
+  `test/C3v4_cosy_mge_opt.py`, `test/results/koa_cosy_mge_result.json`
 
 ### C4. Systematic Testing, Validation & Verification [IN PROGRESS]
 - **Motivation:** FELsim currently relies on ad-hoc cross-validation studies.

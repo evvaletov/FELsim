@@ -1,0 +1,82 @@
+S6: Bunch Length Sensitivity (0.1–2 ps)
+  15 points × 2 configs = 30 optimizations
+
+── baseline ──
+
+======================================================================
+Scan: s6_baseline — sweeping bunch_spread
+======================================================================
+  [1/15] bunch_spread = 0.1
+    MSE = 1.0555e-02  [MARGINAL]  β_x=1.4000  β_y=0.0122  α_x=0.4707  α_y=0.0004  (13.8 s)
+  [2/15] bunch_spread = 0.2357142857142857
+    MSE = 2.9912e-03  [ACCEPTABLE]  β_x=1.4053  β_y=0.1214  α_x=0.4807  α_y=0.0141  (26.7 s)
+  [3/15] bunch_spread = 0.37142857142857144
+    MSE = 2.3713e-05  [EXCELLENT]  β_x=1.4002  β_y=0.2417  α_x=0.4700  α_y=-0.0001  (28.6 s)
+  [4/15] bunch_spread = 0.5071428571428571
+    MSE = 5.4779e-05  [EXCELLENT]  β_x=1.4002  β_y=0.2306  α_x=0.4655  α_y=-0.0023  (24.1 s)
+  [5/15] bunch_spread = 0.6428571428571428
+    MSE = 2.0454e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=0.0000  (20.8 s)
+  [6/15] bunch_spread = 0.7785714285714285
+    MSE = 1.8968e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4699  α_y=-0.0001  (24.6 s)
+  [7/15] bunch_spread = 0.9142857142857143
+    MSE = 2.4333e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (23.6 s)
+  [8/15] bunch_spread = 1.05
+    MSE = 2.9320e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2417  α_x=0.4699  α_y=-0.0000  (32.9 s)
+  [9/15] bunch_spread = 1.1857142857142857
+    MSE = 2.1694e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (30.0 s)
+  [10/15] bunch_spread = 1.3214285714285714
+    MSE = 2.1737e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (18.8 s)
+  [11/15] bunch_spread = 1.457142857142857
+    MSE = 2.7822e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2417  α_x=0.4700  α_y=-0.0000  (22.1 s)
+  [12/15] bunch_spread = 1.5928571428571427
+    MSE = 1.9581e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (22.1 s)
+  [13/15] bunch_spread = 1.7285714285714286
+    MSE = 2.1491e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (25.2 s)
+  [14/15] bunch_spread = 1.8642857142857143
+    MSE = 2.1489e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=0.0000  (20.5 s)
+  [15/15] bunch_spread = 2.0
+    MSE = 2.1524e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (25.9 s)
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/S6/scan_s6_baseline.csv
+
+── emittance_conserved ──
+
+======================================================================
+Scan: s6_emittance_conserved — sweeping bunch_spread
+======================================================================
+  [1/15] bunch_spread = 0.1
+    MSE = 2.1332e-05  [EXCELLENT]  β_x=1.3999  β_y=0.2418  α_x=0.4701  α_y=0.0000  (17.4 s)
+  [2/15] bunch_spread = 0.2357142857142857
+    MSE = 8.2697e-05  [EXCELLENT]  β_x=1.4005  β_y=0.2404  α_x=0.4867  α_y=0.0046  (12.7 s)
+  [3/15] bunch_spread = 0.37142857142857144
+    MSE = 2.2261e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=0.0000  (14.7 s)
+  [4/15] bunch_spread = 0.5071428571428571
+    MSE = 2.1709e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (16.0 s)
+  [5/15] bunch_spread = 0.6428571428571428
+    MSE = 2.9446e-05  [EXCELLENT]  β_x=1.4003  β_y=0.2419  α_x=0.4701  α_y=-0.0002  (22.2 s)
+  [6/15] bunch_spread = 0.7785714285714285
+    MSE = 4.8697e-03  [ACCEPTABLE]  β_x=1.3996  β_y=0.0861  α_x=0.4715  α_y=0.0043  (9.6 s)
+  [7/15] bunch_spread = 0.9142857142857143
+    MSE = 2.1517e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (10.2 s)
+  [8/15] bunch_spread = 1.05
+    MSE = 2.1664e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4699  α_y=0.0000  (17.5 s)
+  [9/15] bunch_spread = 1.1857142857142857
+    MSE = 2.1606e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (13.1 s)
+  [10/15] bunch_spread = 1.3214285714285714
+    MSE = 2.3033e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2417  α_x=0.4700  α_y=-0.0000  (13.6 s)
+  [11/15] bunch_spread = 1.457142857142857
+    MSE = 2.0138e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (16.9 s)
+  [12/15] bunch_spread = 1.5928571428571427
+    MSE = 1.0966e-03  [ACCEPTABLE]  β_x=1.3935  β_y=0.1825  α_x=0.5085  α_y=0.0181  (14.2 s)
+  [13/15] bunch_spread = 1.7285714285714286
+    MSE = 1.3593e-03  [ACCEPTABLE]  β_x=1.3961  β_y=0.1614  α_x=0.4701  α_y=0.0146  (11.5 s)
+  [14/15] bunch_spread = 1.8642857142857143
+    MSE = 2.9884e-04  [EXCELLENT]  β_x=1.3931  β_y=0.2061  α_x=0.4772  α_y=-0.0012  (13.6 s)
+  [15/15] bunch_spread = 2.0
+    MSE = 1.9959e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (17.0 s)
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/S6/scan_s6_emittance_conserved.csv
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+Saved: S6_bunch_length_sensitivity.{eps,png}
+
+============================================================
+  S6 Complete
+============================================================

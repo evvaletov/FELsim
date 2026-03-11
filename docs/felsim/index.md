@@ -40,6 +40,7 @@ Beamline data is maintained in three formats (see
 | `backend/rftrackAdapter.py` | RF-Track particle tracking adapter |
 | `backend/beamline.py` | Transfer matrix element classes |
 | `backend/beamOptimizer.py` | Nelder-Mead optimization wrapper |
+| `backend/multiCodeSimulator.py` | Multi-code hybrid simulation orchestrator |
 | `backend/latticeLoader.py` | Unified lattice loading (Excel/JSON/YAML) |
 | `backend/test/UHM_beamline_opt_*.py` | Optimization study scripts |
 

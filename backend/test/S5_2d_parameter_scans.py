@@ -14,6 +14,7 @@ import sys
 import time
 import argparse
 import csv
+import math
 from pathlib import Path
 import numpy as np
 import matplotlib
@@ -206,7 +207,7 @@ def run_2d_scan(scan_name, nb_particles=500, seed=42, grid_size=None):
                     if mse < thresh:
                         quality = label
                         break
-                _print(f"         MSE = {mse:.2e} ({quality}), "
+                _print(f"         RMS = {math.sqrt(mse):.2e} ({quality}), "
                        f"t = {res['time_s']:.1f}s")
 
             except Exception as e:
@@ -284,24 +285,25 @@ def plot_2d_scan(scan_name, rows=None):
     p1_display = np.array(p1_vals) * p1_scale
     p2_display = np.array(p2_vals) * p2_scale
 
-    # ── Figure 1: MSE contour ──
+    # ── Figure 1: RMS contour ──
     fig, ax = plt.subplots(figsize=(8, 6))
 
     mse_plot = np.where(np.isnan(mse_grid), 1e2, mse_grid)
     mse_plot = np.clip(mse_plot, 1e-10, 1e2)
+    rms_plot = np.sqrt(mse_plot)
 
-    cs = ax.contourf(p1_display, p2_display, mse_plot,
-                     levels=np.logspace(-9, 2, 30),
-                     norm=LogNorm(vmin=1e-9, vmax=1e2),
+    cs = ax.contourf(p1_display, p2_display, rms_plot,
+                     levels=np.logspace(-5, 1, 30),
+                     norm=LogNorm(vmin=1e-5, vmax=1e1),
                      cmap='viridis')
-    cbar = plt.colorbar(cs, ax=ax, label='MSE')
+    cbar = plt.colorbar(cs, ax=ax, label='RMS Twiss Mismatch')
 
-    # Feasibility boundaries
+    # Feasibility boundaries (sqrt of MSE thresholds)
     for thresh_val, (thresh_name, _) in zip(
-            [1e-3, 0.01, 0.1],
+            [math.sqrt(1e-3), math.sqrt(0.01), math.sqrt(0.1)],
             [('Excellent', 'lime'), ('Acceptable', 'yellow'), ('Marginal', 'orange')]):
         try:
-            ct = ax.contour(p1_display, p2_display, mse_plot,
+            ct = ax.contour(p1_display, p2_display, rms_plot,
                            levels=[thresh_val], colors=[_[1]], linewidths=2)
             ax.clabel(ct, fmt={thresh_val: thresh_name}, fontsize=8)
         except Exception:
@@ -347,8 +349,10 @@ def plot_2d_scan(scan_name, rows=None):
     im = ax.pcolormesh(p1_display, p2_display, quality_grid.astype(float),
                        cmap=cmap, norm=norm, shading='nearest')
     cbar = plt.colorbar(im, ax=ax, ticks=[0, 1, 2, 3])
-    cbar.set_ticklabels(['Excellent\n(<1e-3)', 'Acceptable\n(<0.01)',
-                         'Marginal\n(<0.1)', 'Failed\n(≥0.1)'])
+    cbar.set_ticklabels([f'Excellent\n(<{math.sqrt(1e-3):.2e})',
+                         f'Acceptable\n(<{math.sqrt(0.01):.2e})',
+                         f'Marginal\n(<{math.sqrt(0.1):.2e})',
+                         f'Failed\n(\u2265{math.sqrt(0.1):.2e})'])
     ax.set_xlabel(cfg['p1_label'])
     ax.set_ylabel(cfg['p2_label'])
     ax.set_title(cfg['title'] + ' — Feasibility')

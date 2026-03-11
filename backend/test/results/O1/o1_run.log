@@ -1,0 +1,126 @@
+O1: Warm-Start from Neighbors — Validation
+  Emittance range: 1.0–20.0, 20 points
+O1: Cold-start emittance sweep (baseline comparison)
+
+======================================================================
+Scan: o1_emittance_cold — sweeping epsilon_n
+======================================================================
+  [1/20] epsilon_n = 1.0
+    MSE = 1.1699e-02  [MARGINAL]  β_x=1.3998  β_y=0.0000  α_x=0.4703  α_y=-0.0004  (26.6 s)
+  [2/20] epsilon_n = 2.0
+    MSE = 1.1697e-02  [MARGINAL]  β_x=1.3999  β_y=0.0000  α_x=0.4703  α_y=0.0001  (38.5 s)
+  [3/20] epsilon_n = 3.0
+    MSE = 1.9272e+04  [FAILED]  β_x=133.7948  β_y=263.9376  α_x=-95.9281  α_y=-2.1278  (36.5 s)
+  [4/20] epsilon_n = 4.0
+    MSE = 1.3623e-05  [EXCELLENT]  β_x=1.4001  β_y=0.2412  α_x=0.4680  α_y=-0.0004  (24.4 s)
+  [5/20] epsilon_n = 5.0
+    MSE = 3.1105e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2417  α_x=0.4699  α_y=-0.0000  (25.6 s)
+  [6/20] epsilon_n = 6.0
+    MSE = 3.3277e-05  [EXCELLENT]  β_x=1.4002  β_y=0.2415  α_x=0.4704  α_y=0.0001  (23.7 s)
+  [7/20] epsilon_n = 7.0
+    MSE = 2.8675e-05  [EXCELLENT]  β_x=1.4000  β_y=0.2417  α_x=0.4700  α_y=-0.0000  (17.8 s)
+  [8/20] epsilon_n = 8.0
+    MSE = 1.2986e-04  [EXCELLENT]  β_x=1.4002  β_y=0.2429  α_x=0.4525  α_y=0.0148  (19.2 s)
+  [9/20] epsilon_n = 9.0
+    MSE = 1.0601e-03  [ACCEPTABLE]  β_x=1.3902  β_y=0.1754  α_x=0.4440  α_y=-0.0011  (19.7 s)
+  [10/20] epsilon_n = 10.0
+    MSE = 2.0771e-03  [ACCEPTABLE]  β_x=1.3878  β_y=0.1437  α_x=0.4634  α_y=-0.0211  (21.7 s)
+  [11/20] epsilon_n = 11.0
+    MSE = 9.3872e-03  [ACCEPTABLE]  β_x=1.3999  β_y=0.0253  α_x=0.4704  α_y=0.0007  (12.9 s)
+  [12/20] epsilon_n = 12.0
+    MSE = 1.0544e-02  [MARGINAL]  β_x=1.3998  β_y=0.0123  α_x=0.4705  α_y=0.0002  (17.0 s)
+  [13/20] epsilon_n = 13.0
+    MSE = 1.0825e-02  [MARGINAL]  β_x=1.4001  β_y=0.0093  α_x=0.4704  α_y=0.0002  (12.3 s)
+  [14/20] epsilon_n = 14.0
+    MSE = 9.0789e-03  [ACCEPTABLE]  β_x=1.3845  β_y=0.0297  α_x=0.4614  α_y=0.0039  (17.9 s)
+  [15/20] epsilon_n = 15.0
+    MSE = 1.7998e+00  [FAILED]  β_x=0.0079  β_y=2.8836  α_x=0.4733  α_y=0.2863  (13.8 s)
+  [16/20] epsilon_n = 16.0
+    MSE = 1.1220e-02  [MARGINAL]  β_x=1.3999  β_y=0.0051  α_x=0.4702  α_y=0.0002  (18.7 s)
+  [17/20] epsilon_n = 17.0
+    MSE = 3.9703e-01  [FAILED]  β_x=0.0113  β_y=0.0043  α_x=0.4741  α_y=-0.0119  (24.4 s)
+  [18/20] epsilon_n = 18.0
+    MSE = 1.2982e-01  [FAILED]  β_x=1.3389  β_y=1.0295  α_x=0.5843  α_y=0.1089  (20.1 s)
+  [19/20] epsilon_n = 19.0
+    MSE = 4.0218e-01  [FAILED]  β_x=0.0128  β_y=0.5325  α_x=0.4834  α_y=0.0368  (25.3 s)
+  [20/20] epsilon_n = 20.0
+    MSE = 8.2362e-06  [EXCELLENT]  β_x=1.4000  β_y=0.2418  α_x=0.4700  α_y=-0.0000  (23.1 s)
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/O1/scan_o1_emittance_cold.csv
+O1: Warm-start emittance sweep (ε_n = 1–20, 20 points)
+
+======================================================================
+Scan: o1_emittance_warm — sweeping epsilon_n (warm-start)
+======================================================================
+  [1/20] epsilon_n = 1.0
+    MSE = 1.1699e-02  [MARGINAL]  β_x=1.3998  β_y=0.0000  α_x=0.4703  α_y=-0.0004  (24.2 s)
+  [2/20] epsilon_n = 2.0  (warm)
+    MSE = 1.1701e-02  [MARGINAL]  β_x=1.3999  β_y=0.0000  α_x=0.4699  α_y=-0.0001  (11.0 s)
+  [3/20] epsilon_n = 3.0  (warm)
+    MSE = 1.1701e-02  [MARGINAL]  β_x=1.4000  β_y=0.0000  α_x=0.4700  α_y=-0.0001  (10.6 s)
+  [4/20] epsilon_n = 4.0  (warm)
+    MSE = 1.1703e-02  [MARGINAL]  β_x=1.4001  β_y=0.0000  α_x=0.4700  α_y=0.0001  (8.8 s)
+  [5/20] epsilon_n = 5.0  (warm)
+    MSE = 1.1706e-02  [MARGINAL]  β_x=1.4000  β_y=0.0000  α_x=0.4700  α_y=0.0001  (6.4 s)
+  [6/20] epsilon_n = 6.0  (warm)
+    MSE = 1.1712e-02  [MARGINAL]  β_x=1.3999  β_y=0.0000  α_x=0.4699  α_y=-0.0000  (8.7 s)
+  [7/20] epsilon_n = 7.0  (warm)
+    MSE = 1.1723e-02  [MARGINAL]  β_x=1.4000  β_y=0.0000  α_x=0.4699  α_y=0.0000  (6.3 s)
+  [8/20] epsilon_n = 8.0  (warm)
+    MSE = 1.1745e-02  [MARGINAL]  β_x=1.4000  β_y=0.0000  α_x=0.4698  α_y=0.0000  (8.6 s)
+  [9/20] epsilon_n = 9.0  (warm)
+    MSE = 1.1760e-02  [MARGINAL]  β_x=1.4000  β_y=0.0000  α_x=0.4699  α_y=0.0001  (7.4 s)
+  [10/20] epsilon_n = 10.0  (warm)
+    MSE = 1.1768e-02  [MARGINAL]  β_x=1.4000  β_y=0.0000  α_x=0.4700  α_y=-0.0000  (8.8 s)
+  [11/20] epsilon_n = 11.0  (warm)
+    MSE = 1.1769e-02  [MARGINAL]  β_x=1.4001  β_y=0.0000  α_x=0.4700  α_y=-0.0001  (7.7 s)
+  [12/20] epsilon_n = 12.0  (warm)
+    MSE = 1.1766e-02  [MARGINAL]  β_x=1.4000  β_y=0.0000  α_x=0.4708  α_y=0.0007  (10.0 s)
+  [13/20] epsilon_n = 13.0  (warm)
+    MSE = 1.1770e-02  [MARGINAL]  β_x=1.3999  β_y=0.0000  α_x=0.4699  α_y=-0.0000  (8.4 s)
+  [14/20] epsilon_n = 14.0  (warm)
+    MSE = 1.1782e-02  [MARGINAL]  β_x=1.4000  β_y=0.0000  α_x=0.4698  α_y=-0.0000  (5.7 s)
+  [15/20] epsilon_n = 15.0  (warm)
+    MSE = 2.3275e-02  [MARGINAL]  β_x=1.4219  β_y=0.0000  α_x=0.2313  α_y=0.0019  (8.7 s)
+  [16/20] epsilon_n = 16.0  (warm)
+    MSE = 6.6598e-02  [MARGINAL]  β_x=1.2390  β_y=0.0000  α_x=0.9681  α_y=0.0117  (12.7 s)
+  [17/20] epsilon_n = 17.0  (warm)
+    MSE = 3.3798e-01  [FAILED]  β_x=0.1347  β_y=0.0000  α_x=0.6439  α_y=0.0029  (3.9 s)
+  [18/20] epsilon_n = 18.0  (warm)
+    MSE = 3.8886e-01  [FAILED]  β_x=0.0270  β_y=0.0000  α_x=0.4887  α_y=-0.0010  (9.6 s)
+  [19/20] epsilon_n = 19.0  (warm)
+    MSE = 2.8603e-04  [EXCELLENT]  β_x=1.4001  β_y=0.2394  α_x=0.4688  α_y=-0.0005  (15.6 s)
+  [20/20] epsilon_n = 20.0  (warm)
+    MSE = 2.6687e-04  [EXCELLENT]  β_x=1.4001  β_y=0.2395  α_x=0.4688  α_y=-0.0005  (7.9 s)
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/O1/scan_o1_emittance_warm.csv
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+  Saved: O1_warm_start_comparison.{eps,png,pdf}
+
+── O1 Summary ──
+   ε_n     Cold MSE     Warm MSE    Ratio       Cold       Warm
+--------------------------------------------------------------
+   1.0     1.17e-02     1.17e-02     1.00   Marginal   Marginal
+   2.0     1.17e-02     1.17e-02     1.00   Marginal   Marginal
+   3.0     1.93e+04     1.17e-02     0.00     Failed   Marginal
+   4.0     1.36e-05     1.17e-02   859.04  Excellent   Marginal
+   5.0     3.11e-05     1.17e-02   376.35  Excellent   Marginal
+   6.0     3.33e-05     1.17e-02   351.95  Excellent   Marginal
+   7.0     2.87e-05     1.17e-02   408.84  Excellent   Marginal
+   8.0     1.30e-04     1.17e-02    90.44  Excellent   Marginal
+   9.0     1.06e-03     1.18e-02    11.09 Acceptable   Marginal
+  10.0     2.08e-03     1.18e-02     5.67 Acceptable   Marginal
+  11.0     9.39e-03     1.18e-02     1.25 Acceptable   Marginal
+  12.0     1.05e-02     1.18e-02     1.12   Marginal   Marginal
+  13.0     1.08e-02     1.18e-02     1.09   Marginal   Marginal
+  14.0     9.08e-03     1.18e-02     1.30 Acceptable   Marginal
+  15.0     1.80e+00     2.33e-02     0.01     Failed   Marginal
+  16.0     1.12e-02     6.66e-02     5.94   Marginal   Marginal
+  17.0     3.97e-01     3.38e-01     0.85     Failed     Failed
+  18.0     1.30e-01     3.89e-01     3.00     Failed     Failed
+  19.0     4.02e-01     2.86e-04     0.00     Failed  Excellent
+  20.0     8.24e-06     2.67e-04    32.40  Excellent  Excellent
+
+  Warm wins: 4/20
+
+============================================================
+  O1 Complete
+============================================================

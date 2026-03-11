@@ -24,6 +24,7 @@ Author: Eremey Valetov
 
 import sys
 import time
+import math
 import argparse
 from pathlib import Path
 import numpy as np
@@ -188,7 +189,7 @@ def run_mc_stage11(felsim_result, beam_dist, targets,
             args=(mc_full, mc_disp, beam_dist, targets, ebeam_obj, counter),
         )
         total_nfev += counter[0]
-        _print(f"    Restart {i+1}/{len(starts)}: MSE = {result.fun:.4e} "
+        _print(f"    Restart {i+1}/{len(starts)}: RMS = {math.sqrt(result.fun):.4e} "
                f"(nfev={counter[0]})")
 
         if best_result is None or result.fun < best_result.fun:
@@ -258,7 +259,7 @@ def run_comparison(emittance_points, nb_particles=500, seed=42,
             fc[87], fc[93], fc[95], fc[97],
             felsim_time, felsim['nfev'], nb_particles,
         ])
-        _print(f"    MSE = {felsim['mse']:.4e} ({felsim_time:.1f} s)")
+        _print(f"    RMS = {math.sqrt(felsim['mse']):.4e} ({felsim_time:.1f} s)")
 
         # ── 2. MC-val ────────────────────────────────────────────────
         _print(f"  [2/5] MultiCode validation (FELsim currents)...")
@@ -275,7 +276,7 @@ def run_comparison(emittance_points, nb_particles=500, seed=42,
                 fc[87], fc[93], fc[95], fc[97],
                 mc_val_time, 0, mc_val['ngood'],
             ])
-            _print(f"    MSE = {mc_val['mse']:.4e} ({mc_val_time:.1f} s)")
+            _print(f"    RMS = {math.sqrt(mc_val['mse']):.4e} ({mc_val_time:.1f} s)")
         else:
             rows.append([en, 'MC-val'] + [float('nan')] * (len(header) - 2))
             _print(f"    FAILED")
@@ -296,7 +297,7 @@ def run_comparison(emittance_points, nb_particles=500, seed=42,
                 oc[87], oc[93], oc[95], oc[97],
                 mc_opt['time_s'], mc_opt['nfev'], mc_opt['ngood'],
             ])
-            _print(f"    MSE = {mc_opt['mse']:.4e} "
+            _print(f"    RMS = {math.sqrt(mc_opt['mse']):.4e} "
                    f"({mc_opt['time_s']:.1f} s, nfev={mc_opt['nfev']})")
         else:
             rows.append([en, 'MC-opt'] + [float('nan')] * (len(header) - 2))
@@ -318,7 +319,7 @@ def run_comparison(emittance_points, nb_particles=500, seed=42,
                 fc[87], fc[93], fc[95], fc[97],
                 val_time, 0, rft_val['ngood'],
             ])
-            _print(f"    MSE = {rft_val['mse']:.4e} ({val_time:.1f} s)")
+            _print(f"    RMS = {math.sqrt(rft_val['mse']):.4e} ({val_time:.1f} s)")
         else:
             rows.append([en, 'RFT-val'] + [float('nan')] * (len(header) - 2))
             _print(f"    FAILED")
@@ -339,7 +340,7 @@ def run_comparison(emittance_points, nb_particles=500, seed=42,
                 oc[87], oc[93], oc[95], oc[97],
                 rft_opt['time_s'], rft_opt['nfev'], rft_opt['ngood'],
             ])
-            _print(f"    MSE = {rft_opt['mse']:.4e} "
+            _print(f"    RMS = {math.sqrt(rft_opt['mse']):.4e} "
                    f"({rft_opt['time_s']:.1f} s, nfev={rft_opt['nfev']})")
         else:
             rows.append([en, 'RFT-opt'] + [float('nan')] * (len(header) - 2))
@@ -360,7 +361,7 @@ def run_comparison(emittance_points, nb_particles=500, seed=42,
 
 def _print_summary(rows, targets):
     _print(f"\n{'─'*130}")
-    _print(f"{'ε_n':>5} {'Method':>10} {'MSE':>12} {'β_x':>8} {'β_y':>8} "
+    _print(f"{'ε_n':>5} {'Method':>10} {'RMS':>12} {'β_x':>8} {'β_y':>8} "
            f"{'α_x':>8} {'α_y':>10} {'Disp':>8} "
            f"{'I_87':>6} {'I_93':>6} {'I_95':>6} {'I_97':>6} "
            f"{'Time':>7} {'nfev':>6}")
@@ -378,8 +379,12 @@ def _print_summary(rows, targets):
         return f.format(v)
 
     for r in rows:
+        try:
+            rms_val = float('nan') if np.isnan(r[2]) else math.sqrt(r[2])
+        except (TypeError, ValueError):
+            rms_val = math.sqrt(r[2])
         _print(f"{r[0]:>5.0f} {r[1]:>10} "
-               f"{_fmt(r[2], 12, '{:12.4e}')} "
+               f"{_fmt(rms_val, 12, '{:12.4e}')} "
                f"{_fmt(r[5], 8, '{:8.4f}')} {_fmt(r[6], 8, '{:8.4f}')} "
                f"{_fmt(r[3], 8, '{:8.4f}')} {_fmt(r[4], 10, '{:10.6f}')} "
                f"{_fmt(r[7], 8, '{:8.4f}')} "
@@ -409,20 +414,21 @@ def _plot_comparison(rows, emittance_points):
     fig, ax = plt.subplots(figsize=(12, 5))
     for j, m in enumerate(methods):
         m_rows = [r for r in rows if r[1] == m]
-        mse_vals = [r[2] for r in m_rows]
+        rms_vals = [math.sqrt(r[2]) for r in m_rows]
         offset = (j - 2) * width
-        ax.bar(x + offset, mse_vals, width, label=labels[m], color=colors[m])
+        ax.bar(x + offset, rms_vals, width, label=labels[m], color=colors[m])
 
     ax.set_yscale('log')
     ax.set_xticks(x)
     ax.set_xticklabels([str(int(e)) for e in emittance_points])
     ax.set_xlabel(r'Normalised emittance $\varepsilon_n$ ($\pi\cdot$mm$\cdot$mrad)')
-    ax.set_ylabel('MSE')
-    ax.set_title('Stage 11 MSE: Five-Way Comparison (MC-opt vs RFT-opt)')
+    ax.set_ylabel('RMS Twiss Mismatch')
+    ax.set_title('Stage 11 RMS Twiss Mismatch: Five-Way Comparison (MC-opt vs RFT-opt)')
     for tl, thresh in MSE_THRESHOLDS.items():
         clr = {'Excellent': 'green', 'Acceptable': 'orange', 'Marginal': 'red'}
-        ax.axhline(thresh, color=clr[tl], linestyle='--', alpha=0.6,
-                    label=f'{tl} ({thresh})')
+        rms_thresh = math.sqrt(thresh)
+        ax.axhline(rms_thresh, color=clr[tl], linestyle='--', alpha=0.6,
+                    label=f'{tl} ({rms_thresh:.2e})')
     ax.legend(fontsize=7, ncol=2)
     ax.grid(True, alpha=0.3, axis='y')
     fig.tight_layout()

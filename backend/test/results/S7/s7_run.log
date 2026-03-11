@@ -1,0 +1,91 @@
+S7: Verification Runs at Key Transition Points
+
+── Emittance verification ──
+
+  epsilon_n: 7 values × 3 particle counts = 21
+  Already completed: 0
+  [1/21] epsilon_n=1, N=500
+           MSE=1.17e-02 (Marginal), t=34.1s
+  [2/21] epsilon_n=1, N=1000
+           MSE=7.75e+00 (Failed), t=38.9s
+  [3/21] epsilon_n=1, N=2000
+           MSE=1.93e+03 (Failed), t=52.2s
+  [4/21] epsilon_n=3, N=500
+           MSE=1.93e+04 (Failed), t=26.2s
+  [5/21] epsilon_n=3, N=1000
+           MSE=1.17e+01 (Failed), t=35.8s
+  [6/21] epsilon_n=3, N=2000
+           MSE=1.17e-02 (Marginal), t=49.9s
+  [7/21] epsilon_n=5, N=500
+           MSE=3.11e-05 (Excellent), t=21.4s
+  [8/21] epsilon_n=5, N=1000
+           MSE=5.16e-03 (Acceptable), t=19.0s
+  [9/21] epsilon_n=5, N=2000
+           MSE=7.81e-01 (Failed), t=39.2s
+  [10/21] epsilon_n=8, N=500
+           MSE=1.30e-04 (Excellent), t=20.1s
+  [11/21] epsilon_n=8, N=1000
+           MSE=2.13e-05 (Excellent), t=29.3s
+  [12/21] epsilon_n=8, N=2000
+           MSE=2.91e-05 (Excellent), t=24.3s
+  [13/21] epsilon_n=14, N=500
+           MSE=9.08e-03 (Acceptable), t=13.6s
+  [14/21] epsilon_n=14, N=1000
+           MSE=1.02e-02 (Marginal), t=12.8s
+  [15/21] epsilon_n=14, N=2000
+           MSE=2.07e-05 (Excellent), t=22.0s
+  [16/21] epsilon_n=16, N=500
+           MSE=1.12e-02 (Marginal), t=14.5s
+  [17/21] epsilon_n=16, N=1000
+           MSE=1.06e-02 (Marginal), t=9.7s
+  [18/21] epsilon_n=16, N=2000
+           MSE=2.43e-05 (Excellent), t=19.5s
+  [19/21] epsilon_n=20, N=500
+           MSE=8.24e-06 (Excellent), t=15.4s
+  [20/21] epsilon_n=20, N=1000
+           MSE=1.09e-02 (Marginal), t=10.1s
+  [21/21] epsilon_n=20, N=2000
+           MSE=9.60e-03 (Acceptable), t=12.5s
+
+── Energy spread verification ──
+
+  energy_std_percent: 3 values × 3 particle counts = 9
+  Already completed: 0
+  [1/9] energy_std_percent=0.4, N=500
+           MSE=3.54e-05 (Excellent), t=13.1s
+  [2/9] energy_std_percent=0.4, N=1000
+           MSE=2.14e-05 (Excellent), t=17.2s
+  [3/9] energy_std_percent=0.4, N=2000
+           MSE=3.38e-05 (Excellent), t=16.3s
+  [4/9] energy_std_percent=0.55, N=500
+           MSE=2.52e-05 (Excellent), t=13.5s
+  [5/9] energy_std_percent=0.55, N=1000
+           MSE=2.21e-05 (Excellent), t=14.1s
+  [6/9] energy_std_percent=0.55, N=2000
+           MSE=2.90e-05 (Excellent), t=18.5s
+  [7/9] energy_std_percent=0.7, N=500
+           MSE=1.95e-05 (Excellent), t=11.8s
+  [8/9] energy_std_percent=0.7, N=1000
+           MSE=2.41e-05 (Excellent), t=15.0s
+  [9/9] energy_std_percent=0.7, N=2000
+           MSE=2.89e-05 (Excellent), t=25.0s
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+  Saved: S7_verification.{eps,png}
+
+── S7 Verification Summary ──
+       Param    Value        N=500       N=1000       N=2000  Consistent?
+----------------------------------------------------------------------
+   epsilon_n        1     1.17e-02     7.75e+00     1.93e+03           NO
+   epsilon_n        3     1.93e+04     1.17e+01     1.17e-02           NO
+   epsilon_n        5     3.11e-05     5.16e-03     7.81e-01           NO
+   epsilon_n        8     1.30e-04     2.13e-05     2.91e-05          Yes
+   epsilon_n       14     9.08e-03     1.02e-02     2.07e-05           NO
+   epsilon_n       16     1.12e-02     1.06e-02     2.43e-05           NO
+   epsilon_n       20     8.24e-06     1.09e-02     9.60e-03           NO
+energy_std_percent      0.4     3.54e-05     2.14e-05     3.38e-05          Yes
+energy_std_percent     0.55     2.52e-05     2.21e-05     2.90e-05          Yes
+energy_std_percent      0.7     1.95e-05     2.41e-05     2.89e-05          Yes
+
+============================================================
+  S7 Complete
+============================================================

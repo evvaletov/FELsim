@@ -18,6 +18,7 @@ Author: Eremey Valetov
 
 import sys
 import json
+import math
 import argparse
 from pathlib import Path
 import numpy as np
@@ -199,7 +200,7 @@ def print_twiss_comparison(results, targets, label):
         mse += delta**2
         print(f"{name:<20} {val:>12.6f} {tgt:>12.6f} {delta:>+12.6f}")
     mse /= 4
-    print(f"\n  MSE = {mse:.6e}")
+    print(f"\n  RMS = {math.sqrt(mse):.6e}")
     print(f"{'=' * 70}")
     return mse
 
@@ -277,7 +278,7 @@ if __name__ == "__main__":
     cosy_currents = cosy_data['currents']
     cosy_mse = cosy_data.get('mse', '?')
     cosy_fr = cosy_data.get('fringe_field_order', '?')
-    print(f"COSY source: {args.cosy_json} (FR {cosy_fr}, MSE {cosy_mse:.2e})")
+    print(f"COSY source: {args.cosy_json} (FR {cosy_fr}, RMS {math.sqrt(cosy_mse):.2e})")
 
     # Identify polarity incompatibility
     neg_quads = {int(k): v for k, v in cosy_currents.items() if v < 0}
@@ -385,9 +386,9 @@ if __name__ == "__main__":
     print(f"\n{'=' * 70}")
     print("Summary")
     print(f"{'=' * 70}")
-    print(f"  FELsim own currents → MSE = {mse_own:.6e}")
-    print(f"  COSY-compatible currents → MSE = {mse_compat:.6e}")
-    print(f"  COSY self-reported MSE   = {cosy_mse:.6e}")
+    print(f"  FELsim own currents → RMS = {math.sqrt(mse_own):.6e}")
+    print(f"  COSY-compatible currents → RMS = {math.sqrt(mse_compat):.6e}")
+    print(f"  COSY self-reported RMS   = {math.sqrt(cosy_mse):.6e}")
     print(f"\n  Pre-chicane Twiss agreement: "
           f"Δβ_x = {abs(r2['beta_x']-r1['beta_x']):.4f} m, "
           f"Δβ_y = {abs(r2['beta_y']-r1['beta_y']):.4f} m")

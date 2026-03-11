@@ -9,6 +9,7 @@ Author: Eremey Valetov
 
 import sys
 import json
+import math
 import argparse
 from pathlib import Path
 import numpy as np
@@ -238,9 +239,10 @@ def plot_comparison(felsim_part, felsim_mat, rftrack, targets, cosy_data,
     fr = cosy_data.get('fringe_field_order', '?') if cosy_data else '?'
     mge = cosy_data.get('mge', False) if cosy_data else False
     mse = cosy_data.get('mse', '?') if cosy_data else '?'
+    rms_val = math.sqrt(mse) if isinstance(mse, (int, float)) else mse
     ax.set_title(
         f"Beta functions — COSY FR{fr}{'+MGE' if mge else ''} optimised currents "
-        f"(MSE = {mse:.1f})\n"
+        f"(RMS = {rms_val:.1f})\n"
         f"FELsim (matrix + particles) vs RF-Track vs COSY endpoint",
         fontsize=11
     )
@@ -317,7 +319,7 @@ def plot_comparison(felsim_part, felsim_mat, rftrack, targets, cosy_data,
     ax.grid(True, alpha=0.3, which='both')
     ax.set_title(
         f"Beta functions (log scale) — COSY FR{fr}{'+MGE' if mge else ''} "
-        f"optimised currents (MSE = {mse:.1f})\n"
+        f"optimised currents (RMS = {rms_val:.1f})\n"
         f"FELsim vs RF-Track — NOTE: solution is unstable ($\\beta_x$ diverges)",
         fontsize=11
     )
@@ -513,14 +515,14 @@ def plot_three_panel(results_list, targets, output_path):
         ax.grid(True, alpha=0.3)
 
         final = data[-1]
-        mse_str = f"{res.get('mse', 0):.2e}"
+        rms_str = f"{math.sqrt(res.get('mse', 0)):.2e}"
         ax.set_title(
             f"{res['label']}  —  "
             f"$\\beta_x$={final['beta_x']:.4f} m, "
             f"$\\beta_y$={final['beta_y']:.4f} m, "
             f"$\\alpha_x$={final['alpha_x']:.4f}, "
             f"$\\alpha_y$={final['alpha_y']:.4f}  "
-            f"(MSE = {mse_str})",
+            f"(RMS = {rms_str})",
             fontsize=10
         )
 
@@ -560,7 +562,7 @@ if __name__ == "__main__":
         + (fp['alpha_y'] - params['alpha_ym'])**2
     ) / 4
     print(f"  bx={fp['beta_x']:.4f}, by={fp['beta_y']:.4f}, "
-          f"ax={fp['alpha_x']:.4f}, ay={fp['alpha_y']:.4f}, MSE={felsim_mse:.2e}")
+          f"ax={fp['alpha_x']:.4f}, ay={fp['alpha_y']:.4f}, RMS={math.sqrt(felsim_mse):.2e}")
     all_results.append({
         'label': 'FELsim (particle tracking, Nelder-Mead)',
         'data': felsim_part, 'mse': felsim_mse,
@@ -579,7 +581,7 @@ if __name__ == "__main__":
               f"bx={cosy_endpoint.get('beta_x',0):.4f}, "
               f"by={cosy_endpoint.get('beta_y',0):.4f}, "
               f"ax={cosy_endpoint.get('alpha_x',0):.4f}, "
-              f"ay={cosy_endpoint.get('alpha_y',0):.4f}, MSE={cosy_mse:.2e}")
+              f"ay={cosy_endpoint.get('alpha_y',0):.4f}, RMS={math.sqrt(cosy_mse):.2e}")
         print("  (Element-by-element Twiss not available from COSY — endpoint only)")
 
     # ── 3. RF-Track: FELsim stages 1-10 + RF-Track stage 11, tracked ─────
@@ -602,7 +604,7 @@ if __name__ == "__main__":
                 + (rf['alpha_y'] - params['alpha_ym'])**2
             ) / 4
             print(f"  bx={rf['beta_x']:.4f}, by={rf['beta_y']:.4f}, "
-                  f"ax={rf['alpha_x']:.4f}, ay={rf['alpha_y']:.4f}, MSE={rf_mse:.2e}")
+                  f"ax={rf['alpha_x']:.4f}, ay={rf['alpha_y']:.4f}, RMS={math.sqrt(rf_mse):.2e}")
             all_results.append({
                 'label': 'RF-Track (particle tracking, hybrid NM)',
                 'data': rftrack_data, 'mse': rf_mse,
@@ -610,19 +612,19 @@ if __name__ == "__main__":
 
     # Summary
     print(f"\n{'='*72}")
-    print(f"  {'Code':<40} {'beta_x':>8} {'beta_y':>8} {'alpha_x':>8} {'alpha_y':>8} {'MSE':>10}")
+    print(f"  {'Code':<40} {'beta_x':>8} {'beta_y':>8} {'alpha_x':>8} {'alpha_y':>8} {'RMS':>10}")
     print(f"  {'Target':<40} {params['beta_xm']:8.4f} {params['beta_ym']:8.4f} "
           f"{params['alpha_xm']:8.4f} {params['alpha_ym']:8.4f}")
     print(f"  {'-'*68}")
     for res in all_results:
         d = res['data'][-1]
         print(f"  {res['label']:<40} {d['beta_x']:8.4f} {d['beta_y']:8.4f} "
-              f"{d['alpha_x']:8.4f} {d['alpha_y']:8.4f} {res['mse']:10.2e}")
+              f"{d['alpha_x']:8.4f} {d['alpha_y']:8.4f} {math.sqrt(res['mse']):10.2e}")
     if cosy_endpoint:
         print(f"  {'COSY FR3 (endpoint only)':<40} "
               f"{cosy_endpoint['beta_x']:8.4f} {cosy_endpoint['beta_y']:8.4f} "
               f"{cosy_endpoint['alpha_x']:8.4f} {cosy_endpoint['alpha_y']:8.4f} "
-              f"{cosy_mse:10.2e}")
+              f"{math.sqrt(cosy_mse):10.2e}")
     print(f"{'='*72}")
 
     # Single-figure overlay plot

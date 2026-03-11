@@ -283,12 +283,14 @@ class beamOptimizer():
             fig, ax = plt.subplots(2,1)
             handles = []
 
-            # plot MSE line
-            mseLine, =ax[1].plot(self.plotIterate, self.plotMSE, label = 'Mean Squared Error', color = 'black')
+            # plot RMS line
+            import math
+            rmsValues = [math.sqrt(m) if m >= 0 else float('nan') for m in self.plotMSE]
+            mseLine, =ax[1].plot(self.plotIterate, rmsValues, label = 'RMS Twiss Mismatch', color = 'black')
             ax[1].set_xlabel('Iterations')
             ax[1].set_yscale('log')
-            ax[1].set_ylabel('Mean Squared Error')
-            ax[1].set_title("MSE and objectives vs Iterations")
+            ax[1].set_ylabel('RMS Twiss Mismatch')
+            ax[1].set_title("RMS and objectives vs Iterations")
             ax[1].tick_params(axis='y')
             handles.append(mseLine)
 

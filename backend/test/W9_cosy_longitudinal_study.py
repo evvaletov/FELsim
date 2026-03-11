@@ -13,6 +13,7 @@ Author: Eremey Valetov
 
 import sys
 import json
+import math
 import argparse
 from pathlib import Path
 import numpy as np
@@ -163,7 +164,7 @@ def part_a():
     twiss = result['twiss']
     mse = compute_mse(twiss, targets)
     print(f"\n── Transverse matching quality ──")
-    print(f"  MSE = {mse:.6e}")
+    print(f"  RMS = {math.sqrt(mse):.6e}")
     print(f"  β_x = {twiss['beta_x']:.4f} m, α_x = {twiss['alpha_x']:.4f}")
     print(f"  β_y = {twiss['beta_y']:.4f} m, α_y = {twiss['alpha_y']:.4f}")
 
@@ -546,7 +547,7 @@ def part_c():
     R56_base = M_base[4, 5]
     mse_base = compute_mse(result_base['twiss'], targets)
 
-    print(f"  MSE = {mse_base:.6e}")
+    print(f"  RMS = {math.sqrt(mse_base):.6e}")
     print(f"  R56 = {R56_base:.6f} m = {R56_base * 1e3:.4f} mm")
 
     # ── Run 2: Transverse + R56=0 objective ──
@@ -573,13 +574,13 @@ def part_c():
     R56_aug = M_aug[4, 5]
     mse_aug = compute_mse(result_aug['twiss'], targets)
 
-    print(f"  MSE = {mse_aug:.6e}")
+    print(f"  RMS = {math.sqrt(mse_aug):.6e}")
     print(f"  R56 = {R56_aug:.6f} m = {R56_aug * 1e3:.4f} mm")
 
     # ── Comparison ──
     print("\n── Comparison ──")
     print(f"  {'':>25s}  {'Transverse only':>15s}  {'+ R56=0':>15s}  {'Delta':>12s}")
-    print(f"  {'MSE':>25s}  {mse_base:15.6e}  {mse_aug:15.6e}  {mse_aug - mse_base:+12.2e}")
+    print(f"  {'RMS':>25s}  {math.sqrt(mse_base):15.6e}  {math.sqrt(mse_aug):15.6e}  {math.sqrt(mse_aug) - math.sqrt(mse_base):+12.2e}")
     print(f"  {'R56 (mm)':>25s}  {R56_base * 1e3:15.4f}  {R56_aug * 1e3:15.4f}  {(R56_aug - R56_base) * 1e3:+12.4f}")
 
     # Current comparison
@@ -697,7 +698,7 @@ def part_d(part_a_data=None, part_b_data=None, part_c_data=None):
         aug = part_c_data.get('augmented', {})
         print(f"  {'Metric':<25s}  {'Transverse only':>15s}  {'+ R56=0':>15s}")
         print("  " + "-" * 58)
-        print(f"  {'MSE':<25s}  {base.get('mse', 0):15.2e}  {aug.get('mse', 0):15.2e}")
+        print(f"  {'RMS':<25s}  {math.sqrt(base.get('mse', 0)):15.2e}  {math.sqrt(aug.get('mse', 0)):15.2e}")
         print(f"  {'R56 (mm)':<25s}  {base.get('R56_m', 0) * 1e3:15.4f}  {aug.get('R56_m', 0) * 1e3:15.4f}")
         print(f"  {'Max |ΔI| (A)':<25s}  {'—':>15s}  {part_c_data.get('max_delta_I', 0):15.6f}")
 

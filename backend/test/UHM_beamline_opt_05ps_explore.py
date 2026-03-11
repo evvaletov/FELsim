@@ -17,6 +17,7 @@ Author: Eremey Valetov
 
 import sys
 import copy
+import math
 import time
 from pathlib import Path
 import numpy as np
@@ -229,7 +230,7 @@ def print_result(label, r):
     print(f"  y alpha = {r['y_alpha']:+.6f}")
     print(f"  x beta  = {r['x_beta']:.4f} m  (target {beta_ym:.4f})")
     print(f"  y beta  = {r['y_beta']:.4f} m  (target {beta_ym:.4f})")
-    print(f"  MSE     = {r['mse']:.6e}")
+    print(f"  RMS     = {math.sqrt(r['mse']):.6e}")
     print(f"  Currents: I93={r['currents'][0]:.4f}, I95={r['currents'][1]:.4f}, I97={r['currents'][2]:.4f}")
 
 
@@ -646,14 +647,14 @@ results["13. DiffEvo all downstream (10 var)"] = try_strategy(
 # ═════════════════════════════════════════════════════════════════════════════
 
 print("\n" + "=" * 80)
-print("  SUMMARY: All strategies ranked by MSE")
+print("  SUMMARY: All strategies ranked by RMS")
 print("=" * 80)
-print(f"  {'Strategy':<42s} {'MSE':>12s} {'x_beta':>8s} {'y_beta':>8s} {'x_alpha':>9s} {'y_alpha':>9s}")
+print(f"  {'Strategy':<42s} {'RMS':>12s} {'x_beta':>8s} {'y_beta':>8s} {'x_alpha':>9s} {'y_alpha':>9s}")
 print("-" * 80)
 
 ranked = sorted(results.items(), key=lambda kv: kv[1]["mse"])
 for label, r in ranked:
-    print(f"  {label:<42s} {r['mse']:12.6e} {r['x_beta']:8.4f} {r['y_beta']:8.4f} "
+    print(f"  {label:<42s} {math.sqrt(r['mse']):12.6e} {r['x_beta']:8.4f} {r['y_beta']:8.4f} "
           f"{r['x_alpha']:+9.5f} {r['y_alpha']:+9.5f}")
 
 print(f"\n  Target: x_beta = y_beta = {beta_ym:.4f} m, alpha = 0")

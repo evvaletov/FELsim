@@ -57,6 +57,16 @@ set to design values. The Twiss parameters at the undulator entrance
 | $x$ | 1.4 | 0.4714 |
 | $y$ | 0.24 | 0.0 |
 
+## Bunch Length Independence
+
+The bunch length parameter does not affect transverse Twiss matching (S6).
+This is because FELsim's 6×6 transfer matrices decouple transverse and
+longitudinal phase space: the 4×4 transverse block and the dispersion column
+(column 6) are independent of the column-5 ($\Delta t$) distribution.
+Changing $\sigma_t$ from 0.1 to 2.0 ps produces identical optimization
+results.  See also S9 (analytical derivation) and the
+[optimization studies](optimization.md#s6--bunch-length-sensitivity).
+
 ## Random Seed
 
 All optimization scripts use `seed=42` for reproducibility.

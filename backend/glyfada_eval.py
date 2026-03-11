@@ -104,20 +104,18 @@ def evaluate(params, timeout=1200):
     raw = state["objective_func"](variable_vals)
     result = _format_objectives(raw, n_objectives)
 
-    # Binary feasibility constraint placeholder.
-    # The objective function already encodes stability penalties (large MSE
-    # for unstable solutions). This exposes a binary feasibility signal to
-    # glyfada's constraint mechanism: feasible (0) if the un-negated first
-    # objective is finite and below the limit, infeasible (1) otherwise.
-    # A single constraint value is emitted regardless of how many constraint
-    # specs are provided — all specs check the same underlying condition.
+    # Continuous feasibility constraint for glyfada's constraint mechanism.
+    # Emits the un-negated objective value directly as the constraint value,
+    # giving CMA-ES gradient information about how far a solution is from
+    # feasibility (vs binary 0/1 which loses all gradient info).
+    # With constraint spec {type: "<=", limit: L}, violation = max(0, cv - L).
     constraints = state.get("constraints")
     if constraints:
         obj_val = -result.get("objective_1", float("nan"))  # un-negate
-        limit = constraints[0].get("limit", 1e4)
-        feasible = math.isfinite(obj_val) and obj_val < limit
+        if not math.isfinite(obj_val):
+            obj_val = 1e6
         for i in range(1, len(constraints) + 1):
-            result[f"constraint_{i}"] = 0.0 if feasible else 1.0
+            result[f"constraint_{i}"] = obj_val
 
     return result
 

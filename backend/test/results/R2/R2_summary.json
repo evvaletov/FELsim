@@ -1,0 +1,67 @@
+{
+  "table_1_baseline": [
+    {
+      "Code": "COSY FR0",
+      "Model": "DA map (no fringe)",
+      "MSE": 2.2717260594523288e-07,
+      "\u03b2_x": 1.3996301120905263,
+      "\u03b1_x": 0.4699857612159351,
+      "\u03b2_y": 0.24120374188233693,
+      "\u03b1_y": -0.000606237743701582
+    },
+    {
+      "Code": "COSY FR1",
+      "Model": "DA map (1st-order fringe)",
+      "MSE": 3.6531357919731423e-09,
+      "\u03b2_x": 1.3999762865875196,
+      "\u03b1_x": 0.4700306547468453,
+      "\u03b2_y": 0.2418340785247448,
+      "\u03b1_y": 0.00011437424608456981
+    },
+    {
+      "Code": "RF-Track opt",
+      "Model": "Particle tracking",
+      "MSE": 0.0070157164994830365,
+      "\u03b2_x": 1.4010114864590233,
+      "\u03b1_x": 0.46280720868408304,
+      "\u03b2_y": 0.054759075457337304,
+      "\u03b1_y": -0.002803819668763438
+    }
+  ],
+  "table_2_sensitivity": [
+    {
+      "Scan": "Energy spread (%)",
+      "Range": "0.1 \u2013 5",
+      "N": 15,
+      "Excellent": 14,
+      "Acceptable": 1,
+      "Marginal": 0,
+      "Failed": 0,
+      "Best MSE": 8.51750071336008e-07,
+      "Worst MSE": 0.0010799225097808136
+    },
+    {
+      "Scan": "Chirp (1/s)",
+      "Range": "0 \u2013 4e+10",
+      "N": 12,
+      "Excellent": 12,
+      "Acceptable": 0,
+      "Marginal": 0,
+      "Failed": 0,
+      "Best MSE": 1.3191624533829737e-06,
+      "Worst MSE": 0.00022838946868595066
+    },
+    {
+      "Scan": "Emittance (\u03c0\u00b7mm\u00b7mrad)",
+      "Range": "1 \u2013 20",
+      "N": 10,
+      "Excellent": 6,
+      "Acceptable": 3,
+      "Marginal": 0,
+      "Failed": 1,
+      "Best MSE": 1.1951070907732664e-06,
+      "Worst MSE": 23.873729816935203
+    }
+  ],
+  "table_4_compression_R56_m": 0.02708896
+}

@@ -1,0 +1,223 @@
+S5: 2D Coupled Parameter Scans
+Particles: 500, Grid: 10
+
+========================================================================
+  S5B: S5b: $\sigma_E$ vs $\varepsilon_n$ ($h$ = 5×10$^9$/s)
+========================================================================
+  energy_std_percent: 10 values [0.1 .. 3]
+  epsilon_n: 10 values [3 .. 20]
+  Fixed: {'h': 5000000000.0}
+  Total: 100 points, 0 already completed
+  [1/100] energy_std_percent=0.1, epsilon_n=3 (ETA: 0 min)
+         MSE = 9.93e-01 (Failed), t = 12.8s
+  [2/100] energy_std_percent=0.1, epsilon_n=4.889 (ETA: 11 min)
+         MSE = 3.25e+03 (Failed), t = 8.7s
+  [3/100] energy_std_percent=0.1, epsilon_n=6.778 (ETA: 12 min)
+         MSE = 5.82e-01 (Failed), t = 10.9s
+  [4/100] energy_std_percent=0.1, epsilon_n=8.667 (ETA: 13 min)
+         MSE = 2.14e-05 (Excellent), t = 8.2s
+  [5/100] energy_std_percent=0.1, epsilon_n=10.56 (ETA: 13 min)
+         MSE = 2.13e-05 (Excellent), t = 8.2s
+  [6/100] energy_std_percent=0.1, epsilon_n=12.44 (ETA: 13 min)
+         MSE = 2.18e-05 (Excellent), t = 8.9s
+  [7/100] energy_std_percent=0.1, epsilon_n=14.33 (ETA: 13 min)
+         MSE = 2.15e-05 (Excellent), t = 7.5s
+  [8/100] energy_std_percent=0.1, epsilon_n=16.22 (ETA: 13 min)
+         MSE = 2.34e-05 (Excellent), t = 10.2s
+  [9/100] energy_std_percent=0.1, epsilon_n=18.11 (ETA: 13 min)
+         MSE = 2.33e-05 (Excellent), t = 10.7s
+  [10/100] energy_std_percent=0.1, epsilon_n=20 (ETA: 13 min)
+         MSE = 3.99e-01 (Failed), t = 5.6s
+  [11/100] energy_std_percent=0.4222, epsilon_n=3 (ETA: 12 min)
+         MSE = 3.69e-01 (Failed), t = 12.2s
+  [12/100] energy_std_percent=0.4222, epsilon_n=4.889 (ETA: 13 min)
+         MSE = 3.12e-05 (Excellent), t = 11.4s
+  [13/100] energy_std_percent=0.4222, epsilon_n=6.778 (ETA: 13 min)
+         MSE = 2.35e-05 (Excellent), t = 12.1s
+  [14/100] energy_std_percent=0.4222, epsilon_n=8.667 (ETA: 13 min)
+         MSE = 4.07e-03 (Acceptable), t = 9.4s
+  [15/100] energy_std_percent=0.4222, epsilon_n=10.56 (ETA: 13 min)
+         MSE = 9.79e-03 (Acceptable), t = 6.0s
+  [16/100] energy_std_percent=0.4222, epsilon_n=12.44 (ETA: 13 min)
+         MSE = 1.05e-02 (Marginal), t = 8.4s
+  [17/100] energy_std_percent=0.4222, epsilon_n=14.33 (ETA: 12 min)
+         MSE = 1.09e-02 (Marginal), t = 6.5s
+  [18/100] energy_std_percent=0.4222, epsilon_n=16.22 (ETA: 12 min)
+         MSE = 1.05e-02 (Marginal), t = 9.9s
+  [19/100] energy_std_percent=0.4222, epsilon_n=18.11 (ETA: 12 min)
+         MSE = 8.93e-04 (Excellent), t = 10.2s
+  [20/100] energy_std_percent=0.4222, epsilon_n=20 (ETA: 12 min)
+         MSE = 8.21e-06 (Excellent), t = 10.5s
+  [21/100] energy_std_percent=0.7444, epsilon_n=3 (ETA: 12 min)
+         MSE = 3.89e-01 (Failed), t = 10.5s
+  [22/100] energy_std_percent=0.7444, epsilon_n=4.889 (ETA: 12 min)
+         MSE = 7.74e-03 (Acceptable), t = 10.9s
+  [23/100] energy_std_percent=0.7444, epsilon_n=6.778 (ETA: 12 min)
+         MSE = 3.08e-05 (Excellent), t = 8.9s
+  [24/100] energy_std_percent=0.7444, epsilon_n=8.667 (ETA: 12 min)
+         MSE = 9.05e-03 (Acceptable), t = 4.7s
+  [25/100] energy_std_percent=0.7444, epsilon_n=10.56 (ETA: 11 min)
+         MSE = 2.72e-03 (Acceptable), t = 11.5s
+  [26/100] energy_std_percent=0.7444, epsilon_n=12.44 (ETA: 11 min)
+         MSE = 9.80e-03 (Acceptable), t = 6.7s
+  [27/100] energy_std_percent=0.7444, epsilon_n=14.33 (ETA: 11 min)
+         MSE = 9.83e-03 (Acceptable), t = 6.8s
+  [28/100] energy_std_percent=0.7444, epsilon_n=16.22 (ETA: 11 min)
+         MSE = 2.04e-01 (Failed), t = 8.6s
+  [29/100] energy_std_percent=0.7444, epsilon_n=18.11 (ETA: 11 min)
+         MSE = 8.86e-03 (Acceptable), t = 10.2s
+  [30/100] energy_std_percent=0.7444, epsilon_n=20 (ETA: 10 min)
+         MSE = 8.82e-03 (Acceptable), t = 7.3s
+  [31/100] energy_std_percent=1.067, epsilon_n=3 (ETA: 10 min)
+         MSE = 5.51e+04 (Failed), t = 10.7s
+  [32/100] energy_std_percent=1.067, epsilon_n=4.889 (ETA: 10 min)
+         MSE = 4.61e-03 (Acceptable), t = 9.3s
+  [33/100] energy_std_percent=1.067, epsilon_n=6.778 (ETA: 10 min)
+         MSE = 2.90e-05 (Excellent), t = 9.9s
+  [34/100] energy_std_percent=1.067, epsilon_n=8.667 (ETA: 10 min)
+         MSE = 6.76e-03 (Acceptable), t = 7.1s
+  [35/100] energy_std_percent=1.067, epsilon_n=10.56 (ETA: 10 min)
+         MSE = 2.43e-05 (Excellent), t = 9.6s
+  [36/100] energy_std_percent=1.067, epsilon_n=12.44 (ETA: 10 min)
+         MSE = 2.52e-03 (Acceptable), t = 10.4s
+  [37/100] energy_std_percent=1.067, epsilon_n=14.33 (ETA: 9 min)
+         MSE = 1.04e-02 (Marginal), t = 6.7s
+  [38/100] energy_std_percent=1.067, epsilon_n=16.22 (ETA: 9 min)
+         MSE = 1.12e-02 (Marginal), t = 6.7s
+  [39/100] energy_std_percent=1.067, epsilon_n=18.11 (ETA: 9 min)
+         MSE = 1.10e-02 (Marginal), t = 7.7s
+  [40/100] energy_std_percent=1.067, epsilon_n=20 (ETA: 9 min)
+         MSE = 2.94e+00 (Failed), t = 10.2s
+  [41/100] energy_std_percent=1.389, epsilon_n=3 (ETA: 9 min)
+         MSE = 9.58e-02 (Marginal), t = 14.1s
+  [42/100] energy_std_percent=1.389, epsilon_n=4.889 (ETA: 9 min)
+         MSE = 8.10e-01 (Failed), t = 9.2s
+  [43/100] energy_std_percent=1.389, epsilon_n=6.778 (ETA: 9 min)
+         MSE = 3.03e-05 (Excellent), t = 11.2s
+  [44/100] energy_std_percent=1.389, epsilon_n=8.667 (ETA: 8 min)
+         MSE = 2.57e-05 (Excellent), t = 9.2s
+  [45/100] energy_std_percent=1.389, epsilon_n=10.56 (ETA: 8 min)
+         MSE = 2.15e-05 (Excellent), t = 9.2s
+  [46/100] energy_std_percent=1.389, epsilon_n=12.44 (ETA: 8 min)
+         MSE = 4.02e-01 (Failed), t = 8.8s
+  [47/100] energy_std_percent=1.389, epsilon_n=14.33 (ETA: 8 min)
+         MSE = 9.89e-03 (Acceptable), t = 5.8s
+  [48/100] energy_std_percent=1.389, epsilon_n=16.22 (ETA: 8 min)
+         MSE = 1.02e-02 (Marginal), t = 5.3s
+  [49/100] energy_std_percent=1.389, epsilon_n=18.11 (ETA: 8 min)
+         MSE = 3.76e-01 (Failed), t = 4.6s
+  [50/100] energy_std_percent=1.389, epsilon_n=20 (ETA: 7 min)
+         MSE = 1.09e-02 (Marginal), t = 6.9s
+  [51/100] energy_std_percent=1.711, epsilon_n=3 (ETA: 7 min)
+         MSE = 1.61e-02 (Marginal), t = 14.2s
+  [52/100] energy_std_percent=1.711, epsilon_n=4.889 (ETA: 7 min)
+         MSE = 7.28e-01 (Failed), t = 10.3s
+  [53/100] energy_std_percent=1.711, epsilon_n=6.778 (ETA: 7 min)
+         MSE = 2.83e-05 (Excellent), t = 9.9s
+  [54/100] energy_std_percent=1.711, epsilon_n=8.667 (ETA: 7 min)
+         MSE = 2.15e-05 (Excellent), t = 8.3s
+  [55/100] energy_std_percent=1.711, epsilon_n=10.56 (ETA: 7 min)
+         MSE = 6.08e-03 (Acceptable), t = 8.5s
+  [56/100] energy_std_percent=1.711, epsilon_n=12.44 (ETA: 7 min)
+         MSE = 1.97e-05 (Excellent), t = 8.5s
+  [57/100] energy_std_percent=1.711, epsilon_n=14.33 (ETA: 6 min)
+         MSE = 2.01e-04 (Excellent), t = 9.3s
+  [58/100] energy_std_percent=1.711, epsilon_n=16.22 (ETA: 6 min)
+         MSE = 9.50e-03 (Acceptable), t = 7.2s
+  [59/100] energy_std_percent=1.711, epsilon_n=18.11 (ETA: 6 min)
+         MSE = 1.05e-02 (Marginal), t = 6.0s
+  [60/100] energy_std_percent=1.711, epsilon_n=20 (ETA: 6 min)
+         MSE = 1.07e-02 (Marginal), t = 7.0s
+  [61/100] energy_std_percent=2.033, epsilon_n=3 (ETA: 6 min)
+         MSE = 1.78e+04 (Failed), t = 8.7s
+  [62/100] energy_std_percent=2.033, epsilon_n=4.889 (ETA: 6 min)
+         MSE = 8.91e-01 (Failed), t = 8.5s
+  [63/100] energy_std_percent=2.033, epsilon_n=6.778 (ETA: 5 min)
+         MSE = 2.83e-05 (Excellent), t = 8.5s
+  [64/100] energy_std_percent=2.033, epsilon_n=8.667 (ETA: 5 min)
+         MSE = 2.17e-05 (Excellent), t = 9.2s
+  [65/100] energy_std_percent=2.033, epsilon_n=10.56 (ETA: 5 min)
+         MSE = 2.81e-05 (Excellent), t = 8.9s
+  [66/100] energy_std_percent=2.033, epsilon_n=12.44 (ETA: 5 min)
+         MSE = 7.08e-03 (Acceptable), t = 10.1s
+  [67/100] energy_std_percent=2.033, epsilon_n=14.33 (ETA: 5 min)
+         MSE = 2.53e-05 (Excellent), t = 15.4s
+  [68/100] energy_std_percent=2.033, epsilon_n=16.22 (ETA: 5 min)
+         MSE = 1.35e-04 (Excellent), t = 16.0s
+  [69/100] energy_std_percent=2.033, epsilon_n=18.11 (ETA: 5 min)
+         MSE = 1.01e-02 (Marginal), t = 10.7s
+  [70/100] energy_std_percent=2.033, epsilon_n=20 (ETA: 5 min)
+         MSE = 6.95e-03 (Acceptable), t = 16.6s
+  [71/100] energy_std_percent=2.356, epsilon_n=3 (ETA: 4 min)
+         MSE = 2.03e+04 (Failed), t = 19.9s
+  [72/100] energy_std_percent=2.356, epsilon_n=4.889 (ETA: 4 min)
+         MSE = 8.26e-01 (Failed), t = 17.6s
+  [73/100] energy_std_percent=2.356, epsilon_n=6.778 (ETA: 4 min)
+         MSE = 2.64e-05 (Excellent), t = 16.9s
+  [74/100] energy_std_percent=2.356, epsilon_n=8.667 (ETA: 4 min)
+         MSE = 9.59e-03 (Acceptable), t = 8.2s
+  [75/100] energy_std_percent=2.356, epsilon_n=10.56 (ETA: 4 min)
+         MSE = 2.13e-05 (Excellent), t = 15.6s
+  [76/100] energy_std_percent=2.356, epsilon_n=12.44 (ETA: 4 min)
+         MSE = 7.96e-03 (Acceptable), t = 12.3s
+  [77/100] energy_std_percent=2.356, epsilon_n=14.33 (ETA: 4 min)
+         MSE = 6.08e-03 (Acceptable), t = 22.7s
+  [78/100] energy_std_percent=2.356, epsilon_n=16.22 (ETA: 4 min)
+         MSE = 1.88e-05 (Excellent), t = 21.3s
+  [79/100] energy_std_percent=2.356, epsilon_n=18.11 (ETA: 3 min)
+         MSE = 3.46e-03 (Acceptable), t = 17.5s
+  [80/100] energy_std_percent=2.356, epsilon_n=20 (ETA: 3 min)
+         MSE = 2.46e-03 (Acceptable), t = 22.7s
+  [81/100] energy_std_percent=2.678, epsilon_n=3 (ETA: 3 min)
+         MSE = 1.83e-02 (Marginal), t = 28.8s
+  [82/100] energy_std_percent=2.678, epsilon_n=4.889 (ETA: 3 min)
+         MSE = 1.06e-02 (Marginal), t = 18.2s
+  [83/100] energy_std_percent=2.678, epsilon_n=6.778 (ETA: 3 min)
+         MSE = 2.64e-05 (Excellent), t = 17.4s
+  [84/100] energy_std_percent=2.678, epsilon_n=8.667 (ETA: 3 min)
+         MSE = 2.12e-05 (Excellent), t = 15.9s
+  [85/100] energy_std_percent=2.678, epsilon_n=10.56 (ETA: 3 min)
+         MSE = 2.12e-05 (Excellent), t = 15.7s
+  [86/100] energy_std_percent=2.678, epsilon_n=12.44 (ETA: 3 min)
+         MSE = 3.39e-05 (Excellent), t = 15.9s
+  [87/100] energy_std_percent=2.678, epsilon_n=14.33 (ETA: 2 min)
+         MSE = 5.10e-04 (Excellent), t = 16.5s
+  [88/100] energy_std_percent=2.678, epsilon_n=16.22 (ETA: 2 min)
+         MSE = 8.54e-03 (Acceptable), t = 17.2s
+  [89/100] energy_std_percent=2.678, epsilon_n=18.11 (ETA: 2 min)
+         MSE = 4.23e-01 (Failed), t = 16.3s
+  [90/100] energy_std_percent=2.678, epsilon_n=20 (ETA: 2 min)
+         MSE = 1.77e-03 (Acceptable), t = 17.2s
+  [91/100] energy_std_percent=3, epsilon_n=3 (ETA: 2 min)
+         MSE = 1.17e-02 (Marginal), t = 25.9s
+  [92/100] energy_std_percent=3, epsilon_n=4.889 (ETA: 2 min)
+         MSE = 1.03e-02 (Marginal), t = 14.3s
+  [93/100] energy_std_percent=3, epsilon_n=6.778 (ETA: 1 min)
+         MSE = 2.63e-05 (Excellent), t = 16.0s
+  [94/100] energy_std_percent=3, epsilon_n=8.667 (ETA: 1 min)
+         MSE = 2.13e-05 (Excellent), t = 17.6s
+  [95/100] energy_std_percent=3, epsilon_n=10.56 (ETA: 1 min)
+         MSE = 2.65e-05 (Excellent), t = 14.6s
+  [96/100] energy_std_percent=3, epsilon_n=12.44 (ETA: 1 min)
+         MSE = 6.29e-03 (Acceptable), t = 14.3s
+  [97/100] energy_std_percent=3, epsilon_n=14.33 (ETA: 1 min)
+         MSE = 2.86e-05 (Excellent), t = 16.7s
+  [98/100] energy_std_percent=3, epsilon_n=16.22 (ETA: 0 min)
+         MSE = 2.34e-05 (Excellent), t = 15.6s
+  [99/100] energy_std_percent=3, epsilon_n=18.11 (ETA: 0 min)
+         MSE = 1.12e-03 (Acceptable), t = 14.9s
+  [100/100] energy_std_percent=3, epsilon_n=20 (ETA: 0 min)
+         MSE = 1.75e-03 (Acceptable), t = 19.4s
+
+  Scan complete. Total time: 19.7 min
+  Saved: /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/params_05ps_2d/scan_s5b.csv
+  Saved: s5b_mse_landscape.{eps,png}
+  Saved: s5b_twiss_deviation.{eps,png}
+  Saved: s5b_feasibility.{eps,png}
+/home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/S5_2d_parameter_scans.py:422: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+  plt.tight_layout()
+  Saved: S5_feasibility_summary.{eps,png}
+
+========================================================================
+  S5 Complete
+========================================================================

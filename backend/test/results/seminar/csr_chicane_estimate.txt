@@ -1,0 +1,73 @@
+CSR Estimates for UH FEL Transport Line Chicanes
+═══════════════════════════════════════════════════
+
+Beam parameters:
+  E = 40 MeV (γ = 79.3, β ≈ 1.0)
+  Q = 60 pC  (N_b = 3.75 × 10⁸)
+  ε_n = 8 π·mm·mrad
+  σ_t = 2 ps  → σ_z = 600 μm, I_peak = 12.0 A
+  σ_t = 0.5 ps → σ_z = 150 μm, I_peak = 47.9 A
+
+Chicane geometry (FC1, final chicane before undulator):
+  4-dipole symmetric chicane: +θ, -θ, -θ, +θ
+  θ = 11.25° per dipole
+  L_d = 37.4 mm (magnetic length)
+  ρ = 190 mm (bending radius)
+  Drift spacing: 329 mm / 191 mm / 329 mm (center-to-center)
+  R56 ≈ 2.9 mm
+
+Upstream chicanes (×4, smaller angles):
+  θ = 4° per dipole, L_d = 40.6 mm, ρ = 581 mm (weaker bending)
+
+───────────────────────────────────────────────────
+Steady-state CSR (Derbenev–Saldin formula)
+───────────────────────────────────────────────────
+
+Formula: ΔE_CSR = 0.22 × r_e × m_e c² × N_b × L_d / (ρ^{2/3} × σ_z^{4/3})
+
+FC1 chicane (4 dipoles, θ = 11.25°, ρ = 190 mm):
+
+  σ_t = 2 ps (baseline):
+    ΔE_CSR = 4 × 0.68 keV = 2.7 keV  (per chicane)
+    σ_δ,CSR = 0.007%
+    Δε/ε = 0.0002% (negligible)
+
+  σ_t = 0.5 ps (compressed):
+    ΔE_CSR = 4 × 6.8 keV = 27 keV  (per chicane)
+    σ_δ,CSR = 0.068%
+    Δε/ε = 0.02%
+
+Upstream chicanes (θ = 4°, ρ = 581 mm, ×4 chicanes):
+  CSR ~3× weaker per dipole (larger ρ), but cumulative across 4 chicanes.
+  Total upstream: ~0.5× FC1 contribution.
+
+───────────────────────────────────────────────────
+Impact assessment
+───────────────────────────────────────────────────
+
+                            2 ps        0.5 ps
+  Base σ_δ               0.50%        0.50%
+  CSR σ_δ (FC1)          0.007%       0.068%
+  CSR / base             1.4%         14%
+  Emittance growth       negligible   0.02%
+
+Conclusion:
+
+At the nominal 2 ps bunch length, CSR is negligible — the induced energy
+spread (0.007%) is two orders of magnitude below the beam's intrinsic
+σ_δ = 0.5%, and the emittance growth is < 0.001%.
+
+At 0.5 ps (compressed), CSR becomes measurable but remains small: σ_δ,CSR
+contributes ~14% relative to the base energy spread. The CSR-induced
+emittance growth (0.02%) is still negligible for FEL operation.
+
+The dominant collective effect is CSR in the FC1 chicane (shortest ρ).
+LSC and resistive-wall wakefields are subdominant by 1-2 orders of
+magnitude (see S9_bunch_length_study.py for full comparison).
+
+Note: These are steady-state estimates. Transient CSR effects (entrance/exit
+of dipoles) can produce ~2× larger instantaneous energy kicks but average
+out over the chicane. A full numerical CSR simulation (e.g., ELEGANT or
+CSRtrack) would be needed for precision below ~10%.
+
+Source: S9_bunch_length_study.py, Part A3

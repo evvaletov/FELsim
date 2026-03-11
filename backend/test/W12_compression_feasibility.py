@@ -19,6 +19,7 @@ Author: Eremey Valetov
 import sys
 import json
 import argparse
+import math
 import time
 from pathlib import Path
 import numpy as np
@@ -153,7 +154,7 @@ def get_baseline_currents():
         epsilon_n=8, nb_particles=500, seed=42,
     )
     elapsed = time.perf_counter() - t0
-    _print(f"  MSE = {res['mse']:.4e}, time = {elapsed:.1f} s")
+    _print(f"  RMS = {math.sqrt(res['mse']):.4e}, time = {elapsed:.1f} s")
     _print(f"  β_x={res['beta_x']:.4f}, α_x={res['alpha_x']:.4f}, "
            f"β_y={res['beta_y']:.4f}, α_y={res['alpha_y']:.4f}")
     return res['quad_currents'], res
@@ -544,7 +545,7 @@ def part_c(baseline_result, part_a_data=None):
         chrom_upper_bound=15, n_restarts=5,
     )
     elapsed = time.perf_counter() - t0
-    _print(f"  MSE = {ext_res['mse']:.4e}, time = {elapsed:.1f} s")
+    _print(f"  RMS = {math.sqrt(ext_res['mse']):.4e}, time = {elapsed:.1f} s")
     _print(f"  β_x={ext_res['beta_x']:.4f}, α_x={ext_res['alpha_x']:.4f}, "
            f"β_y={ext_res['beta_y']:.4f}, α_y={ext_res['alpha_y']:.4f}")
 
@@ -552,7 +553,7 @@ def part_c(baseline_result, part_a_data=None):
     _print(f"\n── Baseline vs Extended Bounds ──")
     _print(f"{'Metric':<25s}  {'Baseline (10A, 1r)':>18s}  {'Extended (15A, 5r)':>18s}")
     _print("-" * 65)
-    _print(f"{'MSE':<25s}  {baseline_result['mse']:18.4e}  {ext_res['mse']:18.4e}")
+    _print(f"{'RMS':<25s}  {math.sqrt(baseline_result['mse']):18.4e}  {math.sqrt(ext_res['mse']):18.4e}")
     _print(f"{'β_x (m)':<25s}  {baseline_result['beta_x']:18.4f}  {ext_res['beta_x']:18.4f}")
     _print(f"{'α_x':<25s}  {baseline_result['alpha_x']:18.4f}  {ext_res['alpha_x']:18.4f}")
     _print(f"{'β_y (m)':<25s}  {baseline_result['beta_y']:18.4f}  {ext_res['beta_y']:18.4f}")

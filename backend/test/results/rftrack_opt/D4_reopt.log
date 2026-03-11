@@ -1,0 +1,70 @@
+
+RF-Track, version 2.5.5
+
+Copyright (C) 2016-2025 CERN, Geneva, Switzerland. All rights reserved.
+
+Author and contact:
+ Andrea Latina <andrea.latina@cern.ch>
+ BE-ABP Group
+ CERN
+ CH-1211 GENEVA 23
+ SWITZERLAND
+
+This software is distributed under a CERN proprietary software
+license in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the COPYRIGHT and LICENSE files at the top-level directory of
+the RF-Track download area: https://gitlab.cern.ch/rf-track
+
+RF-Track was compiled with GSL-2.5 and fftw-3.3.5-sse2-avx
+
+RF-Track Stage 11 Optimisation
+  E = 40 MeV, particles = 500, SC = OFF, aperture = 0.5 m
+  Mode: full comparison (ε_n=[8.0], 5 restarts)
+
+======================================================================
+  [1/1] ε_n = 8.0
+======================================================================
+  Running FELsim optimization (11 stages)...
+    FELsim: MSE = 6.1344e-06 (39.3 s)
+  Evaluating FELsim currents in RF-Track...
+    RFT-val: MSE = 1.2475e+03 (ngood=500, 1.8 s)
+  Running RF-Track Stage 11 optimization (5 restarts)...
+    Pre-tracking prefix (elements 0:87)...
+    Prefix tracked in 0.4 s
+    Restart 1/5: MSE = 1.9392e-01 (nfev=711)
+    Restart 2/5: MSE = 1.7363e+03 (nfev=442)
+warning: as the beam's first particle was lost, Bunch6d::get_info() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_phase_space() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_info() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_phase_space() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_info() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_phase_space() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_info() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_phase_space() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_info() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_phase_space() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_info() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_phase_space() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_info() will use the beam centroid as reference particle.
+warning: as the beam's first particle was lost, Bunch6d::get_phase_space() will use the beam centroid as reference particle.
+    Restart 3/5: MSE = 1.1302e+09 (nfev=800)
+    Restart 4/5: MSE = 2.0393e+02 (nfev=444)
+    Restart 5/5: MSE = 1.0467e+03 (nfev=275)
+    RFT-opt: MSE = 1.9392e-01 (638.9 s, nfev=2672)
+
+Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/rftrack_opt/comparison.csv
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ε_n     Method          MSE      β_x      β_y      α_x        α_y     Disp   I_87   I_93   I_95   I_97    Time
+          Target                1.4000   0.2418   0.4700   0.000000
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    8     FELsim   6.1344e-06   1.4000   0.2418   0.4699  -0.000055  -0.0078   4.88   2.39   4.33   6.20    39.3
+    8    RFT-val   1.2475e+03  47.4901   1.8474 -63.6080  -2.202566  -0.0074   4.88   2.39   4.33   6.20     1.8
+    8    RFT-opt   1.9392e-01   1.0205   0.0015  -0.4061   0.002478  -0.0252   9.97   2.95   2.24   0.63   638.9
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/rftrack_opt/mse_comparison.eps
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/rftrack_opt/twiss_comparison.eps

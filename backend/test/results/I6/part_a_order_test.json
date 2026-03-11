@@ -1,0 +1,35 @@
+{
+  "1": {
+    "order": 1,
+    "n_input": 100,
+    "n_output": 100,
+    "transmission": 1.0,
+    "sigma_z_in_ps": 2.0,
+    "sigma_z_out_ps": 2.2639226442469687,
+    "sigma_l_in_um": 592.9417430723015,
+    "sigma_l_out_um": 670.1991581439268,
+    "time_s": 1.1275725364685059
+  },
+  "2": {
+    "order": 2,
+    "n_input": 100,
+    "n_output": 100,
+    "transmission": 1.0,
+    "sigma_z_in_ps": 2.0,
+    "sigma_z_out_ps": 3.739859415929985,
+    "sigma_l_in_um": 592.9417430723015,
+    "sigma_l_out_um": 1107.1273298591946,
+    "time_s": 1.2654600143432617
+  },
+  "3": {
+    "order": 3,
+    "n_input": 100,
+    "n_output": 100,
+    "transmission": 1.0,
+    "sigma_z_in_ps": 2.0,
+    "sigma_z_out_ps": 4.157783577736638,
+    "sigma_l_in_um": 592.9417430723015,
+    "sigma_l_out_um": 1230.8472909287962,
+    "time_s": 1.531658411026001
+  }
+}

@@ -1,0 +1,3 @@
+To better address the reviewers’ comments about our PRAB manuscript
+Check the 2ps bunch parameters are realistic with beam simulations i.e. COSY INFINITY and Python
+What are the realistic beam parameters to achieve 0.5ps bunch length, minimizing emittance, energy chirp, energy spread.

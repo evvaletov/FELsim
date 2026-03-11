@@ -18,7 +18,7 @@ severely incorrect y-plane optics through the chicane:
 | Parameter | Expected | With signed K0 | With abs(K0) |
 |-----------|----------|----------------|--------------|
 | $\beta_y$ at undulator | 0.242 m | ~87 m | ~0.055 m |
-| MSE | ~2 | 1583 | 1.985 |
+| RMS | ~1.4 | 39.8 | 1.41 |
 
 The x-plane was relatively unaffected because the chicane DPW wedge angles
 are small ($\eta \approx 2°$), making the x-kick $\tan\eta / R$ small
@@ -79,11 +79,11 @@ RF-Track) gives:
 
 | Metric | Before fix | After fix |
 |--------|-----------|-----------|
-| MSE | 1583 | 1.985 |
+| RMS | 39.8 | 1.41 |
 | $\beta_y$ | ~87 m | ~0.29 m |
 | $\beta_x$ | ~0.5 m | ~5.1 m |
 
-The remaining MSE = 1.985 is due to genuine model differences between FELsim
+The remaining RMS = 1.41 is due to genuine model differences between FELsim
 (transfer matrices with triangle-rule fringe) and RF-Track (analytical
 sector-bend correction with thin-quad edge kicks), not a sign error.
 

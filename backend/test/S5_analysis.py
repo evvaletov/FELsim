@@ -92,8 +92,8 @@ def print_summary():
         print(f"\n  {cfg['title']} (fixed {cfg['fixed_param']}={cfg['fixed_value']})")
         print(f"  {'─' * 50}")
         print(f"  Points: {len(rows)}")
-        print(f"  MSE range: [{min(mses):.2e}, {max(mses):.2e}]")
-        print(f"  Median MSE: {np.median(mses):.2e}")
+        print(f"  RMS range: [{math.sqrt(min(mses)):.2e}, {math.sqrt(max(mses)):.2e}]")
+        print(f"  Median RMS: {math.sqrt(np.median(mses)):.2e}")
         print(f"  Quality: {cats['Excellent']} Excellent, {cats['Acceptable']} Acceptable, "
               f"{cats['Marginal']} Marginal, {cats['Failed']} Failed")
         print(f"  Success rate: {(cats['Excellent'] + cats['Acceptable']) / len(rows) * 100:.0f}%")
@@ -153,8 +153,10 @@ def generate_combined_figure():
 
     cbar = fig.colorbar(im, ax=axes.tolist(), ticks=[0, 1, 2, 3],
                         fraction=0.02, pad=0.04)
-    cbar.set_ticklabels(['Excellent\n(<1e-3)', 'Acceptable\n(<0.01)',
-                         'Marginal\n(<0.1)', 'Failed\n(≥0.1)'])
+    cbar.set_ticklabels([f'Excellent\n(<{math.sqrt(1e-3):.2e})',
+                         f'Acceptable\n(<{math.sqrt(0.01):.2e})',
+                         f'Marginal\n(<{math.sqrt(0.1):.2e})',
+                         f'Failed\n(≥{math.sqrt(0.1):.2e})'])
 
     fig.suptitle('S5: 2D Parameter Scan Feasibility Maps', fontsize=14, y=1.02)
     plt.tight_layout()
@@ -196,17 +198,17 @@ def generate_mse_landscape():
         p1_d = np.array(p1_vals) * p1_scale
         p2_d = np.array(p2_vals) * p2_scale
 
-        mse_plot = np.where(np.isnan(mse_grid), 1e2, np.clip(mse_grid, 1e-10, 1e5))
-        cs = ax.contourf(p1_d, p2_d, mse_plot,
-                         levels=np.logspace(-9, 5, 30),
-                         norm=LogNorm(vmin=1e-9, vmax=1e5),
+        rms_grid = np.sqrt(np.where(np.isnan(mse_grid), 1e2, np.clip(mse_grid, 1e-10, 1e5)))
+        cs = ax.contourf(p1_d, p2_d, rms_grid,
+                         levels=np.logspace(-4.5, 2.5, 30),
+                         norm=LogNorm(vmin=1e-4.5, vmax=1e2.5),
                          cmap='viridis')
-        plt.colorbar(cs, ax=ax, label='MSE')
+        plt.colorbar(cs, ax=ax, label='RMS Twiss Mismatch')
 
-        # Threshold contours
-        for thresh, color in [(1e-3, 'lime'), (0.01, 'yellow'), (0.1, 'orange')]:
+        # Threshold contours (sqrt of MSE thresholds)
+        for thresh, color in [(math.sqrt(1e-3), 'lime'), (math.sqrt(0.01), 'yellow'), (math.sqrt(0.1), 'orange')]:
             try:
-                ax.contour(p1_d, p2_d, mse_plot, levels=[thresh],
+                ax.contour(p1_d, p2_d, rms_grid, levels=[thresh],
                           colors=[color], linewidths=2, linestyles='--')
             except Exception:
                 pass
@@ -215,7 +217,7 @@ def generate_mse_landscape():
         ax.set_ylabel(cfg['p2_label'], fontsize=11)
         ax.set_title(cfg['title'], fontsize=12)
 
-    fig.suptitle('S5: MSE Landscape (log scale)', fontsize=14, y=1.02)
+    fig.suptitle('S5: RMS Twiss Mismatch Landscape (log scale)', fontsize=14, y=1.02)
     plt.tight_layout()
     for ext in ['eps', 'png', 'pdf']:
         fig.savefig(OUTDIR / f'S5_mse_landscape.{ext}', dpi=200, bbox_inches='tight')
@@ -249,7 +251,7 @@ def s4_comparison():
         )
 
         print(f"  σ_E marginal comparison (h≈{h_baseline/1e9:.1f}×10⁹ vs S4 h=5×10⁹):")
-        print(f"  {'σ_E':>8} {'S4 MSE':>12} {'S5a MSE':>12} {'Match?':>8}")
+        print(f"  {'σ_E':>8} {'S4 RMS':>12} {'S5a RMS':>12} {'Match?':>8}")
         for s5r in s5a_at_baseline_h:
             se = s5r['energy_std_percent']
             # Find closest S4 point
@@ -258,7 +260,7 @@ def s4_comparison():
                 s4_cat = classify(closest_s4['mse'])
                 s5_cat = classify(s5r['mse'])
                 match = 'Yes' if s4_cat == s5_cat else 'NO'
-                print(f"  {se:8.2f} {closest_s4['mse']:12.2e} {s5r['mse']:12.2e} {match:>8}")
+                print(f"  {se:8.2f} {math.sqrt(closest_s4['mse']):12.2e} {math.sqrt(s5r['mse']):12.2e} {match:>8}")
 
     # S5b/S5c: check emittance marginals
     s5b_path = SCAN_DIR / 'scan_s5b.csv'
@@ -277,7 +279,7 @@ def s4_comparison():
         )
 
         print(f"\n  ε_n marginal comparison (σ_E≈{se_baseline}% vs S4 σ_E=0.5%):")
-        print(f"  {'ε_n':>8} {'S4 MSE':>12} {'S5b MSE':>12} {'Match?':>8}")
+        print(f"  {'ε_n':>8} {'S4 RMS':>12} {'S5b RMS':>12} {'Match?':>8}")
         for s5r in s5b_at_baseline:
             en = s5r['epsilon_n']
             closest_s4 = min(s4em, key=lambda r: abs(r['param_value'] - en))
@@ -285,7 +287,7 @@ def s4_comparison():
                 s4_cat = classify(closest_s4['mse'])
                 s5_cat = classify(s5r['mse'])
                 match = 'Yes' if s4_cat == s5_cat else 'NO'
-                print(f"  {en:8.2f} {closest_s4['mse']:12.2e} {s5r['mse']:12.2e} {match:>8}")
+                print(f"  {en:8.2f} {math.sqrt(closest_s4['mse']):12.2e} {math.sqrt(s5r['mse']):12.2e} {match:>8}")
 
 
 def main():

@@ -10,6 +10,7 @@ Author: Eremey Valetov
 import sys
 import json
 import copy
+import math
 import argparse
 from pathlib import Path
 import numpy as np
@@ -183,7 +184,7 @@ def run_cosy_optimization_s9(file_path, targets, bunch_spread_ps, sigma_e_pct, h
     currents = get_optimized_currents(reader, stages)
     mse = compute_mse(twiss, targets)
 
-    print(f"  MSE = {mse:.6e}")
+    print(f"  RMS = {math.sqrt(mse):.6e}")
     print(f"  β_x = {twiss.get('beta_x', '?'):.4f}, α_x = {twiss.get('alpha_x', '?'):.4f}")
     print(f"  β_y = {twiss.get('beta_y', '?'):.4f}, α_y = {twiss.get('alpha_y', '?'):.4f}")
 

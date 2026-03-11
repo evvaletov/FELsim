@@ -14,6 +14,7 @@ Author: Eremey Valetov
 import sys
 import time
 import csv
+import math
 from pathlib import Path
 import numpy as np
 import matplotlib
@@ -80,18 +81,20 @@ def plot_results():
         beta_x = [float(r['beta_x']) for r in rows]
         beta_y = [float(r['beta_y']) for r in rows]
 
-        ax1.semilogy(bl, mse, 'o-', label=cfg['label'], markersize=5)
+        rms = [math.sqrt(m) for m in mse]
+        ax1.semilogy(bl, rms, 'o-', label=cfg['label'], markersize=5)
         ax2.plot(bl, beta_x, 'o-', label=cfg['label'] + r' $\beta_x$', markersize=4)
         ax2.plot(bl, beta_y, 's--', label=cfg['label'] + r' $\beta_y$', markersize=4)
 
-    # Threshold lines
+    # Threshold lines (sqrt of MSE thresholds)
     for name, thresh in MSE_THRESHOLDS.items():
-        ax1.axhline(thresh, ls=':', color='gray', alpha=0.5)
-        ax1.text(0.15, thresh * 1.3, name, fontsize=8, color='gray')
+        rms_thresh = math.sqrt(thresh)
+        ax1.axhline(rms_thresh, ls=':', color='gray', alpha=0.5)
+        ax1.text(0.15, rms_thresh * 1.3, name, fontsize=8, color='gray')
 
     ax1.set_xlabel('Bunch length (ps)')
-    ax1.set_ylabel('MSE')
-    ax1.set_title('S6: MSE vs Bunch Length')
+    ax1.set_ylabel('RMS Twiss Mismatch')
+    ax1.set_title('S6: RMS vs Bunch Length')
     ax1.legend(fontsize=8)
     ax1.grid(True, alpha=0.3)
 

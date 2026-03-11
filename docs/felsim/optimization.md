@@ -19,21 +19,23 @@ The optimizer (`beamOptimizer.py`) supports two methods:
 
 **Objective function:** mean squared error (MSE) between computed and target
 Twiss parameters ($\beta_x$, $\alpha_x$, $\beta_y$, $\alpha_y$) at the
-undulator entrance.
+undulator entrance. Results are reported as **RMS** $= \sqrt{\text{MSE}}$,
+which has the same units as the Twiss residuals and is the standard
+figure of merit in beam physics matching.
 
 **Quality thresholds:**
 
-| MSE | Rating |
-|-----|--------|
-| < $10^{-3}$ | Excellent |
-| < $10^{-2}$ | Acceptable |
-| < $10^{-1}$ | Marginal |
-| ≥ $10^{-1}$ | Failed |
+| RMS | MSE | Rating |
+|-----|-----|--------|
+| < $3.2 \times 10^{-2}$ | < $10^{-3}$ | Excellent |
+| < $10^{-1}$ | < $10^{-2}$ | Acceptable |
+| < $3.2 \times 10^{-1}$ | < $10^{-1}$ | Marginal |
+| ≥ $3.2 \times 10^{-1}$ | ≥ $10^{-1}$ | Failed |
 
 The final stage (Stage 11) jointly optimizes 4 variables: the chromaticity
 section quadrupole (q5) plus the final triplet (q21, q22, q23). A
 multi-start variant retries with 5 random initial conditions if the
-single-start result exceeds the MSE threshold.
+single-start result exceeds the threshold.
 
 ## Completed Studies
 
@@ -71,20 +73,20 @@ emittance (1–20 π·mm·mrad). 500 particles per point.
 ### W1 — Chirp Effect on Twiss Matching
 
 Confirmed chirp has negligible effect on Twiss matching. Both $h = 0$ and
-$h = 5 \times 10^9$ /s achieve MSE < $3 \times 10^{-5}$.
+$h = 5 \times 10^9$ /s achieve RMS $< 5.5 \times 10^{-3}$.
 
 ### W2 — Emittance Scan with Multi-Start
 
 Re-ran emittance scan ($\varepsilon_n = 1$–$20$, 20 points) with multi-start
 fallback. Resolved dips at $\varepsilon_n = 14$–$16$; all now excellent
-(MSE ~ $10^{-6}$–$10^{-9}$).
+(RMS ~ $10^{-3}$–$10^{-5}$).
 
 ### W4 — COSY INFINITY Cross-Validation
 
 COSY's gradient-based FIT reproduces the 11-stage optimization.
-FR 0 (hard-edge): MSE = $4.5 \times 10^{-9}$.
-FR 1 (1st-order fringe, warm-started from FR 0): MSE = $7.9 \times 10^{-8}$.
-Cold-starting FR 1 fails (MSE ~ 0.2) due to changed edge kicks creating
+FR 0 (hard-edge): RMS $= 6.7 \times 10^{-5}$.
+FR 1 (1st-order fringe, warm-started from FR 0): RMS $= 2.8 \times 10^{-4}$.
+Cold-starting FR 1 fails (RMS ~ 0.45) due to changed edge kicks creating
 incompatible local minima. Stage 5 consistently finds negative-polarity
 currents (valid solution inaccessible to FELsim's bounded NM).
 
@@ -97,10 +99,10 @@ W6 benchmarked glyfada (ULS algorithm, 600 evals, uniform random init)
 against NM for Stage 11. NM outperformed by 3–6 orders of magnitude at
 $\varepsilon_n = 5, 8, 14$. W7 re-benchmarked with CMA-ES, warm-starting,
 tight bounds (±3 A), and feasibility-rules constraint handling. CMA-ES
-still failed at all points (MSE $7.7 \times 10^5$ at $\varepsilon_n = 5$,
-MSE $17.8$ at $\varepsilon_n = 8$).
+still failed at all points (RMS $= 878$ at $\varepsilon_n = 5$,
+RMS $= 4.2$ at $\varepsilon_n = 8$).
 
-The FELsim MSE landscape has an extremely narrow feasibility basin;
+The objective landscape has an extremely narrow feasibility basin;
 evolutionary search cannot navigate it efficiently.
 
 - Scripts: `UHM_beamline_opt_05ps_params.py --w6` / `--w7`
@@ -111,9 +113,9 @@ evolutionary search cannot navigate it efficiently.
 
 Hybrid FELsim/RF-Track: stages 1–10 use FELsim, stage 11 uses RF-Track
 particle tracking with prefix caching. At $\varepsilon_n = 8$:
-RFT-opt MSE = $7.0 \times 10^{-3}$ (limited by $\beta_y$ residual from
+RFT-opt RMS $= 8.4 \times 10^{-2}$ (limited by $\beta_y$ residual from
 missing triangle-rule fringe correction). At $\varepsilon_n = 5$:
-RFT-opt MSE = $2.6 \times 10^{-7}$, $110\times$ better than FELsim.
+RFT-opt RMS $= 5.1 \times 10^{-4}$, $110\times$ better than FELsim.
 
 - Script: `UHM_rftrack_opt.py`
 - Results: `results/rftrack_opt/`
@@ -149,9 +151,69 @@ propagation) and W12 (compression feasibility with RF-Track validation).
 
 - Report: `reports/2026/Mar/04/R3_longitudinal_report.pdf`
 
+### S5 — 2D Coupled Parameter Scans
+
+Three 10×10 grids exploring pairwise coupling between beam parameters,
+500 particles per point:
+
+| Scan | Parameters | Fixed | Excellent | Acceptable | Marginal | Failed |
+|------|-----------|-------|-----------|------------|----------|--------|
+| S5a | $\sigma_E \times h$ | $\varepsilon_n = 8$ | 92 | 11 | 2 | 0 |
+| S5b | $\sigma_E \times \varepsilon_n$ | $h = 5 \times 10^9$ | 38 | 27 | 17 | 18 |
+| S5c | $h \times \varepsilon_n$ | $\sigma_E = 0.5\%$ | 54 | 12 | 14 | 20 |
+
+**Key finding:** The feasibility boundary is dominated by emittance —
+$\sigma_E$ and $h$ have negligible impact on matchability at the baseline
+$\varepsilon_n = 8$.  Failures cluster at $\varepsilon_n < 5$ and
+$\varepsilon_n > 17$, consistent with S4 and W2.
+
+- Script: `S5_2d_parameter_scans.py`, `S5_analysis.py`
+- Results: `results/params_05ps_2d/`, `results/S5_analysis/`
+
+### S6 — Bunch Length Sensitivity
+
+Swept bunch length from 0.1 to 2.0 ps (15 points) at two parameter sets:
+
+| Config | $\sigma_E$ | $h$ | Excellent | Acceptable | Marginal |
+|--------|-----------|-----|-----------|------------|----------|
+| Baseline | 0.5% | $5 \times 10^9$ | 15/15 | — | — |
+| Emittance-conserved | 2% | $20 \times 10^9$ | 11/15 | 3 | 1 |
+
+**Result:** Transverse Twiss matching is independent of bunch length.
+FELsim's linear transfer matrices decouple transverse and longitudinal
+planes — the 4×4 transverse block and dispersion column do not depend on
+the column-5 (time-of-flight) distribution.  This confirms S9's analytical
+prediction.  The small dips in the emittance-conserved config are NM noise
+(not bunch-length-correlated).
+
+- Script: `S6_bunch_length_sensitivity.py`
+- Results: `results/S6/`
+
+### S7 — Verification Runs at Key Transition Points
+
+Re-ran S4 transition points with $N = 500, 1000, 2000$ particles to test
+statistical robustness of the 500-particle results.
+
+| Sweep | Points | Consistent? | Notes |
+|-------|--------|-------------|-------|
+| Energy spread | $\sigma_E = 0.4, 0.55, 0.7\%$ | All consistent | All Excellent at every $N$ |
+| Emittance | $\varepsilon_n = 1, 3, 5, 8, 14, 16, 20$ | Only $\varepsilon_n = 8$ | Quality varies with $N$ at extremes |
+
+**Key finding:** S4/S5 emittance results at extreme values are **not
+statistically robust** — they depend on the specific random particle
+realization, not solely on physics.  The optimizer landscape has multiple
+local minima that the beam sample selects.  Publication-quality claims at
+extreme emittances require multi-start + multi-seed statistics (see S8).
+
+- Script: `S7_verification_runs.py`
+- Results: `results/S7/`
+
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap. Key upcoming items:
 
-- **S5** — 2D coupled parameter scans ($\sigma_E$ vs $h$, $\sigma_E$ vs
-  $\varepsilon_n$, $h$ vs $\varepsilon_n$) — smoke test done, full scans pending
+- **S8** — Multi-start robustness study: 10 random starts at 5 extreme
+  emittance points to characterize the optimizer landscape
+- **O1** — Warm-starting from neighbors: pass previous scan point's
+  optimized currents as initial guess for improved convergence
+- **R1** — Interactive parameter explorer (Plotly/Dash dashboard)

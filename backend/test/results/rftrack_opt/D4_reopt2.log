@@ -1,0 +1,62 @@
+
+RF-Track, version 2.5.5
+
+Copyright (C) 2016-2025 CERN, Geneva, Switzerland. All rights reserved.
+
+Author and contact:
+ Andrea Latina <andrea.latina@cern.ch>
+ BE-ABP Group
+ CERN
+ CH-1211 GENEVA 23
+ SWITZERLAND
+
+This software is distributed under a CERN proprietary software
+license in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the COPYRIGHT and LICENSE files at the top-level directory of
+the RF-Track download area: https://gitlab.cern.ch/rf-track
+
+RF-Track was compiled with GSL-2.5 and fftw-3.3.5-sse2-avx
+
+RF-Track Stage 11 Optimisation
+  E = 40 MeV, particles = 500, SC = OFF, aperture = 0.5 m
+  Mode: full comparison (ε_n=[8.0], 5 restarts)
+
+======================================================================
+  [1/1] ε_n = 8.0
+======================================================================
+  Running FELsim optimization (11 stages)...
+Unknown element type 'UND' at FEL.UND.127 — treating as drift
+Unknown element type 'UND' at FEL.UND.132 — treating as drift
+    FELsim: MSE = 6.1344e-06 (29.6 s)
+  Evaluating FELsim currents in RF-Track...
+Unknown element type 'UND' at FEL.UND.127 — treating as drift
+Unknown element type 'UND' at FEL.UND.132 — treating as drift
+    RFT-val: MSE = 1.8696e+00 (ngood=500, 3.0 s)
+  Running RF-Track Stage 11 optimization (5 restarts)...
+Unknown element type 'UND' at FEL.UND.127 — treating as drift
+Unknown element type 'UND' at FEL.UND.132 — treating as drift
+    Pre-tracking prefix (elements 0:87)...
+    Prefix tracked in 0.7 s
+    Restart 1/5: MSE = 4.9222e-03 (nfev=659)
+    Restart 2/5: MSE = 3.5715e+02 (nfev=192)
+    Restart 3/5: MSE = 4.4092e+02 (nfev=800)
+    Restart 4/5: MSE = 6.0493e-03 (nfev=392)
+    Restart 5/5: MSE = 4.6090e+03 (nfev=625)
+    RFT-opt: MSE = 4.9222e-03 (531.4 s, nfev=2668)
+
+Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/rftrack_opt/comparison.csv
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ε_n     Method          MSE      β_x      β_y      α_x        α_y     Disp   I_87   I_93   I_95   I_97    Time
+          Target                1.4000   0.2418   0.4700   0.000000
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    8     FELsim   6.1344e-06   1.4000   0.2418   0.4699  -0.000055  -0.0078   4.88   2.39   4.33   6.20    29.6
+    8    RFT-val   1.8696e+00   0.4464   1.8474  -0.5348  -2.202566   0.0022   4.88   2.39   4.33   6.20     3.0
+    8    RFT-opt   4.9222e-03   1.4018   0.0857   0.4557  -0.004259   0.0052   3.91   2.28   4.42   6.65   531.4
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/rftrack_opt/mse_comparison.eps
+The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+  Saved /home/evaletov/UH/fel-merge-workspace/FELsim/backend/test/results/rftrack_opt/twiss_comparison.eps

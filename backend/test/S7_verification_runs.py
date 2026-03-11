@@ -13,6 +13,7 @@ Author: Eremey Valetov
 import sys
 import time
 import csv
+import math
 from pathlib import Path
 import numpy as np
 import matplotlib
@@ -98,7 +99,7 @@ def run_verification(param_name, param_values, particle_counts, seed=42):
                 with open(csv_path, 'a', newline='') as f:
                     csv.writer(f).writerow(row)
 
-                _print(f"           MSE={res['mse']:.2e} ({classify(res['mse'])}), "
+                _print(f"           RMS={math.sqrt(res['mse']):.2e} ({classify(res['mse'])}), "
                        f"t={res['time_s']:.1f}s")
 
             except Exception as e:
@@ -128,15 +129,16 @@ def plot_verification():
             if not subset:
                 continue
             x = [float(r['param_value']) for r in subset]
-            y = [float(r['mse']) for r in subset]
+            y = [math.sqrt(float(r['mse'])) for r in subset]
             ax.semilogy(x, y, 'o-', label=f'N={npart}', markersize=5)
 
         for name, thresh in MSE_THRESHOLDS.items():
-            ax.axhline(thresh, ls=':', color='gray', alpha=0.5)
-            ax.text(ax.get_xlim()[0], thresh * 1.5, name, fontsize=7, color='gray')
+            rms_thresh = math.sqrt(thresh)
+            ax.axhline(rms_thresh, ls=':', color='gray', alpha=0.5)
+            ax.text(ax.get_xlim()[0], rms_thresh * 1.5, name, fontsize=7, color='gray')
 
         ax.set_xlabel(xlabel)
-        ax.set_ylabel('MSE')
+        ax.set_ylabel('RMS Twiss Mismatch')
         ax.set_title(f'S7: Verification — {param_name}')
         ax.legend(fontsize=9)
         ax.grid(True, alpha=0.3)
@@ -168,7 +170,7 @@ def plot_verification():
 
             cats = {n: classify(m) for n, m in mses.items()}
             consistent = len(set(cats.values())) == 1
-            cols = [f"{mses.get(n, float('nan')):.2e}" for n in PARTICLE_COUNTS]
+            cols = [f"{math.sqrt(mses.get(n, float('nan'))):.2e}" for n in PARTICLE_COUNTS]
             _print(f"{param_name:>12} {val:8.3g} {cols[0]:>12} {cols[1]:>12} {cols[2]:>12} "
                    f"{'Yes' if consistent else 'NO':>12}")
 

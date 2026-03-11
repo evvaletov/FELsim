@@ -102,7 +102,7 @@ After the fix, the COSY analytical and FELsim element matrices agree:
 
 With re-optimized quad currents (corrected DPW):
 - $|\operatorname{Tr}_x/2| = 0.39$ (stable)
-- MSE = $6.7 \times 10^{-3}$
+- RMS $= 8.2 \times 10^{-2}$
 
 ## Diagnostic scripts
 

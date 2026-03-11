@@ -10,6 +10,7 @@
 
 import sys
 import time
+import math
 import argparse
 import csv
 from pathlib import Path
@@ -63,7 +64,8 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
                      nb_particles=500, seed=42,
                      chrom_upper_bound=10, n_restarts=1,
                      stage11_method='Nelder-Mead', stage11_kwargs=None,
-                     stage11_startPoint=None):
+                     stage11_startPoint=None,
+                     warm_start_currents=None):
     """Run 11-stage beamline optimization, return results dict.
 
     Parameters
@@ -82,6 +84,10 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
     stage11_startPoint : dict or None
         Custom start point / bounds for Stage 11. Overrides defaults.
         Format: {"Ic": {"bounds": (lo, hi), "start": val}, ...}
+    warm_start_currents : dict or None
+        Previous optimization's quad currents (index -> current). When
+        provided, these are used as starting currents for all stages
+        (clamped to each stage's bounds).
 
     Returns dict with keys: mse, alpha_x, alpha_y, beta_x, beta_y,
     disp_resid, quad_currents (dict of index->current), time_s, nfev, converged.
@@ -116,14 +122,22 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
     opti = beamOptimizer(line, beam_dist)
     t0 = time.perf_counter()
 
+    # Apply warm-start currents if provided
+    if warm_start_currents:
+        for idx, cur in warm_start_currents.items():
+            idx = int(idx)
+            if 0 <= idx < len(line) and hasattr(line[idx], 'current'):
+                line[idx].current = np.clip(cur, 0, qb)
+
     # Stage 1: First Quadrupole Doublet
     variables = {
         1: ["I", "current", lambda num: num],
         3: ["I2", "current", lambda num: num],
     }
+    _ws = warm_start_currents or {}
     startPoint = {
-        "I": {"bounds": (0, qb), "start": 1},
-        "I2": {"bounds": (0, qb), "start": 1},
+        "I": {"bounds": (0, qb), "start": _ws.get(1, 1)},
+        "I2": {"bounds": (0, qb), "start": _ws.get(3, 1)},
     }
     objectives = {
         8: [{"measure": ["x", "alpha"], "goal": 0, "weight": 1},
@@ -136,7 +150,7 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
 
     # Stage 2: First Chromaticity Quad
     variables = {10: ["I", "current", lambda num: num]}
-    startPoint = {"I": {"bounds": (0, cb), "start": 1}}
+    startPoint = {"I": {"bounds": (0, cb), "start": _ws.get(10, 1)}}
     objectives = {15: [{"measure": ["x", "dispersion"], "goal": 0, "weight": 1}]}
     opti.calc("Nelder-Mead", variables, startPoint, objectives,
               plotBeam=False, printResults=False, plotProgress=False)
@@ -148,9 +162,9 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         20: ["I3", "current", lambda num: num],
     }
     startPoint = {
-        "I": {"bounds": (0, qb), "start": 2},
-        "I2": {"bounds": (0, qb), "start": 5},
-        "I3": {"bounds": (0, qb), "start": 3},
+        "I": {"bounds": (0, qb), "start": _ws.get(16, 2)},
+        "I2": {"bounds": (0, qb), "start": _ws.get(18, 5)},
+        "I3": {"bounds": (0, qb), "start": _ws.get(20, 3)},
     }
     objectives = {
         25: [{"measure": ["x", "alpha"], "goal": 0, "weight": 1},
@@ -163,7 +177,7 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
 
     # Stage 4: Second Chromaticity Quad
     variables = {27: ["I", "current", lambda num: num]}
-    startPoint = {"I": {"bounds": (0, cb), "start": 1}}
+    startPoint = {"I": {"bounds": (0, cb), "start": _ws.get(27, 1)}}
     objectives = {32: [{"measure": ["x", "dispersion"], "goal": 0, "weight": 1}]}
     opti.calc("Nelder-Mead", variables, startPoint, objectives,
               plotBeam=False, printResults=False, plotProgress=False)
@@ -175,9 +189,9 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         33: ["I3", "current", lambda num: num],
     }
     startPoint = {
-        "I": {"bounds": (0, qb), "start": 2},
-        "I2": {"bounds": (0, qb), "start": 2},
-        "I3": {"bounds": (0, qb), "start": 2},
+        "I": {"bounds": (0, qb), "start": _ws.get(37, 2)},
+        "I2": {"bounds": (0, qb), "start": _ws.get(35, 2)},
+        "I3": {"bounds": (0, qb), "start": _ws.get(33, 2)},
     }
     objectives = {
         37: [
@@ -195,7 +209,7 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
 
     # Stage 6: Third Chromaticity Quad
     variables = {50: ["I", "current", lambda num: num]}
-    startPoint = {"I": {"bounds": (0, cb), "start": 1}}
+    startPoint = {"I": {"bounds": (0, cb), "start": _ws.get(50, 1)}}
     objectives = {55: [{"measure": ["x", "dispersion"], "goal": 0, "weight": 1}]}
     opti.calc("Nelder-Mead", variables, startPoint, objectives,
               plotBeam=False, printResults=False, plotProgress=False)
@@ -206,8 +220,8 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         58: ["I2", "current", lambda num: num],
     }
     startPoint = {
-        "I": {"bounds": (0, qb), "start": 2},
-        "I2": {"bounds": (0, qb), "start": 2},
+        "I": {"bounds": (0, qb), "start": _ws.get(56, 2)},
+        "I2": {"bounds": (0, qb), "start": _ws.get(58, 2)},
     }
     objectives = {
         59: [
@@ -224,8 +238,8 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         63: ["I2", "current", lambda num: num],
     }
     startPoint = {
-        "I": {"bounds": (0, qb), "start": 2},
-        "I2": {"bounds": (0, qb), "start": 2},
+        "I": {"bounds": (0, qb), "start": _ws.get(61, 2)},
+        "I2": {"bounds": (0, qb), "start": _ws.get(63, 2)},
     }
     objectives = {
         68: [{"measure": ["x", "alpha"], "goal": 0, "weight": 1},
@@ -238,7 +252,7 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
 
     # Stage 9: Fourth Chromaticity Quad
     variables = {70: ["I", "current", lambda num: num]}
-    startPoint = {"I": {"bounds": (0, cb), "start": 1}}
+    startPoint = {"I": {"bounds": (0, cb), "start": _ws.get(70, 1)}}
     objectives = {75: [{"measure": ["x", "dispersion"], "goal": 0, "weight": 1}]}
     opti.calc("Nelder-Mead", variables, startPoint, objectives,
               plotBeam=False, printResults=False, plotProgress=False)
@@ -250,9 +264,9 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
         80: ["I3", "current", lambda num: num],
     }
     startPoint = {
-        "I": {"bounds": (0, qb), "start": 2},
-        "I2": {"bounds": (0, qb), "start": 2},
-        "I3": {"bounds": (0, qb), "start": 2},
+        "I": {"bounds": (0, qb), "start": _ws.get(76, 2)},
+        "I2": {"bounds": (0, qb), "start": _ws.get(78, 2)},
+        "I3": {"bounds": (0, qb), "start": _ws.get(80, 2)},
     }
     objectives = {
         85: [{"measure": ["x", "alpha"], "goal": 0, "weight": 1},
@@ -288,10 +302,10 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
             startPoint = stage11_startPoint
         else:
             startPoint = {
-                "Ic": {"bounds": (0, cb), "start": 4},
-                "I": {"bounds": (0, qb), "start": 2},
-                "I2": {"bounds": (0, qb), "start": 2},
-                "I3": {"bounds": (0, qb), "start": 2},
+                "Ic": {"bounds": (0, cb), "start": _ws.get(87, 4)},
+                "I": {"bounds": (0, qb), "start": _ws.get(93, 2)},
+                "I2": {"bounds": (0, qb), "start": _ws.get(95, 2)},
+                "I3": {"bounds": (0, qb), "start": _ws.get(97, 2)},
             }
         result = opti.calc("glyfada", variables, startPoint, objectives,
                            plotBeam=False, printResults=False,
@@ -299,7 +313,8 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
     else:
         # NM multi-start for Stage 11
         default_starts = [
-            {"Ic": 4, "I": 2, "I2": 2, "I3": 2},
+            {"Ic": _ws.get(87, 4), "I": _ws.get(93, 2),
+             "I2": _ws.get(95, 2), "I3": _ws.get(97, 2)},
         ]
         rng = np.random.RandomState(seed + 999)
         for _ in range(n_restarts - 1):
@@ -419,14 +434,16 @@ TWISS_TARGETS = None  # set at runtime
 
 def plot_mse_vs_param(param_vals, mse_vals, xlabel, title, filepath):
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.semilogy(param_vals, mse_vals, 'ko-', markersize=5)
+    rms_vals = [math.sqrt(m) for m in mse_vals]
+    ax.semilogy(param_vals, rms_vals, 'ko-', markersize=5)
     colors = {'Excellent': 'green', 'Acceptable': 'orange', 'Marginal': 'red'}
     for label, thresh in MSE_THRESHOLDS.items():
-        ax.axhline(thresh, color=colors[label], linestyle='--', alpha=0.7,
-                    label=f'{label} ({thresh})')
+        rms_thresh = math.sqrt(thresh)
+        ax.axhline(rms_thresh, color=colors[label], linestyle='--', alpha=0.7,
+                    label=f'{label} ({rms_thresh:.2e})')
     ax.set_xlabel(xlabel)
-    ax.set_ylabel('MSE')
-    ax.set_title(title)
+    ax.set_ylabel('RMS Twiss Mismatch')
+    ax.set_title(title.replace('MSE', 'RMS'))
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -486,37 +503,52 @@ def plot_currents_vs_param(param_vals, rows, xlabel, title_base, filepath,
 # ── Scan runners ─────────────────────────────────────────────────────────────
 
 def run_scan(scan_name, param_name, param_values, outdir, nb_particles=500,
-             seed=42, **overrides):
-    """Run a 1D parameter scan and save CSV."""
+             seed=42, warm_start=False, **overrides):
+    """Run a 1D parameter scan and save CSV.
+
+    Parameters
+    ----------
+    warm_start : bool
+        When True, each point uses the previous point's optimized quad
+        currents as the starting guess for all 11 stages.
+    """
     print(f"\n{'='*70}")
-    print(f"Scan: {scan_name} — sweeping {param_name}")
+    print(f"Scan: {scan_name} — sweeping {param_name}"
+          f"{' (warm-start)' if warm_start else ''}")
     print(f"{'='*70}")
 
     header = csv_header()
     rows = []
+    prev_currents = None
     for i, val in enumerate(param_values):
         kwargs = dict(BASELINE)
         kwargs['nb_particles'] = nb_particles
         kwargs['seed'] = seed
         kwargs.update(overrides)
         kwargs[param_name] = val
-        print(f"  [{i+1}/{len(param_values)}] {param_name} = {val}")
+        if warm_start and prev_currents is not None:
+            kwargs['warm_start_currents'] = prev_currents
+        print(f"  [{i+1}/{len(param_values)}] {param_name} = {val}"
+              f"{'  (warm)' if warm_start and prev_currents else ''}")
         try:
             res = run_optimization(**kwargs)
             row = result_to_row(val, res)
+            if warm_start:
+                prev_currents = res['quad_currents']
             quality = 'FAILED'
             for label, thresh in sorted(MSE_THRESHOLDS.items(),
                                         key=lambda x: x[1]):
                 if res['mse'] < thresh:
                     quality = label.upper()
                     break
-            print(f"    MSE = {res['mse']:.4e}  [{quality}]  "
+            print(f"    RMS = {math.sqrt(res['mse']):.4e}  [{quality}]  "
                   f"β_x={res['beta_x']:.4f}  β_y={res['beta_y']:.4f}  "
                   f"α_x={res['alpha_x']:.4f}  α_y={res['alpha_y']:.4f}  "
                   f"({res['time_s']:.1f} s)")
         except Exception as e:
             print(f"    FAILED: {e}")
             row = [val] + [float('nan')] * (len(header) - 1)
+            # Don't propagate warm-start from failed point
         rows.append(row)
 
     csv_path = outdir / f'scan_{scan_name}.csv'
@@ -534,19 +566,19 @@ def generate_plots(outdir):
     scans = {
         'energy_spread': {
             'xlabel': r'Energy spread $\sigma_E$ (%)',
-            'title_mse': r'MSE vs Energy Spread ($\sigma_E$)',
+            'title_mse': r'RMS vs Energy Spread ($\sigma_E$)',
             'title_twiss': r'Twiss Parameters vs Energy Spread ($\sigma_E$)',
             'title_curr': r'Quad Currents vs Energy Spread ($\sigma_E$)',
         },
         'chirp': {
             'xlabel': r'Chirp $h$ ($10^9$ /s)',
-            'title_mse': r'MSE vs Chirp ($h$)',
+            'title_mse': r'RMS vs Chirp ($h$)',
             'title_twiss': r'Twiss Parameters vs Chirp ($h$)',
             'title_curr': r'Quad Currents vs Chirp ($h$)',
         },
         'emittance': {
             'xlabel': r'Normalized emittance $\varepsilon_n$ ($\pi \cdot$mm$\cdot$mrad)',
-            'title_mse': r'MSE vs Normalized Emittance ($\varepsilon_n$)',
+            'title_mse': r'RMS vs Normalized Emittance ($\varepsilon_n$)',
             'title_twiss': r'Twiss Parameters vs Normalized Emittance ($\varepsilon_n$)',
             'title_curr': r'Quad Currents vs Normalized Emittance ($\varepsilon_n$)',
         },
@@ -604,7 +636,7 @@ def run_w1(outdir, nb_particles=1000):
         res = run_optimization(nb_particles=nb_particles, seed=42, **kwargs)
         res['label'] = label
         results.append(res)
-        print(f"    MSE = {res['mse']:.4e}  "
+        print(f"    RMS = {math.sqrt(res['mse']):.4e}  "
               f"β_x={res['beta_x']:.4f}  β_y={res['beta_y']:.4f}  "
               f"α_x={res['alpha_x']:.4f}  α_y={res['alpha_y']:.6f}  "
               f"({res['time_s']:.1f} s)")
@@ -612,13 +644,13 @@ def run_w1(outdir, nb_particles=1000):
     # Print comparison table
     beta_xm, alpha_xm, beta_ym, alpha_ym, _ = compute_twiss_targets()
     print(f"\n{'─' * 90}")
-    print(f"{'Configuration':<22} {'MSE':>10} {'β_x':>8} {'β_y':>8} "
+    print(f"{'Configuration':<22} {'RMS':>10} {'β_x':>8} {'β_y':>8} "
           f"{'α_x':>8} {'α_y':>10} {'Disp':>8}")
     print(f"{'Target':.<22} {'':>10} {beta_xm:>8.4f} {beta_ym:>8.4f} "
           f"{alpha_xm:>8.4f} {alpha_ym:>10.6f} {'0':>8}")
     print(f"{'─' * 90}")
     for r in results:
-        print(f"{r['label']:<22} {r['mse']:>10.4e} {r['beta_x']:>8.4f} "
+        print(f"{r['label']:<22} {math.sqrt(r['mse']):>10.4e} {r['beta_x']:>8.4f} "
               f"{r['beta_y']:>8.4f} {r['alpha_x']:>8.4f} "
               f"{r['alpha_y']:>10.6f} {r['disp_resid']:>8.4f}")
     print(f"{'─' * 90}")
@@ -649,7 +681,7 @@ def run_w1(outdir, nb_particles=1000):
         mse_diff = abs(with_chirp['mse'] - without_chirp['mse'])
         bx_diff = abs(with_chirp['beta_x'] - without_chirp['beta_x'])
         by_diff = abs(with_chirp['beta_y'] - without_chirp['beta_y'])
-        print(f"\n  {bunch}: ΔMSE = {mse_diff:.4e}, "
+        print(f"\n  {bunch}: ΔRMS = {math.sqrt(mse_diff) if mse_diff > 0 else 0:.4e}, "
               f"Δβ_x = {bx_diff:.6f}, Δβ_y = {by_diff:.6f}")
         if mse_diff < 1e-3 and bx_diff < 0.01 and by_diff < 0.01:
             print(f"    → Chirp has negligible effect on Twiss matching")
@@ -719,7 +751,7 @@ def run_w2(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
                 if best_res['mse'] < thresh:
                     quality = qlabel.upper()
                     break
-            print(f"    MSE = {best_res['mse']:.4e}  [{quality}]  "
+            print(f"    RMS = {math.sqrt(best_res['mse']):.4e}  [{quality}]  "
                   f"β_x={best_res['beta_x']:.4f}  β_y={best_res['beta_y']:.4f}  "
                   f"q10={best_res['quad_currents'][10]:.2f}  "
                   f"strat={best_label}  ({best_res['time_s']:.1f} s)")
@@ -742,17 +774,20 @@ def run_w2(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
         new_mse = [r[1] for r in rows]
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.semilogy(orig_en, orig_mse, 's--', color='gray', markersize=5,
+        orig_rms = [math.sqrt(m) for m in orig_mse]
+        new_rms = [math.sqrt(m) for m in new_mse]
+        ax.semilogy(orig_en, orig_rms, 's--', color='gray', markersize=5,
                      label='Original (10 A bound, 1 start)', alpha=0.6)
-        ax.semilogy(new_en, new_mse, 'ko-', markersize=5,
+        ax.semilogy(new_en, new_rms, 'ko-', markersize=5,
                      label=f'W2 (dual-strategy, {n_restarts} starts)')
         for label, thresh in MSE_THRESHOLDS.items():
             colors = {'Excellent': 'green', 'Acceptable': 'orange',
                       'Marginal': 'red'}
-            ax.axhline(thresh, color=colors[label], linestyle='--',
-                        alpha=0.7, label=f'{label} ({thresh})')
+            rms_thresh = math.sqrt(thresh)
+            ax.axhline(rms_thresh, color=colors[label], linestyle='--',
+                        alpha=0.7, label=f'{label} ({rms_thresh:.2e})')
         ax.set_xlabel(r'Normalized emittance $\varepsilon_n$ ($\pi \cdot$mm$\cdot$mrad)')
-        ax.set_ylabel('MSE')
+        ax.set_ylabel('RMS Twiss Mismatch')
         ax.set_title('Emittance Scan — Original vs Multi-Start + Raised Bounds')
         ax.legend()
         ax.grid(True, alpha=0.3)
@@ -811,7 +846,7 @@ def run_w6(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5,
                     if res['mse'] < thresh:
                         quality = qlabel.upper()
                         break
-                print(f"    MSE = {res['mse']:.4e}  [{quality}]  "
+                print(f"    RMS = {math.sqrt(res['mse']):.4e}  [{quality}]  "
                       f"β_x={res['beta_x']:.4f}  β_y={res['beta_y']:.4f}  "
                       f"({res['time_s']:.1f} s, nfev={res['nfev']})")
             except Exception as e:
@@ -833,22 +868,25 @@ def run_w6(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5,
     time_nm = [r[12] for r in nm_rows]
     time_gl = [r[12] for r in gl_rows]
 
-    # MSE bar chart
+    # RMS bar chart
+    rms_nm = [math.sqrt(m) for m in mse_nm]
+    rms_gl = [math.sqrt(m) for m in mse_gl]
     x = np.arange(len(emittance_points))
     width = 0.35
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.bar(x - width/2, mse_nm, width, label='Nelder-Mead (5 restarts)', color='#4477AA')
-    ax.bar(x + width/2, mse_gl, width, label='Glyfada', color='#EE6677')
+    ax.bar(x - width/2, rms_nm, width, label='Nelder-Mead (5 restarts)', color='#4477AA')
+    ax.bar(x + width/2, rms_gl, width, label='Glyfada', color='#EE6677')
     ax.set_yscale('log')
     ax.set_xticks(x)
     ax.set_xticklabels([str(int(e)) for e in emittance_points])
     ax.set_xlabel(r'Normalised emittance $\varepsilon_n$ ($\pi\cdot$mm$\cdot$mrad)')
-    ax.set_ylabel('MSE')
-    ax.set_title('W6: Stage 11 MSE — Nelder-Mead vs Glyfada')
+    ax.set_ylabel('RMS Twiss Mismatch')
+    ax.set_title('W6: Stage 11 RMS — Nelder-Mead vs Glyfada')
     for thresh_label, thresh in MSE_THRESHOLDS.items():
         colors = {'Excellent': 'green', 'Acceptable': 'orange', 'Marginal': 'red'}
-        ax.axhline(thresh, color=colors[thresh_label], linestyle='--', alpha=0.6,
-                    label=f'{thresh_label} ({thresh})')
+        rms_thresh = math.sqrt(thresh)
+        ax.axhline(rms_thresh, color=colors[thresh_label], linestyle='--', alpha=0.6,
+                    label=f'{thresh_label} ({rms_thresh:.2e})')
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3, axis='y')
     fig.tight_layout()
@@ -875,13 +913,13 @@ def run_w6(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5,
     # Summary table
     beta_xm, alpha_xm, beta_ym, alpha_ym, _ = compute_twiss_targets()
     print(f"\n{'─' * 95}")
-    print(f"{'ε_n':>5} {'Method':>10} {'MSE':>12} {'β_x':>8} {'β_y':>8} "
+    print(f"{'ε_n':>5} {'Method':>10} {'RMS':>12} {'β_x':>8} {'β_y':>8} "
           f"{'α_x':>8} {'α_y':>10} {'Time(s)':>8} {'nfev':>8}")
     print(f"{'':>5} {'Target':>10} {'':>12} {beta_xm:>8.4f} {beta_ym:>8.4f} "
           f"{alpha_xm:>8.4f} {alpha_ym:>10.6f}")
     print(f"{'─' * 95}")
     for r in rows:
-        print(f"{r[0]:>5.0f} {r[1]:>10} {r[2]:>12.4e} {r[5]:>8.4f} {r[6]:>8.4f} "
+        print(f"{r[0]:>5.0f} {r[1]:>10} {math.sqrt(r[2]):>12.4e} {r[5]:>8.4f} {r[6]:>8.4f} "
               f"{r[3]:>8.4f} {r[4]:>10.6f} {r[12]:>8.1f} {r[13]:>8}")
     print(f"{'─' * 95}")
 
@@ -1014,7 +1052,7 @@ def run_w7(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
                                 cosy_res['quad_87'], cosy_res['quad_93'],
                                 cosy_res['quad_95'], cosy_res['quad_97'],
                                 cosy_res['time_s'], float('nan')]
-                    print(f"    COSY:   MSE = {cosy_res['mse']:.4e}  "
+                    print(f"    COSY:   RMS = {math.sqrt(cosy_res['mse']):.4e}  "
                           f"({cosy_res['time_s']:.1f} s)")
                 else:
                     print(f"    COSY:   FAILED (optimization did not converge)")
@@ -1036,7 +1074,7 @@ def run_w7(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
                       nm_res['quad_currents'][87], nm_res['quad_currents'][93],
                       nm_res['quad_currents'][95], nm_res['quad_currents'][97],
                       nm_res['time_s'], nm_res['nfev']]
-            print(f"    NM:     MSE = {nm_res['mse']:.4e}  "
+            print(f"    NM:     RMS = {math.sqrt(nm_res['mse']):.4e}  "
                   f"({nm_res['time_s']:.1f} s, nfev={nm_res['nfev']})")
         except Exception as e:
             print(f"    NM FAILED: {e}")
@@ -1083,7 +1121,7 @@ def run_w7(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
                 if gly_res['mse'] < thresh:
                     quality = qlabel.upper()
                     break
-            print(f"    CMA-ES: MSE = {gly_res['mse']:.4e}  [{quality}]  "
+            print(f"    CMA-ES: RMS = {math.sqrt(gly_res['mse']):.4e}  [{quality}]  "
                   f"({gly_res['time_s']:.1f} s, nfev={gly_res['nfev']})")
         except Exception as e:
             print(f"    CMA-ES FAILED: {e}")
@@ -1115,22 +1153,24 @@ def run_w7(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
     x = np.arange(len(emittance_points))
     width = 0.8 / n_methods
 
-    # MSE bar chart
+    # RMS bar chart
     fig, ax = plt.subplots(figsize=(10, 5))
     for j, m in enumerate(methods_present):
         offset = (j - (n_methods - 1) / 2) * width
-        ax.bar(x + offset, method_data[m]['mse'], width,
+        rms_data = [math.sqrt(v) for v in method_data[m]['mse']]
+        ax.bar(x + offset, rms_data, width,
                label=labels_map.get(m, m), color=colors_map.get(m, '#999999'))
     ax.set_yscale('log')
     ax.set_xticks(x)
     ax.set_xticklabels([str(int(e)) for e in emittance_points])
     ax.set_xlabel(r'Normalised emittance $\varepsilon_n$ ($\pi\cdot$mm$\cdot$mrad)')
-    ax.set_ylabel('MSE')
-    ax.set_title('W7: Stage 11 MSE — COSY FIT vs NM vs Glyfada CMA-ES')
+    ax.set_ylabel('RMS Twiss Mismatch')
+    ax.set_title('W7: Stage 11 RMS — COSY FIT vs NM vs Glyfada CMA-ES')
     for thresh_label, thresh in MSE_THRESHOLDS.items():
         clr = {'Excellent': 'green', 'Acceptable': 'orange', 'Marginal': 'red'}
-        ax.axhline(thresh, color=clr[thresh_label], linestyle='--', alpha=0.6,
-                    label=f'{thresh_label} ({thresh})')
+        rms_thresh = math.sqrt(thresh)
+        ax.axhline(rms_thresh, color=clr[thresh_label], linestyle='--', alpha=0.6,
+                    label=f'{thresh_label} ({rms_thresh:.2e})')
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3, axis='y')
     fig.tight_layout()
@@ -1161,7 +1201,7 @@ def run_w7(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
     # Summary table
     beta_xm, alpha_xm, beta_ym, alpha_ym, _ = compute_twiss_targets()
     print(f"\n{'─' * 105}")
-    print(f"{'ε_n':>5} {'Method':>12} {'MSE':>12} {'β_x':>8} {'β_y':>8} "
+    print(f"{'ε_n':>5} {'Method':>12} {'RMS':>12} {'β_x':>8} {'β_y':>8} "
           f"{'α_x':>8} {'α_y':>10} {'Time(s)':>8} {'nfev':>8}")
     print(f"{'':>5} {'Target':>12} {'':>12} {beta_xm:>8.4f} {beta_ym:>8.4f} "
           f"{alpha_xm:>8.4f} {alpha_ym:>10.6f}")
@@ -1170,8 +1210,8 @@ def run_w7(outdir, nb_particles=500, chrom_upper_bound=15, n_restarts=5):
         nfev_val = r[13]
         nfev_str = "—" if (isinstance(nfev_val, float) and np.isnan(nfev_val)) else f"{nfev_val}"
         mse_val = r[2]
-        mse_str = f"{mse_val:12.4e}" if not (isinstance(mse_val, float) and np.isnan(mse_val)) else "         N/A"
-        print(f"{r[0]:>5.0f} {r[1]:>12} {mse_str} {r[5]:>8.4f} {r[6]:>8.4f} "
+        rms_str = f"{math.sqrt(mse_val):12.4e}" if not (isinstance(mse_val, float) and np.isnan(mse_val)) else "         N/A"
+        print(f"{r[0]:>5.0f} {r[1]:>12} {rms_str} {r[5]:>8.4f} {r[6]:>8.4f} "
               f"{r[3]:>8.4f} {r[4]:>10.6f} {r[12]:>8.1f} {nfev_str:>8}")
     print(f"{'─' * 105}")
 
@@ -1236,7 +1276,7 @@ def main():
         res = run_optimization(nb_particles=1000, seed=42)
 
         beta_xm, alpha_xm, beta_ym, alpha_ym, _ = compute_twiss_targets()
-        print(f"\n  MSE      = {res['mse']:.4e}")
+        print(f"\n  RMS      = {math.sqrt(res['mse']):.4e}")
         print(f"  β_x      = {res['beta_x']:.4f}  (target {beta_xm})")
         print(f"  β_y      = {res['beta_y']:.4f}  (target {beta_ym:.4f})")
         print(f"  α_x      = {res['alpha_x']:.4f}  (target {alpha_xm})")
@@ -1247,7 +1287,7 @@ def main():
         # Verification: MSE should be < 1e-3 (excellent)
         ok = True
         if res['mse'] > 1e-3:
-            print(f"\n  FAIL: MSE {res['mse']:.4e} > 1e-3")
+            print(f"\n  FAIL: RMS {math.sqrt(res['mse']):.4e} > {math.sqrt(1e-3):.4e}")
             ok = False
         if abs(res['beta_x'] - beta_xm) > 0.05:
             print(f"\n  FAIL: β_x off by {abs(res['beta_x'] - beta_xm):.4f}")

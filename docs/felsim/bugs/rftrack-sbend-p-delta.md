@@ -120,11 +120,11 @@ With the analytical correction (ε_n = 8, 3 restarts):
 
 | Metric | Before correction | After correction |
 |--------|-------------------|------------------|
-| RFT-val MSE | 3.99 | 1.985 |
-| RFT-opt MSE | 7.0e-3 | 7.0e-3 |
+| RFT-val RMS | 2.00 | 1.41 |
+| RFT-opt RMS | 8.4e-2 | 8.4e-2 |
 
-The RFT-val improvement (3.99 → 1.985) confirms that the correction removes
-the dominant source of model disagreement.  The residual MSE reflects genuine
+The RFT-val improvement confirms that the correction removes
+the dominant source of model disagreement.  The residual RMS reflects genuine
 model differences (FELsim uses triangle-rule fringe; RF-Track + correction
 uses pure sector bend).
 
@@ -138,8 +138,8 @@ the bug with RF-Track v2.5.5.  Tracks on-axis and off-axis particles through
 
 1. **2026-02-24 (W8):** RF-Track adapter first used for Stage 11 optimization.
    SBend element mapped to `Drift(0)` as a temporary workaround —
-   RFT-val MSE = 2552 (no body focusing, no dispersion).
+   RFT-val RMS = 50.5 (no body focusing, no dispersion).
 2. **2026-03-02 (C5):** P/δ confusion identified. Analytical sector-bend
-   correction implemented.  RFT-val MSE drops to 1.985.
+   correction implemented.  RFT-val RMS drops to 1.41.
 3. **TODO (C5-BUG):** File bug report with RF-Track maintainer (CERN GitLab
    or email to A. Latina).

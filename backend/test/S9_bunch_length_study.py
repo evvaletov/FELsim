@@ -11,6 +11,7 @@
 # Date: 2026-02-22
 
 import sys
+import math
 import time
 import argparse
 from pathlib import Path
@@ -727,7 +728,7 @@ def part_b1_precompressed(line):
         _, final_mse, currents = run_11stage_optimization(
             line, beam_dist, label=label, print_results=False
         )
-        print(f"  Final MSE: {final_mse:.6e}")
+        print(f"  Final RMS: {math.sqrt(final_mse):.6e}")
         # Print a few key quad currents
         key_quads = [1, 3, 93, 95, 97]
         for qi in key_quads:
@@ -742,7 +743,7 @@ def part_b1_precompressed(line):
     for r in results[1:]:
         max_diff = max(abs(r['currents'].get(k, 0) - ref_currents.get(k, 0))
                        for k in ref_currents)
-        print(f"  {r['label']}: max |ΔI| vs S1 = {max_diff:.6f} A, MSE = {r['mse']:.3e}")
+        print(f"  {r['label']}: max |ΔI| vs S1 = {max_diff:.6f} A, RMS = {math.sqrt(r['mse']):.3e}")
 
     return results
 
@@ -761,7 +762,7 @@ def part_b3_sigma_e_scan(line):
         _, final_mse, currents = run_11stage_optimization(
             line, beam_dist, label=f"σ_E={sigma_e}%", print_results=False
         )
-        print(f"  σ_E={sigma_e:5.1f}%: MSE={final_mse:.3e}")
+        print(f"  σ_E={sigma_e:5.1f}%: RMS={math.sqrt(final_mse):.3e}")
         results.append({'sigma_e': sigma_e, 'mse': final_mse, 'currents': currents})
 
     # Plot
@@ -769,7 +770,7 @@ def part_b3_sigma_e_scan(line):
 
     ax1.semilogy([r['sigma_e'] for r in results], [r['mse'] for r in results], 'ko-')
     ax1.set_xlabel('σ_E (%)')
-    ax1.set_ylabel('Final MSE')
+    ax1.set_ylabel('RMS Twiss Mismatch')
     ax1.set_title('Optimization quality vs energy spread')
     ax1.axhline(1e-3, color='g', ls='--', label='Excellent')
     ax1.axhline(0.01, color='orange', ls='--', label='Acceptable')
