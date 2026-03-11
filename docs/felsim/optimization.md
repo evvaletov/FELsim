@@ -273,6 +273,41 @@ element maps used regardless of DA computation order).
 - Script: `P8_order_convergence.py`
 - Results: `results/P8/`
 
+### P9 — Chromaticity Analysis
+
+Swept energy deviation $\delta$ from $-3\%$ to $+3\%$ using near-mono-energetic
+beams ($\sigma_E = 0.05\%$) with chromatic transport (per-particle
+momentum-dependent matrices).
+
+At $\delta = 0$: chromatic transport matches achromatic (RMS $\approx 0.09$).
+At $|\delta| = 0.5\%$: RMS jumps to $1.6$–$5.4$ (Failed).
+Chromaticity: $\mathrm{d}\beta_x/\mathrm{d}\delta \approx -0.9$ m/\%,
+$\mathrm{d}\beta_y/\mathrm{d}\delta \approx -1.0$ m/\%.
+
+**Finding:** Acceptance bandwidth is $|\delta| < \sim 0.3\%$ for Acceptable
+Twiss matching.  The transport line is highly chromatic; beam energy stability
+must be controlled to $\sim 0.3\%$.
+
+- Script: `P9_chromaticity_analysis.py`
+- Results: `results/P9/`
+
+### P10 — Emittance Preservation
+
+Tracked $\varepsilon_n(s)$ element-by-element through the transport line.
+
+**Achromatic transport:** Dispersion-corrected $\varepsilon_n$ conserved to
+machine precision ($\Delta = 0.00\%$) in both planes.  Raw
+$\varepsilon_{n,x}$ grows $16\%$ through the chicane (x-$\delta$ coupling),
+raw $\varepsilon_{n,y}$ is perfectly conserved.
+
+**Chromatic transport:** Dispersion-corrected $\varepsilon_{n,x}$ grows by
+$591\%$ — emittance is **not conserved** due to chromatic filamentation
+(energy-dependent optics creates irreversible phase space distortion in the
+$\sigma$-matrix sense).
+
+- Script: `P10_emittance_evolution.py`
+- Results: `results/P10/`
+
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap.

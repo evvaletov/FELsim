@@ -1067,6 +1067,40 @@ Items are ordered by estimated impact on the UH MkV FEL beamline
 - Script: `P8_order_convergence.py`
 - Results: `results/P8/`
 
+### P9. Chromaticity Analysis [DONE 2026-03-11]
+- Swept energy deviation δ from -3% to +3% (13 points, 500 particles)
+  with σ_E = 0.05% (near mono-energetic) to isolate chromaticity effects.
+- **Achromatic transport:** Twiss constant across all δ (trivially, since
+  matrices are momentum-independent).
+- **Chromatic transport (achromatic currents):**
+  - At δ=0: RMS = 0.087 (≈ achromatic, 0.075) — chromatic effects
+    negligible for on-energy beam with narrow spread
+  - At δ=±0.5%: RMS = 1.6–5.4 — dramatic degradation
+  - At δ=±1%: RMS = 3.9–17 — catastrophic
+  - Chromaticity: dβ_x/dδ ≈ -0.9 m/%, dβ_y/dδ ≈ -1.0 m/%
+- **Acceptance bandwidth:** Only |δ| < ~0.3% achieves Acceptable matching.
+  The transport line is highly chromatic; beam energy stability must be
+  controlled to ~0.3% for adequate Twiss matching.
+- Script: `P9_chromaticity_analysis.py`
+- Results: `results/P9/`
+
+### P10. Emittance Preservation Along Transport Line [DONE 2026-03-11]
+- Tracked ε_n(s) element-by-element through 118-element beamline.
+- **Achromatic transport:**
+  - Dispersion-corrected ε_n conserved to -0.00% (both planes)
+  - Raw ε_n,x grows 16% (x-δ dispersion coupling in chicane)
+  - ε_n,y perfectly conserved (no vertical dispersion)
+  - Peak η_x = 98 mm in chicane, peak raw ε_n,x = 55.5 π·mm·mrad
+- **Chromatic transport:**
+  - Dispersion-corrected ε_n,x grows **591%** — NOT conserved
+  - Raw ε_n,x grows 659%, ε_n,y grows 387%
+  - Cause: energy-dependent optics creates phase space filamentation
+    (chromatic emittance dilution), appearing as irreversible growth
+    in the sigma-matrix emittance
+  - This is a known accelerator physics effect, not a code bug
+- Script: `P10_emittance_evolution.py`
+- Results: `results/P10/achromatic/`, `results/P10/chromatic/`
+
 ---
 
 ## Workflow
@@ -1112,8 +1146,8 @@ Source: 4-perspective expert review (FEL scientist, Berz-style computational phy
 
 ### Physics & Validation
 - [x] **Order-by-order convergence study**: See P8 — first-order sufficient for hard-edge, ~0.3% linear map variation with fringe fields
-- [ ] **Emittance preservation plot**: ε_n(s) through the chicane to quantify CSR-driven emittance growth
-- [ ] **Chromaticity analysis**: Twiss parameters and beam size as a function of energy deviation δ
+- [x] **Emittance preservation plot**: See P10 — achromatic: conserved to 0.00%; chromatic: 591% growth (filamentation)
+- [x] **Chromaticity analysis**: See P9 — acceptance bandwidth |δ| < ~0.3%, dβ/dδ ≈ 1 m/%
 - [ ] **Fringe field treatment in FELsim**: Currently fringe_field_order=0; currents are optimized for the wrong model. Add fringe field support or at least quantify the impact
 - [ ] **Sensitivity / error analysis**: Magnet errors, misalignments, power supply ripple — DA methods can compute high-order sensitivities directly
 - [ ] **Multi-seed robustness study**: Run optimization with seeds 42, 137, 2023+ and compare results to confirm global minimum was found
