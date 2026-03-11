@@ -10,17 +10,12 @@ const ScrollableBeam = ({ beamline, onClick }) => {
 
     const handleMouseEnter = (startPos, name,  event) => {
         setHovered(`${name} (Start: ${Math.round(startPos * 10000) / 10000} m) (index: ${event.target.getAttribute('data-key')})`);
-        setTooltipStyle({
-            visible: true,
-        });
+        setTooltipStyle({});
     };
 
     const handleMouseLeave = () => {
         setHovered(null);
-        setTooltipStyle({ 
-                            display: 'none',
-                            visible: false
-                        });
+        setTooltipStyle({ display: 'none' });
     };
 
     return <>
@@ -43,7 +38,7 @@ const ScrollableBeam = ({ beamline, onClick }) => {
                     const { startPos, endPos, color, name } = item;
                     const adjustedStartPos = 500 * startPos/totalLength;
                     const adjustedEndPos = 500 * endPos/totalLength;
-                    const width = 500*(adjustedEndPos - adjustedStartPos)/totalLength;
+                    const width = adjustedEndPos - adjustedStartPos;
                     return (
                     <rect
                         key={index}

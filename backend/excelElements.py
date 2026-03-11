@@ -133,6 +133,8 @@ class ExcelElements:
                                             dipole_length=curvature, dipole_angle=angle,
                                             pole_gap=pole_gap if pole_gap > 0 else 0.014478,
                                             enge_fct=enge_fct, name=label))
+            elif element == "UND":
+                beamline.append(driftLattice(z_end - z_sta, name=label))
             else:
                 if (not z_end - z_sta == 0) and (not np.isnan(z_sta)) and (not np.isnan(z_end)):
                     logger.warning(f"Unknown element type '{element}' at {label} — treating as drift")

@@ -34,10 +34,13 @@ class Radiation:
 
         # Find theta_max where E_gamma(theta) = E_thresh
         # For relativistic beams, approximate small angle solution:
-        theta_thresh_rad = np.sqrt((4 * self.gamma**2 * self.E_gamma_L / E_thresh_J - 1 - 4 * self.gamma * self.E_gamma_L / self.me_c2_J) / self.gamma**2)
+        sqrt_arg = (4 * self.gamma**2 * self.E_gamma_L / E_thresh_J - 1 - 4 * self.gamma * self.E_gamma_L / self.me_c2_J) / self.gamma**2
+        if sqrt_arg < 0:
+            raise ValueError(f"Threshold energy {E_thresh_eV} eV exceeds maximum ICS photon energy for this beam/laser configuration")
+        theta_thresh_rad = np.sqrt(sqrt_arg)
         theta_thresh_mrad = theta_thresh_rad * 1e3
 
-        
+
         sigma_T = (8 * np.pi / 3) * self.r_e**2  # # Thomson scattering cross section [m^2]
         # Compute differential cross section (Thomson) * sin(theta)
         d_sigma_vals = 0.5 * self.r_e**2 * (1 + np.cos(self.theta_vals)**2) * np.sin(self.theta_vals)
@@ -68,7 +71,10 @@ class Radiation:
 
         theta_1_over_gamma_mrad = (1 / self.gamma) * 1e3
 
-        theta_thresh_rad = np.sqrt((4 * self.gamma**2 * self.E_gamma_L / E_thresh_J - 1 - 4 * self.gamma * self.E_gamma_L / self.me_c2_J) / self.gamma**2)
+        sqrt_arg = (4 * self.gamma**2 * self.E_gamma_L / E_thresh_J - 1 - 4 * self.gamma * self.E_gamma_L / self.me_c2_J) / self.gamma**2
+        if sqrt_arg < 0:
+            raise ValueError(f"Threshold energy {E_thresh_eV} eV exceeds maximum ICS photon energy for this beam/laser configuration")
+        theta_thresh_rad = np.sqrt(sqrt_arg)
         theta_thresh_mrad = theta_thresh_rad * 1e3
 
         plt.figure(figsize=(8,5))

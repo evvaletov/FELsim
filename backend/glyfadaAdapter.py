@@ -9,6 +9,7 @@ the format expected by beamOptimizer.
 Author: Eremey Valetov
 """
 
+import math
 import os
 import shutil
 import sys
@@ -88,6 +89,10 @@ class GlyfadaOptimizer:
         self.extra_config = extra_config or {}
         self.logger, self.debug = get_logger_with_fallback(__name__, debug)
 
+        if len(variable_names) != len(set(variable_names)):
+            dupes = [n for n in variable_names if variable_names.count(n) > 1]
+            raise ValueError(f"Duplicate variable names: {set(dupes)}")
+
     def _pickle_objective(self, work_dir):
         """Serialize the objective function, variable names, and metadata."""
         import cloudpickle
@@ -117,6 +122,17 @@ class GlyfadaOptimizer:
                 parameters.append(p)
             else:
                 lo, hi = bound
+                if lo is None or hi is None or not math.isfinite(lo) or not math.isfinite(hi):
+                    raise ValueError(
+                        f"Variable '{name}' has unbounded range ({lo}, {hi}). "
+                        f"Glyfada requires finite bounds for all variables."
+                    )
+                if not (lo <= default <= hi):
+                    self.logger.warning(
+                        f"Variable '{name}': default {default} outside bounds "
+                        f"({lo}, {hi}), will be clamped"
+                    )
+                    default = max(lo, min(hi, default))
                 parameters.append({
                     "name": name,
                     "min": lo,
@@ -130,8 +146,8 @@ class GlyfadaOptimizer:
         python_bin_dir = os.path.dirname(sys.executable)
         backend_dir = os.path.dirname(os.path.abspath(__file__))
         return (
-            f"export PATH={python_bin_dir}:$PATH && "
-            f"export PYTHONPATH={backend_dir}:$PYTHONPATH"
+            f"export PATH='{python_bin_dir}':$PATH && "
+            f"export PYTHONPATH='{backend_dir}':$PYTHONPATH"
         )
 
     def optimize(self):
@@ -184,8 +200,7 @@ class GlyfadaOptimizer:
 
             if self.callback:
                 api_kwargs["callback"] = self.callback
-            if self.constraints:
-                api_kwargs["constraints"] = self.constraints
+            # Constraints flow via pickle → evaluator → response dict, not via config
             if self.seed_from_results:
                 api_kwargs["seed_from_results"] = self.seed_from_results
 

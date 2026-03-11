@@ -24,10 +24,6 @@ class beamUtility:
                         "atomic_number": 26, "ionization_potential": 233, "atomic_mass": 55.85},
     }
 
-    # Convert stopping power to SI units (J/m)
-    for material, props in materials.items():
-        props["stopping_power"] *= (MeV_to_J * 1e6) / props["density"]  # Convert MeV cm^2/g to J/m
-
     PARTICLES = {"electron": [me, e, (me * c ** 2)],
                     "proton": [m_p, e, (m_p * c ** 2)]}
     
@@ -97,9 +93,9 @@ class beamUtility:
                         P_beam = E_pulse * r  # Power deposited (W)
 
                         temp_rise = {}
-                        for material, props in self.materials.items():
+                        for mat_name, props in self.materials.items():
                             mass = beam_volume_cm3 * props["density"] / 1000  # Mass in g
-                            temp_rise[material] = P_beam / (mass * props["heat_capacity"])  # °C/s
+                            temp_rise[mat_name] = P_beam / (mass * props["heat_capacity"])  # °C/s
 
                         power_results.append([E, I_pulse * 1e3, r, T_pulse, P_beam,
                                             temp_rise["Copper"], temp_rise["Aluminum"], temp_rise["Stainless Steel"]])
@@ -177,7 +173,8 @@ class beamUtility:
 
     # Function to compute electron deposition profile
     def compute_deposition_profile(self, energy, material):
-        df_bethe = self.model_Bethe(material)
+        E_energy_range = np.linspace(0.1, energy * 1.5, 200)
+        df_bethe = self.model_Bethe(material, E_energy_range)
         closest_energy_idx = (df_bethe["Energy (MeV)"].sub(energy)).abs().idxmin()
         R = df_bethe.loc[closest_energy_idx, "Penetration Depth (cm)"]
 

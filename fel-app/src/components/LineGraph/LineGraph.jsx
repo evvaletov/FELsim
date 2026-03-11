@@ -1,9 +1,32 @@
 import { ResponsiveLine } from '@nivo/line'
 import { useState } from 'react';
 
-const LineGraph = ({totalLen, twissData, setSValue, beamline, twissAxis, scroll, setScroll }) => {
+const CustomSliceTooltip = ({ slice }) => (
+    <div
+        style={{
+            background: 'white',
+            padding: '6px 9px',
+            border: '1px solid #aaa',
+            borderRadius: 4,
+            whiteSpace: 'nowrap',
+            transform: 'translate(+60%, -80%)',
+            pointerEvents: 'none',
+        }}
+    >
+        <strong>s = {slice.points[0].data.xFormatted}</strong>
+        {slice.points.map(point => (
+            <div
+                key={point.id}
+                style={{ color: point.serieColor }}
+            >
+                {point.seriesId.at(-1)}: {point.data.yFormatted}
+            </div>
+        ))}
+    </div>
+);
+
+const LineGraph = ({totalLen, twissData, setSValue, beamline, twissAxis, scroll, setScroll}) => {
     const [unselectedAxis, setUnselectedAxis] = useState([]);
-    const [mouseX, setMouseX] = useState(0);
 
     // Remove Duplicate s indices in the array
     const removeDuplicateX = (dataArray) => {
@@ -20,72 +43,25 @@ const LineGraph = ({totalLen, twissData, setSValue, beamline, twissAxis, scroll,
         data: removeDuplicateX(entry.data),
     }));
 
-    if (cleanedTwissData.length !== 0) {
+    if (cleanedTwissData.length > 0)
         cleanedTwissData[0].color = !unselectedAxis.includes(cleanedTwissData[0].id) ? '#CF0000' : '#000000'; // Red
+    if (cleanedTwissData.length > 1)
         cleanedTwissData[1].color = !unselectedAxis.includes(cleanedTwissData[1].id) ? '#0000CF' : '#000000'; // Blue
+    if (cleanedTwissData.length > 2)
         cleanedTwissData[2].color = !unselectedAxis.includes(cleanedTwissData[2].id) ? '#00CF00' : '#000000'; // Green
     }
-
-    // make tooltip not go off page if user puts mouse on the left side of the screen
-    const CustomSliceTooltip = ({ slice }) => {
-        // console.log('slice', slice);
-        // console.log('slice x value', slice.points[0].x);
-        return (
-            <div
-                style={{
-                    background: 'white',
-                    padding: '6px 9px',
-                    border: '1px solid #aaa',
-                    borderRadius: 4,
-                    whiteSpace: 'nowrap',
-
-                    transform: 'translate(+60%, -80%)',
-                    pointerEvents: 'none'
-                }}
-            >
-                <strong>s = {slice.points[0].data.xFormatted}</strong>
-                {slice.points.map(point => (
-                    <div
-                        key={point.id}
-                        style={{ color: point.serieColor }}
-                    >
-                        {point.seriesId.at(-1)}: {point.data.yFormatted}
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
-    // WORK IN PROGRESS TO DISPLAY S
-    // const CustomTooltip = ({ point }) => (
-    //     <div
-    //         style={{
-    //             background: 'white',
-    //             padding: '5px',
-    //             border: '1px solid #ccc',
-    //             borderRadius: '4px',
-    //         }}
-    //     >
-    //         <strong>{point.serieId}</strong>
-    //         <br />
-    //         x: {point.data.xFormatted}
-    //         <br />
-    //         y: {point.data.yFormatted}
-    //     </div>
-    // );
 
     return <ResponsiveLine
         data={cleanedTwissData.filter(entry => !unselectedAxis.includes(entry.id))}
         margin={{ top: 10, right: 25, bottom: 40, left: 50 }}
         yScale={{ type: 'linear', min: 'auto', max: 'auto', stacked: false, reverse: false }}
-        // PLOT BEAM SEGMENTS FOR PREVIEW
         xScale={{
             type: 'linear',
-            min: 0,      
+            min: 0,
             max: totalLen
         }}
         axisBottom={{ legend: 'distance from beam start (m)', legendOffset: 36 }}
-        axisLeft={{ legend: twissAxis.value.replace(/[\\$]/g, ''), // Remove \ and $ from the string
+        axisLeft={{ legend: twissAxis.value.replace(/[\\$]/g, ''),
                     legendOffset: -40 }}
         colors={(e) => e.color}
         pointSize={5}
@@ -99,9 +75,6 @@ const LineGraph = ({totalLen, twissData, setSValue, beamline, twissAxis, scroll,
         sliceTooltip={({ slice }) => (
             <CustomSliceTooltip slice={slice} />
         )}
-        // tooltip={({point}) => <CustomTooltip point={point} />}
-
-        //onClick={(e) => setSValue(e.points[0].data['x'])} // USE if enableSlices IS 'x'
 
         onClick={
             (e) => {
@@ -110,22 +83,21 @@ const LineGraph = ({totalLen, twissData, setSValue, beamline, twissAxis, scroll,
             }
         }
 
-        // TO DO MOVE TOOLTIP ON LEFT SIDE TO START WITH
         onMouseMove={
             scroll ? (e) => setSValue(e.points[0].data['x']) : undefined
         }
 
         legends={[
             {
-                anchor: 'top-left', 
+                anchor: 'top-left',
                 direction: 'column',
-                translateX: 10, 
+                translateX: 10,
                 itemWidth: 80,
                 itemHeight: 22,
                 symbolShape: 'circle',
                 data: cleanedTwissData.map((entry) => ({
                     id: entry.id,
-                    label: entry.id.replace(/[\\$]/g, ''), // Clean legend item labels
+                    label: entry.id.replace(/[\\$]/g, ''),
                     fill: entry.color
                 })),
                 onClick: (item) => {
@@ -147,7 +119,7 @@ const LineGraph = ({totalLen, twissData, setSValue, beamline, twissAxis, scroll,
             <>
                 {
                     beamline.map((seg, i) => {
-                        const segment = ( 
+                        const segment = (
                             <line
                               key={i}
                               x1={xScale(seg.startPos)}

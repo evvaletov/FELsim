@@ -68,7 +68,10 @@ def _format_objectives(raw, n_objectives):
             result[k] = -1e6
 
     n_obj_keys = sum(1 for k in result if k.startswith("objective_"))
-    if n_obj_keys != n_objectives:
+    if n_obj_keys == 0:
+        # Empty return — produce penalty objectives
+        result = {f"objective_{i+1}": -1e6 for i in range(n_objectives)}
+    elif n_obj_keys != n_objectives:
         _logger = _get_logger()
         _logger.warning(
             f"Objective count mismatch: expected {n_objectives}, got {n_obj_keys} "

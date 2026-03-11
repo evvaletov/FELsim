@@ -87,7 +87,6 @@ const ModalContent = ({ beamline, showErrorWindow }) => {
             return 
         }
         const responseData = await res.json();
-        console.log('Response Data:', responseData);
         setPlotData(responseData);
       };
 
@@ -169,7 +168,7 @@ const ModalContent = ({ beamline, showErrorWindow }) => {
                                       <select {...register('target_parameter')} className={`form-control ${errors.target_parameter ? 'is-invalid' : ''}`}>
                                         {Object.entries(beamElementSelected).map(([key, value]) => {
                                                 if (!MODALPRIVATEVARS.includes(key)) {
-                                                    return <option value={key}>{key}</option>;
+                                                    return <option key={key} value={key}>{key}</option>;
                                                 }
                                             }
                                         )}

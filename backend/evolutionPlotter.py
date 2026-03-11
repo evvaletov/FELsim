@@ -58,19 +58,19 @@ class EvolutionPlotter:
         self.logger, self.debug = get_logger_with_fallback(__name__, debug)
 
     def _compute_global_extents(self, evolution: BeamEvolution):
-        """Compute axis limits encompassing entire beamline evolution."""
-        maxVals = np.full(6, -np.inf)
-        minVals = np.full(6, np.inf)
+        """Compute axis limits encompassing entire beamline evolution.
 
-        for s, particles in evolution.particles.items():
-            for i in range(6):
-                maxVals[i] = max(maxVals[i], np.max(particles[:, i]))
-                minVals[i] = min(minVals[i], np.min(particles[:, i]))
+        Uses percentile-based limits to avoid outlier-driven axis expansion.
+        """
+        # Collect all particles across all s-positions
+        all_particles = [p for p in evolution.particles.values()]
+        if not all_particles:
+            return np.ones(6), -np.ones(6)
 
-        margin = 0.1
-        ranges = maxVals - minVals
-        maxVals += margin * ranges
-        minVals -= margin * ranges
+        combined = np.vstack(all_particles)
+        maxVals = np.array([np.percentile(np.abs(combined[:, i]), 99) * 1.5
+                            for i in range(6)])
+        minVals = -maxVals
 
         return maxVals, minVals
 
@@ -205,20 +205,22 @@ class EvolutionPlotter:
         ax.set_xlim(0, s[-1] if len(s) > 0 else 1)
         ax.grid(True, alpha=0.3)
 
-        # Apply user-specified y-limits if provided
+        # Compute explicit ylim from data to prevent twinx() autoscale issues
         if envelope_ylim is not None:
-            ax.set_ylim(envelope_ylim)
+            data_ymin, data_ymax = envelope_ylim
+        else:
+            all_env = np.concatenate([env_x, env_y])
+            data_ymin = max(0, np.nanmin(all_env) * 0.9)
+            data_ymax = np.nanmax(all_env) * 1.1
 
         if show_schematic and elements:
-            ymin, ymax = ax.get_ylim()
-            schematic_height = (ymax - ymin) * 0.05
-            ax.set_ylim(ymin - schematic_height * 1.2, ymax)
-            ymin, _ = ax.get_ylim()
+            schematic_height = (data_ymax - data_ymin) * 0.05
+            data_ymin -= schematic_height * 1.2
 
             for elem in elements:
                 color = self.ELEMENT_COLORS.get(elem.element_type, 'gray')
                 rect = patches.Rectangle(
-                    (elem.s_start, ymin),
+                    (elem.s_start, data_ymin),
                     elem.length,
                     schematic_height,
                     linewidth=0.5,
@@ -226,6 +228,8 @@ class EvolutionPlotter:
                     facecolor=color
                 )
                 ax.add_patch(rect)
+
+        ax.set_ylim(data_ymin, data_ymax)
 
         # Secondary axis for dispersion
         if 'dispersion_x' in twiss_df.columns:
@@ -238,6 +242,8 @@ class EvolutionPlotter:
                      label=r'$D_y$ (m)', alpha=0.7)
             ax2.set_ylabel('Dispersion (m)')
             ax2.legend(loc='upper right')
+            # Re-assert primary axis limits after twinx
+            ax.set_ylim(data_ymin, data_ymax)
 
     def _plot_phase_space(self, axes, particles, shape, scatter):
         """Update phase space plots with particle distribution at current s."""
@@ -247,8 +253,9 @@ class EvolutionPlotter:
         if self.axis_mode == 'global' and self._global_extents is not None:
             maxVals, minVals = self._global_extents
         else:
-            # Adaptive scaling based on current particle distribution
-            maxVals = [np.max(np.abs(particles[:, i])) * 1.2 for i in range(6)]
+            # Percentile-based limits to avoid outlier-driven axis expansion
+            maxVals = [np.percentile(np.abs(particles[:, i]), 99) * 1.5
+                       for i in range(6)]
             minVals = [-m for m in maxVals]
 
         self._ebeam.plotXYZ(

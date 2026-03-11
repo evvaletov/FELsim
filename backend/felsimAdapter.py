@@ -272,10 +272,12 @@ class FELsimAdapter(SimulatorBase):
             beam_energy=self.beam_energy
         )
 
-        for cp in propagate(self._native_beamline, particles, interval, rounding=2):
-            evolution.s_positions.append(cp.s)
-            evolution.particles[cp.s] = cp.particles
-            evolution.twiss[cp.s] = self._calc_twiss(cp.particles)
+        for cp in propagate(self._native_beamline, particles, interval, rounding=4):
+            twiss = self._calc_twiss(cp.particles)
+            try:
+                evolution.add_sample(cp.s, particles=cp.particles, twiss=twiss)
+            except ValueError:
+                evolution.update_sample(cp.s, particles=cp.particles, twiss=twiss)
 
             # Record element boundaries for plotting
             if cp.is_element_boundary and cp.element is not None:

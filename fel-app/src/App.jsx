@@ -29,7 +29,6 @@ import SimulationModel from './components/SimulationModel/SimulationModel';
 
 function App()
 {
-    console.log(API_ROUTE);
     const [beamSegmentInfo, setBeamSegmentInfo] = useState(null);
     const [dotGraphs, setDotGraphs] = useState([]);
     const [lineGraph, setLineGraph] = useState(null);
@@ -66,7 +65,6 @@ function App()
     const [graphTarget, setTarget] = useState(null);
 
     const showErrorWindow = (message) => {
-        console.log("Error:", message);
         setErrorMessage(message);
         setError(true);
     };
@@ -80,16 +78,13 @@ function App()
             showErrorWindow("Use at least 3 particles");
             return true;
         };
-        if (beamlistSelected.length == 0) {
+        if (beamlistSelected.length === 0) {
             showErrorWindow("Please include 1+ beam elements");
             return true;
         } 
         return false;         
     };
 
-    useEffect(() => {
-        console.log(beamlistSelected);
-    }, [beamlistSelected]);
 
     useEffect(() => {
         if (!showError) return ;
@@ -118,9 +113,6 @@ function App()
         }, []);
     //console.log(beamSegmentInfo);
 
-    useEffect(() => {
-        console.log("Updated beamlistSelected:", beamlistSelected);
-    }, [beamlistSelected]);
 
     if (!beamSegmentInfo) return <div>Loading...</div>;
     const items = Object.keys(beamSegmentInfo);
@@ -130,12 +122,13 @@ function App()
     const beamlistHandler = (segList) => {
         let sCurrent = 0;
         const cleanedSegList = segList.map((obj, i) => {
-            obj['startPos'] = sCurrent;
-            sCurrent += obj['length'];
-            obj['endPos'] = sCurrent;
-            obj.id = i;
-            return obj;
-        })
+            const newObj = { ...obj };
+            newObj.startPos = sCurrent;
+            sCurrent += newObj.length;
+            newObj.endPos = sCurrent;
+            newObj.id = i;
+            return newObj;
+        });
         setTotalLen(sCurrent);
         setSelectedItems(cleanedSegList);
     };
@@ -155,7 +148,6 @@ function App()
 
     //  Handles both color and start and end pos for ENTIRE beamline
     const setSelectedItemsHandler = (segList) => {
-        console.log("segList from excel:", segList);
         const cleanedSegList = segList.map((segment) => {
             return handleSegmentColor(segment);
         });
@@ -163,39 +155,19 @@ function App()
     };
     
     //  Handles and formats twiss data for plotting
-    const handleTwiss = (twissJsonObj, x_axis) => { 
-        //console.log(twissJsonObj);
-        const twissPlotData = Object.entries(twissJsonObj).flatMap(([key, obj]) => {
-                return Object.entries(obj).map(([axis, arr], index) => { 
-                    return {
-                            "id": `${key}: ${axis}`,
-                            "data": 
-                                arr.map((val, i) => ({
-                                    'x': x_axis[i],
-                                    'y': val
-                                    })
-                                ) 
-                    } 
+    const handleTwiss = (twissJsonObj, x_axis) => {
+        const grouped = {};
+        Object.entries(twissJsonObj).forEach(([key, obj]) => {
+            const option = TWISS_OPTIONS.find(opt => opt.modal_val === key);
+            const label = option ? option.label : key;
+            if (!grouped[label]) grouped[label] = [];
+            Object.entries(obj).forEach(([axis, arr]) => {
+                grouped[label].push({
+                    id: `${key}: ${axis}`,
+                    data: arr.map((val, i) => ({ x: x_axis[i], y: val }))
                 });
+            });
         });
-       
-        const grouped = twissPlotData.reduce((acc, item, i) => {
-          const label = TWISS_OPTIONS[Math.floor(i / 3)].label;
-        
-          // Check if label group already exists
-          //let group = acc.find(g => g.label === label);
-          let group = acc[label];
-          if (!group) {
-              acc[label] = [];
-          }
-          
-          acc[label].push(item);
-          return acc;
-        }, []);
-
-        // console.log(grouped);
-        //console.log(twissPlotData);
-        //setTwissDf(twissPlotData);
         setTwissDf(grouped);
     };
 
@@ -243,7 +215,6 @@ function App()
                 const cleanedParams = Object.fromEntries(
                 Object.entries(obj).filter(([p]) => !PRIVATEVARS.includes(p))
                 );
-                console.log('cleanedParams:', cleanedParams);
                 return {
                     segmentName: key,
                     parameters: cleanedParams
@@ -300,55 +271,40 @@ function App()
     };
 
     const handleChange = (id, key, value) => {
-        const nextData = Object.assign([], beamlistSelected);
-        nextData.find(item => item.id === id)[key] = value;
-      };
+        const nextData = beamlistSelected.map(item =>
+            item.id === id ? { ...item, [key]: value } : item
+        );
+        setSelectedItems(nextData);
+    };
 
     const handleEdit = id => {
-        const nextData = Object.assign([], beamlistSelected);
-        const activeItem = nextData.find(item => item.id === id);
-
-        if(activeItem.status === 'EDIT') {
-            const newItem = beamlistSelected.find(item => item.id === id);
-            if (newItem) {
-                const { status, ...rest } = newItem;
-                Object.assign(activeItem, rest);
-            }
-        }
-        activeItem.status = activeItem.status === 'EDIT' ? null : 'EDIT';
+        const nextData = beamlistSelected.map(item => {
+            if (item.id !== id) return item;
+            return { ...item, status: item.status === 'EDIT' ? null : 'EDIT' };
+        });
         beamlistHandler(nextData);
-      };
+    };
     
       const handleRemove = id => {
         const beamlineHandler = beamlistSelected.filter(item => item.id !== id);
         beamlistHandler(beamlineHandler);
       };
 
-    const PreModalCheck = (beamline) => {
-        if (beamline.length === 0) {
-            setSelectedMenu(null)
+    const handleParameterGraphingClick = () => {
+        if (beamlistSelected.length === 0) {
             showErrorWindow("Please add beam segments before graphing parameters");
-            return false;
+            return;
         }
-        return true;
-    }
+        setSelectedMenu('parameterGraphing');
+    };
 
     const ParticleSettingsSubmitHelper = (data) => {
-        console.log("Settings data received:", data);
         setBeamtypeToPass(data.customIon ? data.customIon : data.beamType);
         setMeV(data.kineticEnergy);
         setParticleNum(data.numParticles);
         setBaseDistribution(data.base_distribution);
         setTwissValues(data.twiss);
-        if (data.beam_setup === "twiss") {
-            setBeamSetup("twiss");
-        }
-        else if (data.beam_setup === "base_dist") {
-            setBeamSetup("base_dist");
-        }
-        else if (data.beam_setup === "import") {
-            setBeamSetup("import");
-        }
+        setBeamSetup(data.beam_setup);
     };
 
     const SaveFig = () => {
@@ -385,7 +341,7 @@ function App()
         <ErrorWindow message={errorMessage}
                      showError = {showError} />
         <Modal 
-            open={selectedMenu === 'parameterGraphing' && PreModalCheck(beamlistSelected)} 
+            open={selectedMenu === 'parameterGraphing'}
             onClose={() => setSelectedMenu(null)} 
             center
             classNames={{
@@ -545,7 +501,7 @@ function App()
                     </button>
                 </Row>
                 <Row className="mb-3 g-0">
-                    <button className="menu-button" onClick={() => setSelectedMenu("parameterGraphing")}>
+                    <button className="menu-button" onClick={handleParameterGraphingClick}>
                         <i className="fa-solid fa-chart-area"></i>
                     </button>
                 </Row>
@@ -566,7 +522,7 @@ function App()
                             setSelectedMenu("simulationModel");
                             }}
                     >
-                       <i class="fa-solid fa-network-wired"></i>
+                       <i className="fa-solid fa-network-wired"></i>
                     </button>
                 </Row> 
                 <Row className="g-0 mt-auto mb-3">
@@ -629,7 +585,7 @@ function App()
             </Overlay>
         </div>
         <div className="main-content h-100 d-flex justify-content-center align-items-center">
-            <PlotMenu 
+            <PlotMenu
                 saveFig={SaveFig}
                 setSelectedMenu={setSelectedMenu}
             />

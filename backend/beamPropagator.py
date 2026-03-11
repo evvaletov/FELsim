@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Generator, List, Any
 import numpy as np
 
+from beamline import dipole_wedge
+
 
 @dataclass
 class PropagationCheckpoint:
@@ -14,6 +16,12 @@ class PropagationCheckpoint:
     is_element_boundary: bool
 
 
+# Element types with thin-lens angular kicks that must not be sub-stepped.
+# Sub-stepping these would apply the full kick at every sub-step, amplifying
+# it by a factor of N.
+_NO_SUBSTEP_TYPES = (dipole_wedge,)
+
+
 def propagate(beamline: List,
               particles: np.ndarray,
               interval: float,
@@ -23,6 +31,9 @@ def propagate(beamline: List,
 
     Samples particle state at regular intervals and element boundaries.
     Initial state (s=0) is always included.
+
+    Thin-lens elements (dipole_wedge) are tracked as whole elements to avoid
+    multiplying angular kicks by the number of sub-steps.
     """
     EPS = 1e-12
     s = 0.0
@@ -37,6 +48,18 @@ def propagate(beamline: List,
     )
 
     for idx, segment in enumerate(beamline):
+        if isinstance(segment, _NO_SUBSTEP_TYPES):
+            current = segment.useMatrice(current)
+            s = round(s + segment.length, rounding)
+            yield PropagationCheckpoint(
+                s=s,
+                particles=current.copy(),
+                element_index=idx,
+                element=segment,
+                is_element_boundary=True
+            )
+            continue
+
         remaining = segment.length
 
         while remaining - interval > EPS:

@@ -20,7 +20,6 @@ from beamline import *
 from ebeam import beam
 import numpy as np
 from schematic import *
-import timeit
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import time

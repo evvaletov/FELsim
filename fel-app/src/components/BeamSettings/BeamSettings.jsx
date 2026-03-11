@@ -12,7 +12,10 @@ const BeamSettings = ({ setSelectedMenu, excelToAPI, sInterval, setSInterval,
             <input defaultValue={sInterval}
                     type="number"
                     name="interval" 
-                    onChange={(e) => setSInterval(e.target.value)}
+                    onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val)) setSInterval(val);
+                    }}
             />
             <Row className="mt-2">
                 <Button
@@ -21,7 +24,6 @@ const BeamSettings = ({ setSelectedMenu, excelToAPI, sInterval, setSInterval,
                         setSelectedMenu(null);
                         getBeamline(beamlistSelected);
                     }}
-                    bold
                 >
                     Simulate
                 </Button>

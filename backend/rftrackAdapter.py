@@ -866,6 +866,8 @@ class RFTrackAdapter(SimulatorBase):
                             lat.append(ne)
                     else:
                         lat.append(native)
+                if not self._physical_apertures:
+                    lat.set_aperture(self.default_aperture, self.default_aperture)
 
                 bunch = rft.Bunch6d(
                     self.particle_mass, self.particle_charge, self._Pc, ps
@@ -874,45 +876,51 @@ class RFTrackAdapter(SimulatorBase):
                 ps = np.array(tracked.get_phase_space())
 
             elif seg_type == 'dipole':
-                elem = seg_data
-                angle_rad = np.radians(elem.parameters.get('angle', 0.0))
-                length = elem.length
-
-                drift = rft.Drift(length)
-                ap = self.DIPOLE_HALF_WIDTH if self._physical_apertures else self.default_aperture
-                drift.set_aperture(ap, ap)
-                lat = rft.Lattice()
-                lat.append(drift)
-                bunch = rft.Bunch6d(
-                    self.particle_mass, self.particle_charge, self._Pc, ps
-                )
-                tracked = lat.track(bunch)
-                ps = np.array(tracked.get_phase_space())
-
-                if ps.ndim == 2 and ps.shape[0] > 0:
-                    self._apply_sector_bend_correction(
-                        ps, length, angle_rad, self._Pc, self.particle_mass
-                    )
+                ps = self._track_analytical_dipole(ps, seg_data)
 
             else:  # 'dpw'
-                elem = seg_data
-                # Track through drift for path length
-                native = self._convert_element_to_native(elem)
-                lat = rft.Lattice()
-                lat.append(native)
-                bunch = rft.Bunch6d(
-                    self.particle_mass, self.particle_charge, self._Pc, ps
-                )
-                tracked = lat.track(bunch)
-                ps = np.array(tracked.get_phase_space())
-                # Apply analytical edge kick
-                if ps.ndim == 2 and ps.shape[0] > 0:
-                    self._apply_dpw_edge_kick(
-                        ps,
-                        elem.parameters.get('dpw_kick_x', 0.0),
-                        elem.parameters.get('dpw_kick_y', 0.0),
-                    )
+                ps = self._track_analytical_dpw(ps, seg_data)
 
+        return ps
+
+    def _track_analytical_dipole(self, ps, elem):
+        """Track through a single analytical dipole (drift + sector bend correction)."""
+        angle_rad = np.radians(elem.parameters.get('angle', 0.0))
+        length = elem.length
+
+        drift = rft.Drift(length)
+        ap = self.DIPOLE_HALF_WIDTH if self._physical_apertures else self.default_aperture
+        drift.set_aperture(ap, ap)
+        lat = rft.Lattice()
+        lat.append(drift)
+        bunch = rft.Bunch6d(
+            self.particle_mass, self.particle_charge, self._Pc, ps
+        )
+        tracked = lat.track(bunch)
+        ps = np.array(tracked.get_phase_space())
+
+        if ps.ndim == 2 and ps.shape[0] > 0:
+            self._apply_sector_bend_correction(
+                ps, length, angle_rad, self._Pc, self.particle_mass
+            )
+        return ps
+
+    def _track_analytical_dpw(self, ps, elem):
+        """Track through a single analytical DPW (drift + edge kick)."""
+        native = self._convert_element_to_native(elem)
+        lat = rft.Lattice()
+        lat.append(native)
+        bunch = rft.Bunch6d(
+            self.particle_mass, self.particle_charge, self._Pc, ps
+        )
+        tracked = lat.track(bunch)
+        ps = np.array(tracked.get_phase_space())
+        if ps.ndim == 2 and ps.shape[0] > 0:
+            self._apply_dpw_edge_kick(
+                ps,
+                elem.parameters.get('dpw_kick_x', 0.0),
+                elem.parameters.get('dpw_kick_y', 0.0),
+            )
         return ps
 
     def track_elements(self, ps_rftrack, start_idx, end_idx):
@@ -967,42 +975,10 @@ class RFTrackAdapter(SimulatorBase):
                 ps = np.array(tracked.get_phase_space())
 
             elif seg_type == 'dipole':
-                elem = seg_data
-                angle_rad = np.radians(elem.parameters.get('angle', 0.0))
-                length = elem.length
-
-                drift = rft.Drift(length)
-                ap = self.DIPOLE_HALF_WIDTH if self._physical_apertures else self.default_aperture
-                drift.set_aperture(ap, ap)
-                lat = rft.Lattice()
-                lat.append(drift)
-                bunch = rft.Bunch6d(
-                    self.particle_mass, self.particle_charge, self._Pc, ps
-                )
-                tracked = lat.track(bunch)
-                ps = np.array(tracked.get_phase_space())
-
-                if ps.ndim == 2 and ps.shape[0] > 0:
-                    self._apply_sector_bend_correction(
-                        ps, length, angle_rad, self._Pc, self.particle_mass
-                    )
+                ps = self._track_analytical_dipole(ps, seg_data)
 
             else:  # 'dpw'
-                elem = seg_data
-                native = self._convert_element_to_native(elem)
-                lat = rft.Lattice()
-                lat.append(native)
-                bunch = rft.Bunch6d(
-                    self.particle_mass, self.particle_charge, self._Pc, ps
-                )
-                tracked = lat.track(bunch)
-                ps = np.array(tracked.get_phase_space())
-                if ps.ndim == 2 and ps.shape[0] > 0:
-                    self._apply_dpw_edge_kick(
-                        ps,
-                        elem.parameters.get('dpw_kick_x', 0.0),
-                        elem.parameters.get('dpw_kick_y', 0.0),
-                    )
+                ps = self._track_analytical_dpw(ps, seg_data)
 
         return ps
 
@@ -1396,7 +1372,8 @@ class RFTrackAdapter(SimulatorBase):
             return 0.0
 
         mass_kg = self.particle_mass * PhysicalConstants.MeV_to_J / PhysicalConstants.C**2
-        k1 = abs(PhysicalConstants.Q * self.G_quad * current) / (
+        charge_C = abs(self.particle_charge) * PhysicalConstants.Q
+        k1 = abs(charge_C * self.G_quad * current) / (
             mass_kg * PhysicalConstants.C * self._beta * self._gamma
         )
         return k1 if focusing else -k1

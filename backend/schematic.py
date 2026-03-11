@@ -228,6 +228,27 @@ class draw_beamline:
         with tqdm(total=total_intervals, desc="Simulating Beamline",
                   bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]") as pbar:
             for i in range(len(beamSegments)):
+                # Thin-lens elements (e.g. dipole_wedge): track as whole element,
+                # sub-stepping would multiply angular kicks
+                if isinstance(beamSegments[i], dipole_wedge):
+                    matrixVariables = np.array(beamSegments[i].useMatrice(matrixVariables))
+                    x_axis.append(round(x_axis[-1] + beamSegments[i].length, self.DEFAULTINTERVALROUND))
+
+                    if defineLim:
+                        maxVals, minVals = self.checkMinMax(matrixVariables, maxVals, minVals)
+
+                    result = ebeam.getXYZ(matrixVariables)
+                    twiss = result[3]
+                    plot6dValues.update({x_axis[-1]: result})
+
+                    for j, axis in enumerate(twiss.index):
+                        twiss_axis = twiss.loc[axis]
+                        for label, value in twiss_axis.items():
+                            twiss_aggregated_df.at[axis, label].append(value)
+
+                    pbar.update(1)
+                    continue
+
                 intTrack = beamSegments[i].length
 
                 while intTrack >= interval:
@@ -350,6 +371,27 @@ class draw_beamline:
         with tqdm(total=total_intervals, desc="Simulating Beamline",
                   bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]") as pbar:
             for i in range(len(beamSegments)):
+                # Thin-lens elements (e.g. dipole_wedge): track as whole element,
+                # sub-stepping would multiply angular kicks
+                if isinstance(beamSegments[i], dipole_wedge):
+                    matrixVariables = np.array(beamSegments[i].useMatrice(matrixVariables))
+                    x_axis.append(round(x_axis[-1] + beamSegments[i].length, self.DEFAULTINTERVALROUND))
+
+                    if defineLim:
+                        maxVals, minVals = self.checkMinMax(matrixVariables, maxVals, minVals)
+
+                    result = ebeam.getXYZ(matrixVariables)
+                    twiss = result[3]
+                    plot6dValues.update({x_axis[-1]: result})
+
+                    for j, axis in enumerate(twiss.index):
+                        twiss_axis = twiss.loc[axis]
+                        for label, value in twiss_axis.items():
+                            twiss_aggregated_df.at[axis, label].append(value)
+
+                    pbar.update(1)
+                    continue
+
                 intTrack = beamSegments[i].length
 
                 while intTrack >= interval:

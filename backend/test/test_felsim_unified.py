@@ -12,7 +12,7 @@ from felsimAdapter import FELsimAdapter
 from evolutionPlotter import EvolutionPlotter
 from ebeam import beam
 
-EXCEL_PATH = Path("../../beam_excel/Beamline_elements.xlsx")
+EXCEL_PATH = Path(__file__).resolve().parent.parent.parent / "beam_excel" / "Beamline_elements.xlsx"
 MAX_ELEMENTS = 50
 BEAM_ENERGY_MEV = 45.0
 

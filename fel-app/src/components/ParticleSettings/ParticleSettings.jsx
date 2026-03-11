@@ -47,16 +47,6 @@ const ParticleSettings = ({ setSelectedMenu, submitHelper, twissValues, beamtype
         setTabValue(newValue);
       };
 
-    const getBeamDistributionFromTwiss = async (fileJSON) => {  
-    const res =  await fetch(API_ROUTE + '/twiss-to-particles', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(fileJSON, null, 2),
-    });
-    };
-
     return (
         <Form onSubmit={handleSubmit(onSubmit)}>
             <Container className="d-flex flex-column align-items-center justify-content-center">

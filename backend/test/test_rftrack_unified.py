@@ -26,7 +26,7 @@ try:
 except ImportError:
     FELSIM_AVAILABLE = False
 
-EXCEL_PATH = Path("../../beam_excel/Beamline_elements_3.xlsx")
+EXCEL_PATH = Path(__file__).resolve().parent.parent.parent / "beam_excel" / "Beamline_elements_3.xlsx"
 BEAM_ENERGY = 45.0
 MAX_ELEMENTS = 30
 

@@ -15,9 +15,7 @@ import logging
 import tempfile
 import threading
 import traceback
-import types
 from excelElements import ExcelElements
-import uvicorn
 import os
 from dotenv import load_dotenv
 import copy
