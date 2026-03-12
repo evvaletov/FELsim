@@ -97,18 +97,23 @@ currents (valid solution inaccessible to FELsim's bounded NM).
 ### W6/W7 — Glyfada Optimizer Benchmarks
 
 W6 benchmarked glyfada (ULS algorithm, 600 evals, uniform random init)
-against NM for Stage 11. NM outperformed by 3–6 orders of magnitude at
-$\varepsilon_n = 5, 8, 14$. W7 re-benchmarked with CMA-ES, warm-starting,
-tight bounds (±3 A), and feasibility-rules constraint handling. CMA-ES
-still failed at all points (RMS $= 878$ at $\varepsilon_n = 5$,
-RMS $= 4.2$ at $\varepsilon_n = 8$).
+against NM for Stage 11.  NM outperformed by 3–6 orders of magnitude at
+$\varepsilon_n = 5, 8, 14$.  W7 re-benchmarked after fixing three bugs
+(CMA-ES initial mean never set, feasibility rules ignored, binary
+constraint).  With pycma CMA-ES warm-started from NM:
 
-The objective landscape has an extremely narrow feasibility basin;
-evolutionary search cannot navigate it efficiently.
+| $\varepsilon_n$ | pycma RMS | NM RMS | Improvement |
+|-----------------|-----------|--------|-------------|
+| 5 | $2.1 \times 10^{-8}$ | $2.9 \times 10^{-3}$ | $\sim 10^{5}\times$ |
+| 8 | $1.1 \times 10^{-8}$ | $2.5 \times 10^{-3}$ | $\sim 10^{5}\times$ |
+| 14 | $7.9 \times 10^{-2}$ | $9.4 \times 10^{-2}$ | $1.2\times$ |
 
-- Scripts: `UHM_beamline_opt_05ps_params.py --w6` / `--w7`
-- Results: `results/params_05ps/W6/`, `results/params_05ps/W7/`
-- Report: `reports/2026/Mar/04/R2_unified_comparison_report.pdf` (§7)
+**Conclusion:** Two-phase NM→CMA-ES is the recommended Stage 11 strategy.
+NM finds the right basin; CMA-ES polishes to near-machine-precision.
+Integrated as automatic post-NM polishing (O5).
+
+- Scripts: `W7_glyfada_rebenchmark.py`
+- Results: `results/params_05ps/W7/`
 
 ### W8 — RF-Track Stage 11 Optimization
 
@@ -332,6 +337,30 @@ through $\alpha_y$.  Zero-angle DPW faces acquire "pure" fringe kicks
 
 - Script: `P11_fringe_field_impact.py`
 - Results: `results/P11/`
+
+### P12 — Multi-Seed Robustness
+
+S7 tested particle count sensitivity (fixed seed), S8 tested Stage 11
+optimizer landscape (fixed seed, varied starting point).  P12 varies the
+random beam realization itself: 20 seeds $\times$ 3 emittance points
+($\varepsilon_n = 5, 8, 14$), 500 particles, cold-start.
+
+| $\varepsilon_n$ | Exc | Acc | Mar | Fail | Best RMS | Median RMS | CV% |
+|-----------------|-----|-----|-----|------|----------|------------|-----|
+| 5 | 2 | 4 | 4 | 10 | $5.6 \times 10^{-3}$ | $3.2 \times 10^{-1}$ | 407% |
+| 8 | 13 | 3 | 1 | 3 | $4.6 \times 10^{-3}$ | $5.3 \times 10^{-3}$ | 203% |
+| 14 | 12 | 4 | 1 | 3 | $4.3 \times 10^{-3}$ | $4.8 \times 10^{-3}$ | 209% |
+
+**Key finding: Single-seed results are not representative.** At
+$\varepsilon_n = 5$, 50% of seeds fail entirely (RMS $> 0.32$).  At
+$\varepsilon_n = 8$ and 14, the majority (65–60%) achieve Excellent but
+$\sim 15\%$ still fail.  The variability originates from upstream stages
+(beam generation), confirming S7/S8's finding that Stage 11 is unimodal
+but stages 1–10 are seed-sensitive.  Publication-quality results require
+multi-seed statistics (report median $\pm$ IQR, not single-seed values).
+
+- Script: `P12_multi_seed_robustness.py`
+- Results: `results/P12/`
 
 ### C4 — CI Pipeline Expansion
 

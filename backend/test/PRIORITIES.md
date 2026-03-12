@@ -1089,6 +1089,37 @@ Items are ordered by estimated impact on the UH MkV FEL beamline
 - Script: `P9_chromaticity_analysis.py`
 - Results: `results/P9/`
 
+### P12. Multi-Seed Robustness Study [DONE 2026-03-12]
+- **Motivation:** S7 tested particle count sensitivity (fixed seed=42), S8 tested
+  Stage 11 optimizer landscape (fixed seed, varied starting point). Neither varied
+  the random beam realization itself. P12 fills this gap: does the 11-stage
+  optimizer produce consistent results across different random seeds?
+- **Design:** 20 seeds × 3 emittance points (5, 8, 14), 500 particles, cold-start.
+  Seeds: [42 + 100·i for i in range(20)]. 60 total runs.
+- **Results:**
+
+  | ε_n | Exc | Acc | Mar | Fail | Best RMS | Median RMS | CV% |
+  |-----|-----|-----|-----|------|----------|------------|-----|
+  | 5 | 2 | 4 | 4 | 10 | 5.58e-3 | 3.16e-1 | 407% |
+  | 8 | 13 | 3 | 1 | 3 | 4.57e-3 | 5.34e-3 | 203% |
+  | 14 | 12 | 4 | 1 | 3 | 4.29e-3 | 4.81e-3 | 209% |
+
+- **Key finding: Single-seed results are not representative.** At ε_n=5,
+  50% of seeds fail entirely (RMS > 0.32). At ε_n=8 and 14, the majority
+  (65–60%) achieve Excellent but ~15% still fail. The variability originates
+  from upstream stages (beam generation), confirming S7/S8's findings that
+  Stage 11 is unimodal but stages 1–10 are seed-sensitive.
+- **Quad current variability:** Mean CV = 56% (ε_n=5), 25% (ε_n=8), 27% (ε_n=14).
+  Worst: q16 (408% CV at ε_n=5), q80 (~130–193% CV at ε_n=8,14).
+- **Implication:** Publication-quality results require multi-seed statistics
+  (report median ± IQR, not single-seed values). Improving robustness
+  requires upstream fixes (deterministic beam generation, multi-seed averaging,
+  or ensemble optimization).
+- **Plots:** RMS box plot, quad current CV% bars, quality histogram, Twiss scatter.
+- **CLI:** `--seeds N`, `--particles N`, `--emittances ...`, `--plots-only`.
+- Script: `P12_multi_seed_robustness.py`
+- Results: `results/P12/`
+
 ### P10. Emittance Preservation Along Transport Line [DONE 2026-03-11]
 - Tracked ε_n(s) element-by-element through 118-element beamline.
 - **Achromatic transport:**
@@ -1155,7 +1186,7 @@ Source: 4-perspective expert review (FEL scientist, Berz-style computational phy
 - [x] **Chromaticity analysis**: See P9 — acceptance bandwidth |δ| < ~0.3%, dβ/dδ ≈ 1 m/%
 - [x] **Fringe field treatment in FELsim**: See P11 — DPW φ correction modifies M43 by 2–8%, removing it degrades RMS 7×. fringeType parameter is field-profile-only (drift matrix). Quad fringe not modeled.
 - [ ] **Sensitivity / error analysis**: Magnet errors, misalignments, power supply ripple — DA methods can compute high-order sensitivities directly
-- [ ] **Multi-seed robustness study**: Run optimization with seeds 42, 137, 2023+ and compare results to confirm global minimum was found
+- [x] **Multi-seed robustness study**: See P12 — 50% failure at ε_n=5, 65% Excellent at ε_n=8, 60% at ε_n=14. Single-seed not representative; upstream stages are seed-sensitive
 
 ### Code Quality
 - [x] **Decouple optimization from visualization**: P9, P10, P11 now support `--plots-only` to regenerate plots from cached summary.json without re-running computation. S5, R2, S4 parameter scans already had this. P10 updated to save full evolution data.
