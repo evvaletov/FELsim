@@ -876,7 +876,12 @@
   - Physics note: x-emittance shows apparent growth through dispersive
     chicane regions (x-δ coupling). This is expected — the raw (x, x')
     emittance is not conserved in the presence of dispersion.
-- **Current CI suite:** 210 tests (7 skipped YAML), 8 test files.
+- **Current CI suite:** 210+ tests, 16 test files (expanded 2026-03-11 from 8).
+  Added: `test_chromatic_dipole`, `test_chromatic_quad`, `test_optimizer`,
+  `test_edge_cases`, `test_rftrack`, `test_felsim_unified`, `test_cosy_unified`,
+  `test_rftrack_unified`. Tests requiring COSY/RF-Track gracefully skip.
+  Visual tests excluded via `-m "not visual"`. Added `cloudpickle` to CI deps.
+  Registered `cosy` and `rftrack` pytest markers in `conftest.py`.
 - **Output:** `backend/test/test_*.py` files, CI config, benchmark report.
 - **Progress (2026-03-10):**
   - Created `test_chromatic_physics.py`: 30 tests covering chromatic quads,
@@ -1148,7 +1153,7 @@ Source: 4-perspective expert review (FEL scientist, Berz-style computational phy
 - [x] **Order-by-order convergence study**: See P8 — first-order sufficient for hard-edge, ~0.3% linear map variation with fringe fields
 - [x] **Emittance preservation plot**: See P10 — achromatic: conserved to 0.00%; chromatic: 591% growth (filamentation)
 - [x] **Chromaticity analysis**: See P9 — acceptance bandwidth |δ| < ~0.3%, dβ/dδ ≈ 1 m/%
-- [ ] **Fringe field treatment in FELsim**: Currently fringe_field_order=0; currents are optimized for the wrong model. Add fringe field support or at least quantify the impact
+- [x] **Fringe field treatment in FELsim**: See P11 — DPW φ correction modifies M43 by 2–8%, removing it degrades RMS 7×. fringeType parameter is field-profile-only (drift matrix). Quad fringe not modeled.
 - [ ] **Sensitivity / error analysis**: Magnet errors, misalignments, power supply ripple — DA methods can compute high-order sensitivities directly
 - [ ] **Multi-seed robustness study**: Run optimization with seeds 42, 137, 2023+ and compare results to confirm global minimum was found
 

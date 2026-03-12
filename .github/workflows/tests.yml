@@ -25,19 +25,27 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install numpy scipy pandas matplotlib sympy PyYAML openpyxl tqdm pydantic
+          pip install numpy scipy pandas matplotlib sympy PyYAML openpyxl tqdm pydantic cloudpickle
           pip install pytest
 
-      - name: Run core tests
+      - name: Run tests
         working-directory: backend/test
         run: |
           python -m pytest \
             test_transfer_matrices.py \
             test_chromatic_physics.py \
+            test_chromatic_dipole.py \
+            test_chromatic_quad.py \
             test_twiss.py \
             test_adapter_roundtrip.py \
             test_fieldmap_validation.py \
             test_attribute_guard.py \
+            test_optimizer.py \
+            test_edge_cases.py \
             test_multicode.py \
             test_cross_code_benchmark.py \
-            -v --tb=short -x
+            test_rftrack.py \
+            test_felsim_unified.py \
+            test_cosy_unified.py \
+            test_rftrack_unified.py \
+            -v --tb=short -m "not visual"

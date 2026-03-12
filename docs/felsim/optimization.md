@@ -308,6 +308,43 @@ $\sigma$-matrix sense).
 - Script: `P10_emittance_evolution.py`
 - Results: `results/P10/`
 
+### P11 — Fringe Field Impact
+
+Quantified the effect of DPW triangle-model fringe correction ($\phi$) on
+Twiss matching within FELsim's first-order model.
+
+**FELsim fringe architecture:**
+- DPW edge kick always includes $\phi = (l_e/6) \cdot h \cdot (1 + \sin^2\eta) / \cos\eta$
+- `fringeType` parameter affects field profile only (drift-space matrix)
+- Quadrupole fringe: not modeled
+
+**Results with fixed (warm-start) currents:**
+
+| Mode | RMS | $\beta_y$ (m) | $\alpha_y$ |
+|------|-----|---------------|------------|
+| With $\phi$ | $7.8 \times 10^{-2}$ | 0.232 | 0.013 |
+| Without $\phi$ | $5.7 \times 10^{-1}$ | 0.241 | $-1.12$ |
+
+The $\phi$ correction modifies $M_{43}$ by 2–8% (transport dipoles) and
+5% (FC1 chicane).  Removing it degrades RMS by $7\times$, primarily
+through $\alpha_y$.  Zero-angle DPW faces acquire "pure" fringe kicks
+(0.046 m$^{-1}$) that have no hard-edge equivalent.
+
+- Script: `P11_fringe_field_impact.py`
+- Results: `results/P11/`
+
+### C4 — CI Pipeline Expansion
+
+Expanded the GitHub Actions test suite from 8 to 16 test files.  Added
+`test_chromatic_dipole`, `test_chromatic_quad`, `test_optimizer`,
+`test_edge_cases`, `test_rftrack`, `test_felsim_unified`,
+`test_cosy_unified`, and `test_rftrack_unified`.  Tests requiring external
+tools (COSY, RF-Track) are gracefully skipped via `pytest.skip()` at module
+level.  Visual tests are excluded with `-m "not visual"`.
+
+- Config: `.github/workflows/tests.yml`
+- Markers: `conftest.py` (`visual`, `cosy`, `rftrack`)
+
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap.

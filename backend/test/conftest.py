@@ -17,3 +17,5 @@ if str(_BACKEND) not in sys.path:
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "visual: tests requiring interactive display")
+    config.addinivalue_line("markers", "cosy: tests requiring COSY INFINITY binary")
+    config.addinivalue_line("markers", "rftrack: tests requiring RF-Track installation")

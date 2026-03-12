@@ -19,7 +19,11 @@ Advantages:
 Limitations:
 - Linear optics only — no higher-order aberrations
 - No space charge
-- Fringe fields modelled analytically (Enge function), not from measured data
+- Fringe fields: DPW edge kicks include the triangle-model $\phi$ correction
+  ($\phi = (l_e/6) \cdot h \cdot (1 + \sin^2\eta) / \cos\eta$), which modifies
+  $M_{43}$ by 2–8%.  The `fringeType` parameter affects field profile
+  visualization only (drift-space matrix).  Quadrupole fringe: not modeled.
+  See P11 for quantification.
 
 **Usage:**
 
