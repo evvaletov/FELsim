@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+plt.style.use(str(Path(__file__).resolve().parent / 'felsim.mplstyle'))
 
 backend_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_dir))

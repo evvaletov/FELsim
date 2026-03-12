@@ -1,0 +1,22 @@
+# FELsim standard matplotlib style
+# Usage: plt.style.use(Path(__file__).parent / 'felsim.mplstyle')
+
+font.family: serif
+font.size: 13
+
+axes.labelsize: 15
+axes.titlesize: 15
+axes.grid: True
+
+grid.alpha: 0.3
+
+xtick.labelsize: 12
+ytick.labelsize: 12
+
+legend.fontsize: 10
+
+lines.linewidth: 2.0
+
+figure.dpi: 150
+savefig.dpi: 300
+savefig.bbox: tight

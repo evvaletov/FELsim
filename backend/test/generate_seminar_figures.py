@@ -67,22 +67,10 @@ C_TEAL = '#009988'
 C_ORANGE = '#EE7733'
 C_GREY = '#BBBBBB'
 
-# ── Seminar rcParams ─────────────────────────────────────────────────────
-RCPARAMS = {
-    'font.family': 'serif',
-    'font.size': 13,
-    'axes.labelsize': 15,
-    'axes.titlesize': 15,
-    'legend.fontsize': 10,
-    'xtick.labelsize': 12,
-    'ytick.labelsize': 12,
-    'figure.dpi': 150,
-    'savefig.dpi': 300,
-    'savefig.bbox': 'tight',
-    'axes.grid': True,
-    'grid.alpha': 0.3,
-    'lines.linewidth': 2.5,
-}
+# ── Style ────────────────────────────────────────────────────────────────
+STYLE_PATH = Path(__file__).resolve().parent / 'felsim.mplstyle'
+# Seminar override: slightly thicker lines than the shared style
+RCPARAMS_OVERRIDE = {'lines.linewidth': 2.5}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -686,7 +674,8 @@ def figure_envelope_dispersion(twiss, line):
 
 if __name__ == '__main__':
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    plt.rcParams.update(RCPARAMS)
+    plt.style.use(str(STYLE_PATH))
+    plt.rcParams.update(RCPARAMS_OVERRIDE)
     params = compute_params()
 
     print("UH FEL Seminar Figures")

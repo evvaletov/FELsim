@@ -291,7 +291,7 @@ class draw_beamline:
         return twiss_aggregated_df, plot6dValues, x_axis, maxVals, minVals
 
     def plotBeamPositionTransform(self, matrixVariables, beamSegments, interval: float = -1, defineLim=True,
-                                  saveData=False, saveFig=False, shape={}, plot=True, spacing=True,
+                                  saveData=False, saveFig=False, shape=None, plot=True, spacing=True,
                                   matchScaling=True, showIndice=False, scatter=False, apiCall=False,
                                   rendering=True, show_schematic='legacy', curved_trajectory=False):
         '''

@@ -1133,9 +1133,9 @@ Items are ordered by estimated impact on the UH MkV FEL beamline
 - **CRITICAL (pre-existing):** `/plot-parameters` endpoint (felAPI.py:580) references non-existent
   `Beamline` class and `findSegmentAtPos` method — endpoint always crashes with NameError.
   Part of the frontend-facing API (Christian's responsibility to fix or coordinate).
-- **MODERATE:** Mutable default `shape={}` in `ebeam.plotXYZ` (ebeam.py:568) and
-  `draw_beamline.plotBeamPositionTransform` (schematic.py:273). Shared across calls.
-  Low risk since the dict is only read, not mutated, but violates Python best practice.
+- **MODERATE (FIXED 2026-03-11):** Mutable default `shape={}` in `ebeam.plotXYZ` and
+  `schematic.plotBeamPositionTransform` changed to `shape=None`. Callers already
+  checked `if shape is not None` — no behavior change.
 - **MODERATE (needs domain knowledge):** `dipole_wedge` fringe field integral
   (beamline.py:707) uses `le = self.length` which comes from `gap_wedge` in the Excel
   lattice. Needs clarification whether `gap_wedge` is the fringe field extent or the
@@ -1160,7 +1160,7 @@ Source: 4-perspective expert review (FEL scientist, Berz-style computational phy
 ### Code Quality
 - [x] **Decouple optimization from visualization**: P9, P10, P11 now support `--plots-only` to regenerate plots from cached summary.json without re-running computation. S5, R2, S4 parameter scans already had this. P10 updated to save full evolution data.
 - [ ] **Add pytest test suite**: Unit tests for Twiss computation, integration test for simplified optimization, visual regression with pytest-mpl
-- [ ] **Extract rcParams to .mplstyle file**: Reusable seminar style across projects
+- [x] **Extract rcParams to .mplstyle file**: `felsim.mplstyle` created with shared settings (font, grid, DPI). P9-P11 and generate_seminar_figures.py updated to use it.
 - [ ] **Make output formats configurable**: argparse for PDF/PNG selection
 
 ## Notes

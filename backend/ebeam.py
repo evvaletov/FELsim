@@ -562,8 +562,8 @@ class beam:
         
         return std1, std6, dist_6d, twiss
 
-    def plotXYZ(self, dist_6d, std1, std6, twiss, ax1, ax2, ax3, ax4, 
-                maxVals = [0,0,0,0,0,0], minVals = [0,0,0,0,0,0], defineLim=True, shape={}, scatter=False):
+    def plotXYZ(self, dist_6d, std1, std6, twiss, ax1, ax2, ax3, ax4,
+                maxVals = [0,0,0,0,0,0], minVals = [0,0,0,0,0,0], defineLim=True, shape=None, scatter=False):
         '''
         Plots 2D phase spaces (x-x', y-y', z-z') and the x-y spatial distribution
         with Twiss parameters and optional aperture shapes.

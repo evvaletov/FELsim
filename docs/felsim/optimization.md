@@ -358,6 +358,17 @@ figures from cached `summary.json` without re-running computation.  P10
 updated to save full element-by-element evolution data (was 5 sample
 points).  S4/S5/R2 already had this capability.
 
+### Bug Fixes — Mutable Default Arguments
+
+Fixed `shape={}` mutable default in `ebeam.plotXYZ` and
+`schematic.plotBeamPositionTransform` — changed to `shape=None`.
+
+### Shared Plot Style
+
+Extracted common matplotlib rcParams to `felsim.mplstyle` (serif fonts,
+grid settings, DPI 150/300, tick sizes).  P9, P10, P11, and
+`generate_seminar_figures.py` updated to use `plt.style.use()`.
+
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap.
