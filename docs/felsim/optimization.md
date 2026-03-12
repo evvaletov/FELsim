@@ -345,6 +345,19 @@ level.  Visual tests are excluded with `-m "not visual"`.
 - Config: `.github/workflows/tests.yml`
 - Markers: `conftest.py` (`visual`, `cosy`, `rftrack`)
 
+### Bug Fixes — AlgebraicOptimization Variable Ordering
+
+Fixed non-deterministic `set.pop()` variable extraction in
+`AlgebraicOptimization.py` — replaced with `sorted()` by symbol name to
+ensure reproducible x/y assignment across Python versions and runs.
+
+### Visualization Decoupling
+
+Added `--plots-only` flag to P9, P10, and P11 study scripts.  Regenerates
+figures from cached `summary.json` without re-running computation.  P10
+updated to save full element-by-element evolution data (was 5 sample
+points).  S4/S5/R2 already had this capability.
+
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap.

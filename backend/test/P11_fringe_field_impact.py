@@ -229,9 +229,27 @@ def main():
     parser.add_argument('--particles', type=int, default=500)
     parser.add_argument('--currents', type=str,
                         default='results/felsim_nm_warm.json')
+    parser.add_argument('--plots-only', action='store_true',
+                        help='Regenerate plots from cached summary.json')
     args = parser.parse_args()
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if args.plots_only:
+        summary_path = RESULTS_DIR / 'summary.json'
+        if not summary_path.exists():
+            print(f"No cached results at {summary_path}")
+            sys.exit(1)
+        with open(summary_path) as f:
+            summary = json.load(f)
+        plot_comparison(
+            summary['dpw_elements'],
+            summary['with_phi']['twiss'],
+            summary['without_phi']['twiss'],
+            RESULTS_DIR,
+        )
+        print(f"Plots regenerated from {summary_path}")
+        return
 
     currents_path = Path(__file__).resolve().parent / args.currents
     if not currents_path.exists():

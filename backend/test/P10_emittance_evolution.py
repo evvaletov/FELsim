@@ -276,9 +276,28 @@ def main():
                         help='Use chromatic transport')
     parser.add_argument('--apertures', action='store_true',
                         help='Enable aperture tracking')
+    parser.add_argument('--plots-only', action='store_true',
+                        help='Regenerate plots from cached summary.json')
     args = parser.parse_args()
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    mode = 'chromatic' if args.chromatic else 'achromatic'
+    outdir = RESULTS_DIR / mode
+
+    if args.plots_only:
+        summary_path = outdir / 'summary.json'
+        if not summary_path.exists():
+            print(f"No cached results at {summary_path}")
+            sys.exit(1)
+        with open(summary_path) as f:
+            summary = json.load(f)
+        plot_emittance(
+            summary['evolution'], summary['norm_factor'], outdir,
+            chicane_s=tuple(summary['chicane_s']) if summary.get('chicane_s') else None,
+        )
+        print(f"Plots regenerated from {summary_path}")
+        return
 
     currents_path = Path(__file__).resolve().parent / args.currents
     if not currents_path.exists():
@@ -317,17 +336,13 @@ def main():
             max_raw = max(e['eps_nx_raw'] for e in chicane_evo)
             print(f"  Peak ε_n,x(raw) in chicane: {max_raw * norm:.4f} π·mm·mrad")
 
-    # Output directory with mode suffix
-    outdir = RESULTS_DIR / mode
     outdir.mkdir(parents=True, exist_ok=True)
 
     # Plots
     plot_emittance(evolution, norm, outdir, chicane_s)
     print(f"\n  Plots saved to {outdir}/")
 
-    # JSON summary (sample key points, not all 118)
-    sample_indices = [0, len(evolution)//4, len(evolution)//2,
-                      3*len(evolution)//4, len(evolution)-1]
+    # JSON summary (full evolution for --plots-only regeneration)
     summary = {
         'mode': mode,
         'apertures': args.apertures,
@@ -337,8 +352,7 @@ def main():
         'chicane_s': list(chicane_s) if chicane_s[0] else None,
         'n_checkpoints': len(evolution),
         'wall_s': wall_s,
-        'samples': [evolution[i] for i in sample_indices
-                     if i < len(evolution)],
+        'evolution': evolution,
         'initial': evolution[0],
         'final': evolution[-1],
     }

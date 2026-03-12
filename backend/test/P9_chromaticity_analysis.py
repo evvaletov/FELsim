@@ -278,9 +278,29 @@ def main():
     parser.add_argument('--chromatic-currents', type=str,
                         default='results/felsim_chromatic_warm.json',
                         help='Path to chromatic-optimized currents JSON')
+    parser.add_argument('--plots-only', action='store_true',
+                        help='Regenerate plots from cached summary.json')
     args = parser.parse_args()
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if args.plots_only:
+        summary_path = RESULTS_DIR / 'summary.json'
+        if not summary_path.exists():
+            print(f"No cached results at {summary_path}")
+            sys.exit(1)
+        with open(summary_path) as f:
+            summary = json.load(f)
+        plot_chromaticity(
+            summary['A_chrom_achrom_currents'],
+            summary['B_achrom_reference'],
+            summary['targets'],
+            RESULTS_DIR,
+            results_C=summary.get('C_chrom_chrom_currents'),
+        )
+        print(f"Plots regenerated from {summary_path}")
+        return
+
     targets = compute_targets()
     base = Path(__file__).resolve().parent
 

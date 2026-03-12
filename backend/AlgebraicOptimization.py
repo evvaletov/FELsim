@@ -272,9 +272,9 @@ class AlgebraicOpti():
         
         
         #  This is necessary so that the solutions given in rootList and variable order
-        #  in nameList are the matched accordingly
-        x = sett.pop()
-        y = sett.pop()
+        #  in nameList are the matched accordingly.
+        #  Sort by name for deterministic variable ordering (set iteration order is arbitrary).
+        x, y = sorted(sett, key=lambda s: s.name)
         variableOrder = (x,y)
         nameList = []
         for i in variableOrder:

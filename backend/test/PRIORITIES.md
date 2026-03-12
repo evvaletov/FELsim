@@ -1140,10 +1140,10 @@ Items are ordered by estimated impact on the UH MkV FEL beamline
   (beamline.py:707) uses `le = self.length` which comes from `gap_wedge` in the Excel
   lattice. Needs clarification whether `gap_wedge` is the fringe field extent or the
   inter-dipole drift gap — if the latter, the K integral is wrong.
-- **MODERATE:** `ebeam.ellipse_sym` (ebeam.py:79–82) divides by Twiss beta or gamma
-  without zero guard. Crashes on degenerate beam distributions.
-- **MODERATE:** `AlgebraicOptimization.py` (lines 276–277) uses `set.pop()` for variable
-  extraction — non-deterministic ordering can silently swap x/y solutions between runs.
+- **MODERATE (FIXED 2026-03-11):** `ebeam.ellipse_sym` (ebeam.py:79–82) — zero guards
+  already present (`abs(beta) > 1e-30`, `denom > 0` checks). No change needed.
+- **MODERATE (FIXED 2026-03-11):** `AlgebraicOptimization.py` (line 276) — `set.pop()` replaced
+  with `sorted(sett, key=lambda s: s.name)` for deterministic variable ordering.
 
 ## Longer-Term Improvements (from multi-AI review 2026-03-10)
 
@@ -1158,7 +1158,7 @@ Source: 4-perspective expert review (FEL scientist, Berz-style computational phy
 - [ ] **Multi-seed robustness study**: Run optimization with seeds 42, 137, 2023+ and compare results to confirm global minimum was found
 
 ### Code Quality
-- [ ] **Decouple optimization from visualization**: Cache optimization results (HDF5/NPZ) so figure generation doesn't require re-running the 2-minute optimization
+- [x] **Decouple optimization from visualization**: P9, P10, P11 now support `--plots-only` to regenerate plots from cached summary.json without re-running computation. S5, R2, S4 parameter scans already had this. P10 updated to save full evolution data.
 - [ ] **Add pytest test suite**: Unit tests for Twiss computation, integration test for simplified optimization, visual regression with pytest-mpl
 - [ ] **Extract rcParams to .mplstyle file**: Reusable seminar style across projects
 - [ ] **Make output formats configurable**: argparse for PDF/PNG selection
