@@ -411,17 +411,28 @@ deterministic for a given particle count — independent of seed.
 Added `method='sobol'` parameter to `ebeam.gen_6d_gaussian()` and
 `run_optimization(..., beam_method='sobol')`.
 
-**Validation (3 seeds $\times$ 3 emittances):**
+**Determinism validation (3 seeds $\times$ 3 emittances):** MSE spread = 0.0
+across all seeds — seed variability is completely eliminated.
 
-| $\varepsilon_n$ | Sobol RMS | Quality | MSE spread | P12 random CV |
-|-----------------|-----------|---------|------------|---------------|
-| 5 | $1.04 \times 10^{-1}$ | Marginal | 0.0 | 407% |
-| 8 | $4.84 \times 10^{-3}$ | Excellent | 0.0 | 203% |
-| 14 | $4.96 \times 10^{-3}$ | Excellent | 0.0 | 209% |
+**Full emittance sweep ($\varepsilon_n = 1$–$20$, Sobol, 512 particles, 5 restarts):**
 
-**Result:** MSE spread = 0.0 across all seeds at all emittances — seed
-variability is completely eliminated.  $\varepsilon_n = 5$ gives a single
-deterministic Marginal result (vs P12's 50% failure with random beams).
+| Quality | Points | $\varepsilon_n$ values |
+|---------|--------|----------------------|
+| Excellent | 14/20 | 7–15, 17–20 |
+| Acceptable | 1/20 | 6 |
+| Marginal | 5/20 | 1–5 |
+| Failed | 0/20 | — |
+
+**Key findings:**
+
+- **Zero failures** with Sobol + 5 restarts (P12 random had 6/20 failures).
+- Core range ($\varepsilon_n = 7$–$15$): all Excellent with RMS $\sim 2 \times 10^{-3}$,
+  $\beta_y$ matching target to $< 10^{-4}$ m.
+- $\varepsilon_n \leq 5$: deterministically Marginal.  $\beta_y$ collapses to
+  $\sim 0$ regardless of restarts — a physics limitation (beam too small for
+  the optics to match $\beta_y = 0.24$ m).
+- Multi-start is important: single-start Sobol had 6 failures and 3 Marginal;
+  5 restarts recovered 9 of these to Excellent.
 
 - Script: `P13_deterministic_beam.py`
 - Results: `results/P13/`
