@@ -398,6 +398,34 @@ Extracted common matplotlib rcParams to `felsim.mplstyle` (serif fonts,
 grid settings, DPI 150/300, tick sizes).  P9, P10, P11, and
 `generate_seminar_figures.py` updated to use `plt.style.use()`.
 
+### P13 — Deterministic Beam Generation (Sobol)
+
+P12 showed 50% failure at $\varepsilon_n = 5$ with CV $= 407\%$ across random
+seeds.  The root cause is pseudo-random beam generation in stages 1–10 (S8
+confirmed Stage 11 is unimodal).
+
+**Solution:** Replace `np.random.normal` with a Sobol quasi-random sequence
+(inverse normal CDF) via `scipy.stats.qmc.Sobol`.  The Sobol distribution is
+deterministic for a given particle count — independent of seed.
+
+Added `method='sobol'` parameter to `ebeam.gen_6d_gaussian()` and
+`run_optimization(..., beam_method='sobol')`.
+
+**Validation (3 seeds $\times$ 3 emittances):**
+
+| $\varepsilon_n$ | Sobol RMS | Quality | MSE spread | P12 random CV |
+|-----------------|-----------|---------|------------|---------------|
+| 5 | $1.04 \times 10^{-1}$ | Marginal | 0.0 | 407% |
+| 8 | $4.84 \times 10^{-3}$ | Excellent | 0.0 | 203% |
+| 14 | $4.96 \times 10^{-3}$ | Excellent | 0.0 | 209% |
+
+**Result:** MSE spread = 0.0 across all seeds at all emittances — seed
+variability is completely eliminated.  $\varepsilon_n = 5$ gives a single
+deterministic Marginal result (vs P12's 50% failure with random beams).
+
+- Script: `P13_deterministic_beam.py`
+- Results: `results/P13/`
+
 ### C3 — FR3+MGE Fieldmap Optimization (In Progress)
 
 Attempting to optimize all 23 quad currents with COSY INFINITY using

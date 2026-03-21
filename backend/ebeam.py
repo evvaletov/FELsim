@@ -190,19 +190,24 @@ class beam:
 
         return dist_avg, dist_cov, twiss
 
-    def gen_6d_gaussian(self, mean, std_dev, num_particles=100):
+    def gen_6d_gaussian(self, mean, std_dev, num_particles=100, method='random'):
         '''
         Generates a 6D Gaussian distributed beam of particles.
 
         Parameters
         ----------
-        mean : float
-            Mean/center of the distribution
+        mean : float or array-like
+            Mean/center of the distribution.
         std_dev : np.ndarray
-            A 1D numpy array of length 6, representing the standard deviations for each of the
-            six phase space coordinates.
+            A 1D numpy array of length 6, representing the standard deviations
+            for each of the six phase space coordinates.
         num_particles : int, optional
             The number of particles to generate. Defaults to 100.
+        method : str, optional
+            'random' (default): pseudo-random via np.random.normal (seed-dependent).
+            'sobol': Sobol quasi-random sequence with inverse normal CDF.
+              Deterministic for a given num_particles — independent of seed.
+              Requires num_particles to be a power of 2.
 
         Returns
         -------
@@ -210,6 +215,26 @@ class beam:
             A 2D numpy array of shape (num_particles, 6) containing the generated
             6D Gaussian distributed particle data.
         '''
+        if method == 'sobol':
+            from scipy.stats import qmc, norm as norm_dist
+            n = num_particles
+            if n & (n - 1) != 0:
+                # Round up to next power of 2 for Sobol, then truncate
+                n_sobol = 1 << (n - 1).bit_length()
+            else:
+                n_sobol = n
+            sampler = qmc.Sobol(d=6, scramble=False)
+            # Skip the origin (all-zeros point)
+            sampler.fast_forward(1)
+            u = sampler.random(n_sobol)
+            # Clamp to avoid ±inf from ppf at exactly 0 or 1
+            u = np.clip(u, 1e-10, 1 - 1e-10)
+            particles = norm_dist.ppf(u)[:n]
+            mean = np.asarray(mean)
+            std_dev = np.asarray(std_dev)
+            particles = mean + particles * std_dev
+            return particles
+
         particles = np.random.normal(mean, std_dev, size=(num_particles, 6))
         return particles
     

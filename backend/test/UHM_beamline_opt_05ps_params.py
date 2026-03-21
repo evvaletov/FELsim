@@ -65,7 +65,8 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
                      chrom_upper_bound=10, n_restarts=1,
                      stage11_method='Nelder-Mead', stage11_kwargs=None,
                      stage11_startPoint=None,
-                     warm_start_currents=None):
+                     warm_start_currents=None,
+                     beam_method='random'):
     """Run 11-stage beamline optimization, return results dict.
 
     Parameters
@@ -107,7 +108,7 @@ def run_optimization(bunch_spread=0.5, energy_std_percent=0.5, h=5e9,
     ebeam_gen = beam()
     beam_dist = ebeam_gen.gen_6d_gaussian(
         0, [x_std, x_prime_std, y_std, y_prime_std, tof_std, energy_std],
-        nb_particles)
+        nb_particles, method=beam_method)
     tof_dist = beam_dist[:, 4] / RF_FREQ
     beam_dist[:, 5] += h * tof_dist
 

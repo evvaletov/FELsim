@@ -67,6 +67,21 @@ Changing $\sigma_t$ from 0.1 to 2.0 ps produces identical optimization
 results.  See also S9 (analytical derivation) and the
 [optimization studies](optimization.md#s6--bunch-length-sensitivity).
 
+## Sampling Method
+
+Two sampling methods are supported via `gen_6d_gaussian(..., method=)`:
+
+- **`'random'`** (default): Pseudo-random via `np.random.normal`. Fast, but
+  results depend on the random seed.  P12 showed that different seeds produce
+  highly variable optimization results at extreme emittances (CV up to 407%).
+- **`'sobol'`**: Sobol quasi-random sequence with inverse normal CDF
+  (`scipy.stats.qmc.Sobol`).  Deterministic — produces identical output
+  regardless of seed.  Requires `num_particles` to be a power of 2.
+  Better space-filling properties eliminate the upstream seed variability
+  identified in P12/S7/S8. See [P13](optimization.md#p13--deterministic-beam-generation-sobol).
+
 ## Random Seed
 
-All optimization scripts use `seed=42` for reproducibility.
+All optimization scripts use `seed=42` for reproducibility.  With
+`method='sobol'`, the seed only affects the Nelder-Mead / CMA-ES optimizer
+internals (Stage 11 multi-start), not the beam distribution itself.
