@@ -12,7 +12,8 @@ stability boundary, it can then refine Twiss within the stable basin.
 Approaches tested (in order of expected success):
   A) Capped objective + cold start from [0]*23 + large sigma + BIPOP
   B) Capped objective + warm start from v1 result + BIPOP
-  C) Two-phase: stability-only objective for first half, then Twiss MSE
+  C) Two-phase: stability-only for first half, then capped Twiss MSE
+  D) Warm-start polish from best Approach C stable solution (sigma=0.3)
 
 Author: Eremey Valetov
 """
@@ -27,6 +28,21 @@ import time
 import argparse
 import atexit
 import numpy as np
+
+
+class NumpySafeEncoder(json.JSONEncoder):
+    """JSON encoder that converts numpy types to native Python types."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
 
 # ── Beam parameters ──────────────────────────────────────────────────────────
 ENERGY = 40  # MeV
@@ -212,6 +228,25 @@ def compute_objective_stability_only(M):
     return instability  # range (1, inf) for unstable
 
 
+def compute_objective_uncapped(M):
+    """Raw Twiss MSE with stability penalty (no cap). For final reporting only."""
+    cos_mu_x = (M[0, 0] + M[1, 1]) / 2
+    cos_mu_y = (M[2, 2] + M[3, 3]) / 2
+    instability = max(abs(cos_mu_x), abs(cos_mu_y))
+
+    if instability > 1:
+        return 1e3 * (1 + math.log(instability))
+
+    b0, g0 = BETA_0, 1.0 / BETA_0
+    bx = M[0, 0]**2 * b0 + M[0, 1]**2 * g0
+    ax = -(M[0, 0] * M[1, 0] * b0 + M[0, 1] * M[1, 1] * g0)
+    by = M[2, 2]**2 * b0 + M[2, 3]**2 * g0
+    ay = -(M[2, 2] * M[3, 2] * b0 + M[2, 3] * M[3, 3] * g0)
+
+    return ((bx - BETA_XM)**2 + (by - BETA_YM)**2 +
+            (ax - ALPHA_XM)**2 + (ay - ALPHA_YM)**2) / 4
+
+
 def setup_cosy_binary(run_dir):
     """Locate COSY binary: $COSY_BIN env var, or copy to /tmp if noexec."""
     env_bin = os.environ.get('COSY_BIN')
@@ -284,8 +319,8 @@ def main():
         sys.exit("ERROR: 'cma' package required. Install: pip install cma")
 
     parser = argparse.ArgumentParser(description='C3v4: COSY FR3+MGE with stability-guaranteed objective')
-    parser.add_argument('--approach', choices=['A', 'B', 'C'], default='A',
-                        help='A=capped+cold, B=capped+warm, C=two-phase')
+    parser.add_argument('--approach', choices=['A', 'B', 'C', 'D'], default='A',
+                        help='A=capped+cold, B=capped+warm, C=two-phase, D=polish from C result')
     parser.add_argument('--sigma', type=float, default=2.0,
                         help='CMA-ES initial step size (default 2.0 for broad search)')
     parser.add_argument('--max-eval', type=int, default=5000,
@@ -293,7 +328,7 @@ def main():
     parser.add_argument('--restarts', type=int, default=15,
                         help='Number of BIPOP restarts')
     parser.add_argument('--warm-start', type=str, default=None,
-                        help='JSON result file for warm start (approach B)')
+                        help='JSON result file for warm start (approach B/D)')
     parser.add_argument('--save', type=str, default='result_cosy_mge_v4.json')
     parser.add_argument('--fox-template', type=str, default=None)
     parser.add_argument('--fox-source', type=str, default=None)
@@ -307,9 +342,14 @@ def main():
     elif args.approach == 'B':
         variables = VARIABLES_V1_WARM
         desc = "Warm start from v1, capped objective"
-    else:
+    elif args.approach == 'C':
         variables = VARIABLES_COLD
-        desc = "Two-phase: stability-only → Twiss MSE"
+        desc = "Two-phase: stability-only → capped Twiss MSE"
+    elif args.approach == 'D':
+        if not args.warm_start:
+            sys.exit("ERROR: Approach D requires --warm-start (e.g., result_cosy_mge_v4C.json)")
+        variables = VARIABLES_COLD  # overridden by --warm-start below
+        desc = "Polish from Approach C stable solution, capped objective, sigma=0.3"
 
     var_names = [v[0] for v in variables]
     defaults = [v[1] for v in variables]
@@ -348,10 +388,11 @@ def main():
 
     # Select objective function
     if args.approach == 'C':
-        # Phase 1: stability-only for first half of evals
-        phase1_budget = args.max_eval * (args.restarts + 1) // 2
+        # Phase 1: stability-only for one restart's worth of evals, then
+        # switch to capped Twiss MSE for remaining restarts
+        phase1_budget = args.max_eval
         objective_fn = compute_objective_stability_only
-        phase_desc = "Phase 1 (stability-only)"
+        phase_desc = f"Phase 1 (stability-only, {phase1_budget} evals)"
     else:
         objective_fn = compute_objective_capped
         phase_desc = "Capped objective"
@@ -378,25 +419,32 @@ def main():
         if args.approach == 'C' and n_eval[0] >= phase1_budget:
             if objective_fn is compute_objective_stability_only:
                 objective_fn = compute_objective_capped
+                # Reset best tracking — Phase 1 values (negative) are not
+                # comparable to Phase 2 capped objective values (non-negative)
+                best_obj[0] = float('inf')
                 print(f"\n  === Phase 2: switching to capped Twiss RMS objective ===\n")
 
         obj = evaluate(fox_template, var_names, run_dir, list(x), objective_fn)
         n_eval[0] += 1
 
-        # Track stability crossings
-        if obj < 0 or (0 <= obj < 1000):
-            if first_stable[0] is None:
-                first_stable[0] = n_eval[0]
-                elapsed = time.time() - t_start
-                print(f"  *** FIRST STABLE SOLUTION at eval {n_eval[0]} "
-                      f"(obj={obj:.6e}, t={elapsed:.0f}s) ***")
+        # Determine stability based on which objective is active
+        if objective_fn is compute_objective_stability_only:
+            is_stable = obj < 0  # stability-only: [-1, 0) = stable
+        else:
+            is_stable = 0 <= obj < 1000  # capped: [0, 999] = stable
+
+        if is_stable and first_stable[0] is None:
+            first_stable[0] = n_eval[0]
+            elapsed = time.time() - t_start
+            print(f"  *** FIRST STABLE SOLUTION at eval {n_eval[0]} "
+                  f"(obj={obj:.6e}, t={elapsed:.0f}s) ***")
 
         if obj < best_obj[0]:
             best_obj[0] = obj
             best_x[0] = list(x)
             elapsed = time.time() - t_start
-            stable = "STABLE" if obj < 1000 else "unstable"
-            print(f"  [{n_eval[0]:5d}] obj={obj:.6e} ({stable}) t={elapsed:.0f}s")
+            tag = "STABLE" if is_stable else f"unstable"
+            print(f"  [{n_eval[0]:5d}] obj={obj:.6e} ({tag}) t={elapsed:.0f}s")
 
         return obj
 
@@ -415,16 +463,15 @@ def main():
 
     print(f"\nOptimization complete: {n_eval[0]} evaluations")
     print(f"  Best objective: {best_obj[0]:.6e}")
-    stable = best_obj[0] < 1000 and best_obj[0] >= 0
+    stable = bool(0 <= best_obj[0] < 1000)
     print(f"  Stable: {'YES' if stable else 'NO'}")
     if first_stable[0]:
         print(f"  First stable solution at eval {first_stable[0]}")
 
     # Final evaluation with uncapped objective for true MSE
-    from koa_cosy_mge_opt import compute_objective as compute_objective_uncapped
     final_mse = evaluate(fox_template, var_names, run_dir, best_x[0],
                          compute_objective_uncapped)
-    print(f"  True (uncapped) RMS: {math.sqrt(final_mse):.6e}")
+    print(f"  True (uncapped) RMS: {math.sqrt(max(final_mse, 0)):.6e}")
 
     # Read final Twiss
     M = read_transfer_map(run_dir)
@@ -474,7 +521,7 @@ def main():
         'currents': {name: float(val) for name, val in zip(var_names, best_x[0])},
     }
     with open(args.save, 'w') as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f, indent=2, cls=NumpySafeEncoder)
     print(f"\nResults saved to {args.save}")
 
 

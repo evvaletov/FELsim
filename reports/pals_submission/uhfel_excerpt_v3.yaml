@@ -1,0 +1,246 @@
+# University of Hawaii Mark V FEL — Lattice Excerpt (v3)
+#
+# This is a representative excerpt from the UH MkV FEL transport line lattice.
+# It shows the first matching section (two quadrupoles), correctors, diagnostics,
+# and the first chicane dipole assembly (DPW-DPH-DPW sandwich).
+#
+# Format version 3 adds optional PALS-aligned fields (MagneticMultipoleP, BendP)
+# alongside legacy FELsim parameters. When both are present, PALS fields take
+# precedence.
+#
+# Full beamline: 137 elements, 23 quadrupoles, 4 chicane assemblies, ~15 m.
+# Beam: 40 MeV electrons, epsilon_n = 8 pi.mm.mrad.
+
+beamline:
+  metadata:
+    format_version: 3
+    name: UH_FEL_Beamline_Excerpt
+    version: '1.0'
+    description: >
+      University of Hawaii Mark V FEL transport line excerpt.
+      First matching section through first chicane dipole assembly.
+    reference_energy_mev: 40.0
+    particle_type: electron
+  beam_parameters:
+    particle:
+      type: electron
+      kinetic_energy_mev: 40.0
+      mass_mev: 0.51099895
+      charge_e: -1
+    rf_frequency_hz: 2856000000.0
+  elements:
+
+  # === Stage 1: First matching quadrupole doublet ===
+
+  - name: LIN_QPF_004
+    kind: Quadrupole
+    s_start_m: 0.358775
+    s_end_m: 0.447675
+    length_m: 0.0889
+    polarity: focusing
+    aperture_m: 0.027
+    parameters:
+      current_a: 0.8857            # legacy: current in Amperes
+    MagneticMultipoleP:
+      Bn1: -0.03222                # PALS v3: pole-tip field [T]
+    metadata:
+      nomenclature: LIN.QPF.004
+      element_name: Quad
+      channel: 20
+      sector: LIN
+
+  - name: LIN_BPM
+    kind: Instrument
+    instrument_type: BPM
+    s_start_m: 0.447675
+    s_end_m: 0.447675
+    length_m: 0.0
+    parameters: {}
+    metadata:
+      element_name: Beam position monitor
+      sector: LIN
+
+  - name: LQ2
+    kind: Quadrupole
+    s_start_m: 0.644525
+    s_end_m: 0.733425
+    length_m: 0.0889
+    polarity: defocusing
+    aperture_m: 0.027
+    parameters:
+      current_a: 1.0529            # legacy: current in Amperes
+    MagneticMultipoleP:
+      Bn1: 0.03829                 # PALS v3: pole-tip field [T]
+    metadata:
+      nomenclature: LIN.QPD.007
+      element_name: Quad
+      channel: 21
+      label: LQ2
+      sector: LIN
+
+  - name: VC1
+    kind: Kicker
+    plane: vertical
+    s_start_m: 0.733425
+    s_end_m: 0.733425
+    length_m: 0.0
+    parameters: {}
+    metadata:
+      nomenclature: LIN.STV.007
+      element_name: V. Corrector
+      channel: 22
+      label: VC1
+      sector: LIN
+
+  - name: VC2
+    kind: Kicker
+    plane: vertical
+    s_start_m: 0.733425
+    s_end_m: 0.733425
+    length_m: 0.0
+    parameters: {}
+    metadata:
+      nomenclature: LIN.STV.007
+      element_name: V. Corrector
+      channel: 24
+      label: VC2
+      sector: LIN
+
+  - name: OS1
+    kind: Instrument
+    instrument_type: OTR
+    s_start_m: 1.632864
+    s_end_m: 1.632864
+    length_m: 0.0
+    parameters: {}
+    metadata:
+      nomenclature: DC1.OTR.016
+      element_name: OTR Screen
+      label: OS1
+      sector: DC1
+
+  # === First chicane dipole assembly (DPW-DPH-DPW sandwich) ===
+  #
+  # In the PALS interchange format, edge angles are attributes of the parent
+  # SBend element (BendP.e1, BendP.e2). FELsim's internal representation uses
+  # separate DIPOLE_WEDGE thin elements for edge kicks — a legacy artefact
+  # from the original beamline spreadsheet. Both representations coexist in
+  # this file for round-trip compatibility.
+
+  - name: DC1_DPW_017
+    kind: DIPOLE_WEDGE
+    s_start_m: 1.697921
+    s_end_m: 1.707921
+    length_m: 0.01
+    parameters:
+      wedge_angle_deg: 0.0
+      dipole_angle_deg: 1.5
+      dipole_length_m: 0.0889
+      pole_gap_m: 0.014478
+    metadata:
+      nomenclature: DC1.DPW.017
+      sector: DC1
+
+  - name: DPHa
+    kind: SBend
+    s_start_m: 1.707921
+    s_end_m: 1.796821
+    length_m: 0.0889
+    parameters:
+      bending_angle_deg: 1.5       # legacy
+      dipole_length_m: 0.0889
+      pole_gap_m: 0.014478
+    BendP:
+      g_ref: 0.29449               # PALS v3: 1/rho [1/m]
+      e1: 0.0                      # entrance edge [rad] — from preceding DPW
+      e2: 0.02618                  # exit edge [rad] — from following DPW
+    metadata:
+      nomenclature: DC1.DPH.018
+      element_name: Split Bend 1 start
+      channel: 26
+      label: DPHa
+      sector: DC1
+
+  - name: DC1_DPW_018
+    kind: DIPOLE_WEDGE
+    s_start_m: 1.796821
+    s_end_m: 1.806821
+    length_m: 0.01
+    parameters:
+      wedge_angle_deg: 1.5
+      dipole_angle_deg: 1.5
+      dipole_length_m: 0.0889
+      pole_gap_m: 0.014478
+    metadata:
+      nomenclature: DC1.DPW.018
+      sector: DC1
+
+  # === Chromaticity quad between dipoles ===
+
+  - name: DPHQ
+    kind: Quadrupole
+    s_start_m: 2.033041
+    s_end_m: 2.121941
+    length_m: 0.0889
+    polarity: focusing
+    aperture_m: 0.027
+    parameters:
+      current_a: 3.8166            # legacy: current in Amperes
+    MagneticMultipoleP:
+      Bn1: -0.13882                # PALS v3: pole-tip field [T]
+    metadata:
+      nomenclature: DC1.QPF.021
+      element_name: Chromaticity quad
+      channel: 28
+      label: DPHQ
+      sector: DC1
+
+  # === Second dipole of first chicane ===
+
+  - name: DC1_DPW_024
+    kind: DIPOLE_WEDGE
+    s_start_m: 2.348161
+    s_end_m: 2.358161
+    length_m: 0.01
+    parameters:
+      wedge_angle_deg: 0.75
+      dipole_angle_deg: 1.5
+      dipole_length_m: 0.0889
+      pole_gap_m: 0.014478
+    metadata:
+      nomenclature: DC1.DPW.024
+      sector: DC1
+
+  - name: DPHb
+    kind: SBend
+    s_start_m: 2.358161
+    s_end_m: 2.447061
+    length_m: 0.0889
+    parameters:
+      bending_angle_deg: 1.5       # legacy
+      dipole_length_m: 0.0889
+      pole_gap_m: 0.014478
+    BendP:
+      g_ref: 0.29449               # PALS v3: 1/rho [1/m]
+      e1: 0.01309                  # entrance edge [rad] — symmetric
+      e2: 0.01309                  # exit edge [rad] — symmetric
+    metadata:
+      nomenclature: DC1.DPH.024
+      element_name: Split Bend 1 end
+      channel: 26
+      label: DPHb
+      sector: DC1
+
+  - name: DC1_DPW_025
+    kind: DIPOLE_WEDGE
+    s_start_m: 2.447061
+    s_end_m: 2.457061
+    length_m: 0.01
+    parameters:
+      wedge_angle_deg: 0.75
+      dipole_angle_deg: 1.5
+      dipole_length_m: 0.0889
+      pole_gap_m: 0.014478
+    metadata:
+      nomenclature: DC1.DPW.025
+      sector: DC1

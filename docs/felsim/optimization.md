@@ -398,6 +398,42 @@ Extracted common matplotlib rcParams to `felsim.mplstyle` (serif fonts,
 grid settings, DPI 150/300, tick sizes).  P9, P10, P11, and
 `generate_seminar_figures.py` updated to use `plt.style.use()`.
 
+### C3 — FR3+MGE Fieldmap Optimization (In Progress)
+
+Attempting to optimize all 23 quad currents with COSY INFINITY using
+third-order fringe fields (FR3) and measured dipole field maps (MGE).  The
+MGE field dramatically shifts the stable optics basin away from the
+FR3-only optimum — FR3 currents (RMS $= 5.0 \times 10^{-5}$) become
+completely unstable under MGE.
+
+**Objective design:** Capped objective ensures any stable solution (MSE
+$\leq 999$) always ranks better than any unstable one ($\geq 1000 +
+1000 \ln(\text{instability})$).
+
+**Results to date ($\sim 42$k evaluations across v1–v4):**
+
+| Version | Evals | Best instability | Stable? |
+|---------|-------|-----------------|---------|
+| v1 (warm, $\sigma = 0.5$) | 10,020 | 1.03 | No |
+| v2 (BIPOP $\times 9$) | 16,000 | 1.000005 | No |
+| v3 (BIPOP, $\sigma = 0.5$) | 247 | — | Killed |
+| v4-A (cold, capped) | 5,006 | 1.2 | No |
+| v4-B (warm, capped) | 5,006 | 3.1 | No |
+| v4-C (two-phase) | 5,006 | 3.88 | No |
+
+v4-C (two-phase: stability-only $\to$ capped Twiss MSE) steadily reduced
+instability from $\sim 10{,}000$ to 3.88 — approaching the stability
+boundary at 1.0 but not crossing it.  Three bugs prevented a conclusive
+result: numpy JSON serialization crash, stability tracking mislabeling,
+and Phase 2 budget too large to activate.
+
+**v4d resubmission (Koa job 11547054, 2026-03-21):** Fixed all three bugs.
+Runs Approach C (fixed) then Approach D (polish from C's result with
+$\sigma = 0.3$).
+
+- Scripts: `C3v4_cosy_mge_opt.py`, `C3v4_cosy_mge_opt.slurm`
+- Results: `results/koa_cosy_mge_result.json`
+
 ## Planned Work
 
 See `backend/test/PRIORITIES.md` for the full roadmap.

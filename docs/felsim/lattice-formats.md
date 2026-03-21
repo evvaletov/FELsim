@@ -106,6 +106,15 @@ converts both official PALS and FELsim v2/v3 lattice files to COSY INFINITY
 FOX code. It auto-detects the format and supports `MagneticMultipoleP.Bn1`,
 `BendP`, and `DIPOLE_WEDGE` triplet consolidation.
 
+## PALS Use Case
+
+FELsim is registered as a use case for the
+[Particle Accelerator Lattice Standard](https://pals-project.readthedocs.io/)
+(PALS).  The v2/v3 lattice format independently adopted PALS-compatible type
+names, and the v3 extension adds optional PALS parameter groups
+(`MagneticMultipoleP.Bn1`, `BendP`).  Submission materials are in
+`reports/pals_submission/`.
+
 ## Specification
 
 Full format specification with field descriptions and examples:
