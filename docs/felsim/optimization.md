@@ -437,6 +437,24 @@ across all seeds — seed variability is completely eliminated.
 - Script: `P13_deterministic_beam.py`
 - Results: `results/P13/`
 
+### P5 — Chromatic M56 (Per-Particle Time-of-Flight)
+
+The M56 transfer matrix element ($\Delta t$ coupling to $\Delta E/E$) previously
+used reference $\beta$, $\gamma$ for all particles.  With `chromatic=True`, M56
+is now computed per-particle using each particle's actual $\beta_p$, $\gamma_p$:
+
+$$
+M_{56,p} = -\frac{l \cdot f}{c \cdot \beta_p \cdot \gamma_p \cdot (\gamma_p + 1)}
+$$
+
+**Applied to:** drift, QPF, QPD, dipole wedge, fringe field (5 element types).
+The dipole body already had per-particle M56.
+
+**Validation:** On-momentum: max $|\Delta| < 4 \times 10^{-14}$ vs linear.
+Off-momentum ($\delta = 0.5\%$, 40 MeV): M56 changes by $-0.97\%$ — consistent
+with $\Delta M_{56}/M_{56} \approx -2\delta/\gamma$ scaling.  147 regression
+tests pass.
+
 ### C3 — FR3+MGE Fieldmap Optimization (In Progress)
 
 Attempting to optimize all 23 quad currents with COSY INFINITY using

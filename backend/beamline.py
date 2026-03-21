@@ -245,6 +245,21 @@ class lattice:
 class driftLattice(lattice):
     __slots__ = ()
 
+    def useMatrice(self, val, **kwargs):
+        if not self.chromatic:
+            return super().useMatrice(val, **kwargs)
+        particles = np.asarray(val, dtype=np.float64)
+        l = kwargs.get('length', self.length)
+        delta = particles[:, 5]
+        gamma_p = (self.E * (1 + delta * 1e-3) + self.E0) / self.E0
+        beta_p = np.sqrt(np.maximum(1 - 1 / gamma_p**2, 1e-30))
+        M56 = -(l * self.f / (self.C * beta_p * gamma_p * (gamma_p + 1)))
+        out = particles.copy()
+        out[:, 0] = particles[:, 0] + l * particles[:, 1]
+        out[:, 2] = particles[:, 2] + l * particles[:, 3]
+        out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
+        return out
+
     def __init__(self, length: float, name=None):
         '''
         Represents a drift space (empty section) in the beamline.
@@ -474,8 +489,9 @@ class qpfLattice(lattice):
         out[:, 2] = Ch * particles[:, 2] + (Sh / sqrtk) * particles[:, 3]
         out[:, 3] = sqrtk * Sh * particles[:, 2] + Ch * particles[:, 3]
 
-        # Longitudinal (first-order, reference particle)
-        M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+        # Longitudinal: per-particle M56
+        beta_p = bg_p / gamma_p
+        M56 = -(l * self.f / (self.C * beta_p * gamma_p * (gamma_p + 1)))
         out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
         return out
 
@@ -637,8 +653,9 @@ class qpdLattice(lattice):
         out[:, 2] = C * particles[:, 2] + (S / sqrtk) * particles[:, 3]
         out[:, 3] = -sqrtk * S * particles[:, 2] + C * particles[:, 3]
 
-        # Longitudinal (first-order, reference particle)
-        M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+        # Longitudinal: per-particle M56
+        beta_p = bg_p / gamma_p
+        M56 = -(l * self.f / (self.C * beta_p * gamma_p * (gamma_p + 1)))
         out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
         return out
 
@@ -978,8 +995,9 @@ class dipole_wedge(lattice):
         out[:, 1] = particles[:, 1] + (Tx / R) * particles[:, 0]
         out[:, 3] = particles[:, 3] - (Ty / R) * particles[:, 2]
 
-        # Longitudinal (first-order, reference particle)
-        M56 = -(self.length * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+        # Longitudinal: per-particle M56
+        beta_p = bg_p / gamma_p
+        M56 = -(self.length * self.f / (self.C * beta_p * gamma_p * (gamma_p + 1)))
         out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
         return out
 
@@ -1035,6 +1053,21 @@ class beamline:
                 [0, 0, 0, 0, 0, 1]
             ])
             return mat
+
+        def useMatrice(self, val, **kwargs):
+            if not self.chromatic:
+                return super().useMatrice(val, **kwargs)
+            particles = np.asarray(val, dtype=np.float64)
+            l = kwargs.get('length', self.length)
+            delta = particles[:, 5]
+            gamma_p = (self.E * (1 + delta * 1e-3) + self.E0) / self.E0
+            beta_p = np.sqrt(np.maximum(1 - 1 / gamma_p**2, 1e-30))
+            M56 = -(l * self.f / (self.C * beta_p * gamma_p * (gamma_p + 1)))
+            out = particles.copy()
+            out[:, 0] = particles[:, 0] + l * particles[:, 1]
+            out[:, 2] = particles[:, 2] + l * particles[:, 3]
+            out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
+            return out
 
         def __str__(self):
             return f"Fringe field segment {self.length} m long with a magnetic field of {self.B} teslas"
