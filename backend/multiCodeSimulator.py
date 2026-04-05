@@ -42,6 +42,7 @@ _FELSIM_TYPE_MAP = {
     'qpdLattice': 'QUAD_D',
     'dipole': 'DIPOLE',
     'dipole_wedge': 'DIPOLE_WEDGE',
+    'rfCavityLattice': 'RF_CAVITY',
 }
 
 # Attributes to copy for each element type
@@ -51,6 +52,9 @@ _PARAM_KEYS = {
     'QUAD_D': ('current',),
     'DIPOLE': ('angle',),
     'DIPOLE_WEDGE': ('angle', 'dipole_length', 'dipole_angle', 'pole_gap'),
+    'RF_CAVITY': ('frequency_hz', 'phase_deg', 'voltage_mv',
+                  'gradient_mv_per_m', 'structure_type',
+                  'phase_advance_deg', 'n_cells'),
 }
 
 

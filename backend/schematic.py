@@ -798,7 +798,8 @@ class draw_beamline:
             'qpfLattice': 'QPF',
             'qpdLattice': 'QPD',
             'dipole': 'DPH',
-            'dipole_wedge': 'DPW'
+            'dipole_wedge': 'DPW',
+            'rfCavityLattice': 'RFC',
         }
 
         info['type'] = type_map.get(class_name, class_name)
@@ -819,7 +820,9 @@ class draw_beamline:
             'DPH': 'forestgreen',
             'DPW': 'lightgreen',
             'DIPOLE': 'forestgreen',
-            'SBEND': 'forestgreen'
+            'SBEND': 'forestgreen',
+            'RFC': 'gold',
+            'RF_CAVITY': 'gold',
         }
         return colors.get(elem_type, 'gray')
 

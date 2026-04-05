@@ -45,7 +45,9 @@ except ImportError:
         def mark_all_accessed(self): pass
         def report_unused(self): return []
         def unaccessed(self): return []
-from beamline import driftLattice, qpfLattice, qpdLattice, dipole, dipole_wedge
+from beamline import (
+    driftLattice, qpfLattice, qpdLattice, dipole, dipole_wedge, rfCavityLattice,
+)
 from loggingConfig import get_logger_with_fallback
 
 SUPPORTED_FORMAT_VERSIONS = [1, 2, 3]
@@ -430,6 +432,28 @@ class LatticeLoaderBase:
                 dipole_length=dipole_length, dipole_angle=dipole_angle,
                 pole_gap=pole_gap if pole_gap > 0 else 0.014478,
                 enge_fct=enge_fct, name=name,
+            )
+
+        elif internal_type == "RFC":
+            frequency_hz = params.get("frequency_hz")
+            phase_deg = params.get("phase_deg", 0.0)
+            voltage_mv = params.get("voltage_mv")
+            gradient_mv_per_m = params.get("gradient_mv_per_m")
+            structure_type = params.get("structure_type", "TW")
+            phase_advance_deg = params.get("phase_advance_deg", 120.0)
+            n_cells = params.get("n_cells")
+            params.mark_all_accessed()
+            if frequency_hz is None:
+                raise ValueError(
+                    f"RFC element {name!r}: missing required parameter 'frequency_hz'"
+                )
+            return rfCavityLattice(
+                length=length, frequency_hz=frequency_hz,
+                phase_deg=phase_deg, voltage_mv=voltage_mv,
+                gradient_mv_per_m=gradient_mv_per_m,
+                structure_type=structure_type,
+                phase_advance_deg=phase_advance_deg,
+                n_cells=n_cells, name=name,
             )
 
         else:

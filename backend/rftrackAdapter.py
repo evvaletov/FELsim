@@ -415,6 +415,92 @@ class RFTrackAdapter(SimulatorBase):
             }
         )
 
+    def _build_rf_cavity(self, length: float, params: dict) -> Any:
+        """Build an RF-Track RF cavity from generic RFC parameters.
+
+        Supports structure_type ∈ {'TW', 'SW', 'RFCA'}. For TW/SW the
+        peak on-axis gradient is passed as a single Fourier coefficient
+        (constant-gradient approximation); n_cells is derived from
+        length and phase advance if not provided, assuming β_wave = 1.
+
+        Expected params:
+            frequency_hz         (required)
+            phase_deg            (default 0.0 — on-crest under autophase)
+            gradient_mv_per_m OR voltage_mv  (required)
+            structure_type       (default 'TW')
+            phase_advance_deg    (default 120.0)
+            n_cells              (default: auto from length + phase advance)
+        """
+        freq = params.get('frequency_hz')
+        if freq is None:
+            raise ValueError("RF_CAVITY element missing 'frequency_hz'")
+        phase_deg = float(params.get('phase_deg', 0.0))
+        structure_type = str(params.get('structure_type', 'TW')).upper()
+        phi_adv = float(params.get('phase_advance_deg', 120.0)) * np.pi / 180.0
+
+        # Resolve gradient
+        gradient_vpm = params.get('gradient_mv_per_m')
+        voltage_mv = params.get('voltage_mv')
+        if gradient_vpm is not None:
+            e0_vpm = float(gradient_vpm) * 1e6
+        elif voltage_mv is not None:
+            e0_vpm = float(voltage_mv) * 1e6 / length
+        else:
+            raise ValueError(
+                "RF_CAVITY: provide 'gradient_mv_per_m' or 'voltage_mv'"
+            )
+
+        # Synchronous cell length assuming β_wave = 1
+        c_m_s = 299792458.0
+        l_cell_sync = c_m_s * phi_adv / (2.0 * np.pi * float(freq))
+
+        if structure_type == 'TW':
+            n_cells = params.get('n_cells')
+            if n_cells is None:
+                n_cells = length / l_cell_sync
+            else:
+                # User-supplied n_cells: warn if it yields a length
+                # significantly different from the element's length_m.
+                actual_L = float(n_cells) * l_cell_sync
+                if length > 0 and abs(actual_L - length) / length > 0.01:
+                    self.logger.warning(
+                        f"RFC TW: n_cells={n_cells} gives L={actual_L:.4f} m, "
+                        f"but length_m={length} m (delta "
+                        f"{(actual_L - length) * 1e3:+.1f} mm). Using "
+                        f"n_cells-derived length."
+                    )
+            elem = rft.TW_Structure(
+                float(e0_vpm), 0, float(freq), float(phi_adv), float(n_cells)
+            )
+            elem.set_phid(phase_deg)
+        elif structure_type == 'SW':
+            # SW_Structure(coefficients, freq, cell_length, n_cells).
+            # Accept explicit cell_length_m or derive from phase advance
+            # assuming β_wave = 1 (same convention as TW).
+            cell_length = params.get('cell_length_m', l_cell_sync)
+            n_cells = params.get('n_cells')
+            if n_cells is None:
+                n_cells = length / float(cell_length)
+            elem = rft.SW_Structure(
+                float(e0_vpm), float(freq),
+                float(cell_length), float(n_cells)
+            )
+            elem.set_phid(phase_deg)
+        else:  # RFCA — no direct RF-Track equivalent; approximate as TW
+            self.logger.warning(
+                "RFCA structure_type approximated as TW_Structure; "
+                "true lumped-cavity behavior requires the elegant adapter."
+            )
+            n_cells = max(1.0, length / l_cell_sync)
+            elem = rft.TW_Structure(
+                float(e0_vpm), 0, float(freq), float(phi_adv), float(n_cells)
+            )
+            elem.set_phid(phase_deg)
+
+        if 'name' in params:
+            elem.set_name(str(params['name']))
+        return elem
+
     def _convert_element_to_native(self, element: BeamlineElement) -> Any:
         """
         Convert generic BeamlineElement to RF-Track element.
@@ -482,6 +568,10 @@ class RFTrackAdapter(SimulatorBase):
             elem = rft.Sextupole()
             elem.set_length(length)
             elem.set_strength(params.get('strength', 0.0))
+            ap_x = ap_y = self.default_aperture
+
+        elif elem_type in ('RF_CAVITY', 'RFC'):
+            elem = self._build_rf_cavity(length, params)
             ap_x = ap_y = self.default_aperture
 
         else:
@@ -1280,6 +1370,7 @@ class RFTrackAdapter(SimulatorBase):
             'qpdLattice': 'QUAD_D',
             'dipole': 'DIPOLE',
             'dipole_wedge': 'DIPOLE_WEDGE',
+            'rfCavityLattice': 'RF_CAVITY',
         }
 
         elem_type = type_map.get(cls_name, cls_name.upper())
@@ -1299,6 +1390,12 @@ class RFTrackAdapter(SimulatorBase):
             params['fringe_type'] = native_elem.fringeType
         if hasattr(native_elem, 'name') and native_elem.name:
             params['name'] = native_elem.name
+        # RF cavity parameters
+        for attr in ('frequency_hz', 'phase_deg', 'voltage_mv',
+                     'gradient_mv_per_m', 'structure_type',
+                     'phase_advance_deg', 'n_cells'):
+            if hasattr(native_elem, attr):
+                params[attr] = getattr(native_elem, attr)
 
         return BeamlineElement(
             element_type=elem_type,

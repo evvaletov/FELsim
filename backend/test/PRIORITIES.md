@@ -1,9 +1,37 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-03-11)
+**Date:** 2026-02-11 (updated 2026-04-05)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
 
 ---
+
+## Due by 2026-04-13 (Monday — next meeting with Niels)
+
+### L1. RF-Track Linac Model vs elegant Benchmark [IN PROGRESS — Phase 0-2 DONE 2026-04-05]
+- **Git-bug:** 35e31e6 (P1-high) — Big item for Monday
+- **Scope:** RF-Track TW_Structure model of SLAC 3-m S-band linac, cell-by-cell
+  geometry from SLAC-two-mile-report10.pdf, benchmark vs elegant RFCA+TWLA
+- **Standalone:** `backend/test/rftrack_linac/linac_standalone.py` — 73-point
+  phase scan, peak K_out=41.468 MeV at phid=0 (autophased)
+- **Benchmark headline:** **0.06% agreement at peak** (RFT 41.468 vs elegant
+  RFCA-optimal 41.442 MeV at 1 MeV injection, 13.3 MV/m, 3.048 m)
+- **Phase 0 DONE:** RF-Track API reconnaissance, directory scaffolding,
+  phase-convention understanding (autophase → phid=0 ≡ optimal phase)
+- **Phase 1 DONE:** Standalone script, 73-point scan, CSV + PDF output,
+  loss handling (11/73 points in deep-decel zones phid ∈ [+85°, +155°])
+- **Phase 2 DONE:** `rfCavityLattice` class in beamline.py; RFC branch in
+  latticeLoaderBase._element_to_object; _build_rf_cavity() in rftrackAdapter
+  dispatching to TW/SW/RFCA; linac-only JSON `var/slac_linac.json`;
+  integration test passes (0.005% standalone↔adapter agreement); no
+  regressions (32 smoke + 22 JSON/YAML equivalence tests pass)
+- **Remaining:** Phase 3 (benchmark driver + figures), Phase 4 (cell-by-cell
+  transcription from SLAC-two-mile-report10.pdf Tables I+II), Phase 5
+  (LaTeX report at reports/2026/Apr/13/), Phase 6 (polish)
+
+### L2. COSY SC interspersed transfer-map demo (Demo B) [TODO]
+- **Git-bug:** 0a70783 (P2-medium) — quick win
+- **Scope:** FOX script, analytical linear SC kicks in split-operator with
+  drift maps, compare to envelope equation
 
 ## Due by 2026-02-18 (Wednesday)
 
@@ -844,8 +872,24 @@
     Zero stable solutions found in ~6000+ total evals. The FR3+MGE stability
     basin in 23D appears to be extremely narrow or nonexistent with the
     current fieldmap parameters.
+- **C3v5: Fringe-shape homotopy + direct FR3 warm-start (2026-03-12):**
+  After ~37k evals across v1-v4, zero stable solutions found. v5 introduces
+  two fundamentally new ideas:
+  1. **Fieldmap shape homotopy:** Continuously deform MGE field from uniform
+     (alpha=0, hard-edge-like) to measured (alpha=1), optimizing at each step.
+     `B_alpha(j) = B_mean + alpha*(B_measured(j) - B_mean)` — field integral
+     preserved at all alpha. CMA-ES warm-starts from previous step. Bisection
+     down to delta_alpha=0.025 if stability breaks.
+  2. **Direct FR3 warm-start (Phase D):** CMA-ES from proven FR3 currents
+     (MSE=2.5e-9) with full MGE — the obvious approach never tried in v1-v4.
+  - Phases: 0 (verify FR0/FR3 at alpha=0,1), 1 (optimize alpha=0),
+    2 (sweep alpha 0→1, 10 steps), 3 (polish), D (direct, parallel)
+  - Est. ~27k evals (~14h) without bisection, up to ~100k with bisection
+  - Scripts: `C3v5_homotopy_opt.py`, `C3v5_homotopy_opt.slurm`,
+    `C3v5_direct_opt.slurm`
 - **Files:** `fields/chicane_dipole_fieldmap.dat`, `test/koa_cosy_mge_opt.py`,
-  `test/C3v4_cosy_mge_opt.py`, `test/results/koa_cosy_mge_result.json`
+  `test/C3v4_cosy_mge_opt.py`, `test/C3v5_homotopy_opt.py`,
+  `test/results/koa_cosy_mge_result.json`
 
 ### C4. Systematic Testing, Validation & Verification [IN PROGRESS]
 - **Motivation:** FELsim currently relies on ad-hoc cross-validation studies.

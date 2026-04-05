@@ -1005,6 +1005,103 @@ class dipole_wedge(lattice):
         return f"Horizontal wedge dipole magnet segment {self.length} m long (curvature) with an angle of {self.angle} degrees"
 
 
+class rfCavityLattice(lattice):
+    """RF accelerating cavity (lumped, TW, or SW).
+
+    In FELsim's native tracking this element behaves as a drift — the
+    relativistic energy gain is modeled only by downstream adapters
+    (RF-Track, elegant). The element stores the parameters needed to
+    reconstruct the cavity in those codes.
+
+    Parameters
+    ----------
+    length : float
+        Physical length in metres.
+    frequency_hz : float
+        RF frequency in Hz.
+    phase_deg : float
+        RF phase in degrees (adapter-specific convention).
+    voltage_mv : float, optional
+        Peak total voltage in MV. If omitted, derived from gradient * length.
+    gradient_mv_per_m : float, optional
+        Peak on-axis accelerating gradient in MV/m. If omitted, derived
+        from voltage / length.
+    structure_type : {'RFCA', 'TW', 'SW'}
+        'RFCA' = lumped cavity, 'TW' = travelling wave (SLAC-style
+        constant-gradient), 'SW' = standing wave.
+    phase_advance_deg : float
+        Cell-to-cell phase advance in degrees (TW/SW only). Default 120°
+        (2π/3 mode).
+    n_cells : float, optional
+        Number of cells in the structure (TW/SW only). If omitted, the
+        adapter derives it from length and phase advance assuming
+        β_wave = 1.
+    name : str, optional
+        Element label.
+    """
+
+    __slots__ = (
+        'frequency_hz', 'phase_deg', 'voltage_mv', 'gradient_mv_per_m',
+        'structure_type', 'phase_advance_deg', 'n_cells',
+    )
+
+    def __init__(self, length, frequency_hz, phase_deg=0.0,
+                 voltage_mv=None, gradient_mv_per_m=None,
+                 structure_type='TW', phase_advance_deg=120.0,
+                 n_cells=None, name=None):
+        super().__init__(length, name=name)
+        self.color = 'gold'
+        self.frequency_hz = float(frequency_hz)
+        self.phase_deg = float(phase_deg)
+        stype = str(structure_type).upper()
+        if stype not in ('RFCA', 'TW', 'SW'):
+            raise ValueError(
+                f"rfCavityLattice: structure_type must be 'RFCA', 'TW', or 'SW', got {structure_type!r}"
+            )
+        self.structure_type = stype
+        self.phase_advance_deg = float(phase_advance_deg)
+        self.n_cells = n_cells  # may be None; adapter resolves it
+
+        if gradient_mv_per_m is not None:
+            self.gradient_mv_per_m = float(gradient_mv_per_m)
+            self.voltage_mv = float(voltage_mv) if voltage_mv is not None \
+                else float(gradient_mv_per_m) * length
+        elif voltage_mv is not None:
+            self.voltage_mv = float(voltage_mv)
+            self.gradient_mv_per_m = float(voltage_mv) / length
+        else:
+            raise ValueError(
+                "rfCavityLattice: provide voltage_mv or gradient_mv_per_m"
+            )
+
+    def useMatrice(self, val, **kwargs):
+        particles = np.asarray(val, dtype=np.float64)
+        l = kwargs.get('length', self.length)
+        out = particles.copy()
+        out[:, 0] = particles[:, 0] + l * particles[:, 1]
+        out[:, 2] = particles[:, 2] + l * particles[:, 3]
+        return out
+
+    def _compute_numeric_matrix(self, length=None, **kwargs):
+        l = self.length if length is None else length
+        return np.array([
+            [1.0, l,   0.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, l,   0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+        ], dtype=np.float64)
+
+    def _compute_symbolic_matrix(self, length=None, **kwargs):
+        return self._compute_numeric_matrix(length=length)
+
+    def __str__(self):
+        return (f"RF cavity ({self.structure_type}) {self.length} m, "
+                f"f={self.frequency_hz/1e9:.3f} GHz, "
+                f"E0={self.gradient_mv_per_m:.1f} MV/m, φ={self.phase_deg}°")
+
+
 class beamline:
     class fringeField(lattice):
         __slots__ = ('B',)
