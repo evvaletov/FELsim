@@ -361,6 +361,14 @@ class LatticeLoaderBase:
             params.mark_accessed("dipole_length_m")
             enge_fct = self._get_enge(elem)
 
+        elif internal_type == "RFC":
+            self.logger.warning(
+                f"Element {elem.get('name')!r}: RFC passed through "
+                f"_element_to_dict / parse_beamline — the COSY/BeamlineBuilder "
+                f"path does not carry RF cavity parameters. Use create_beamline "
+                f"for RFC support (RF-Track / FELsim adapters)."
+            )
+
         name = elem.get("name")
         elem.mark_accessed("name", "aperture_m", "optimization", "fringe_fields", "metadata")
         params.mark_all_accessed()

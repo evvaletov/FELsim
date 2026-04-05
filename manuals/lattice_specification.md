@@ -278,11 +278,21 @@ A dipole with wedge pole faces is represented as: DIPOLE_WEDGE (entrance) → DI
 
 #### RF_CAVITY
 
-| Parameter      | Type  | Required | Description                    |
-|----------------|-------|----------|--------------------------------|
-| `voltage_mv`   | float | yes      | Peak voltage in MV             |
-| `frequency_hz` | float | yes      | RF frequency in Hz             |
-| `phase_deg`    | float | yes      | RF phase in degrees            |
+| Parameter            | Type  | Required | Description                                                |
+|----------------------|-------|----------|------------------------------------------------------------|
+| `frequency_hz`       | float | yes      | RF frequency in Hz                                          |
+| `phase_deg`          | float | no       | RF phase in degrees (default 0.0, adapter-specific crest)   |
+| `voltage_mv`         | float | one of   | Peak total voltage in MV                                    |
+| `gradient_mv_per_m`  | float | one of   | Peak on-axis gradient in MV/m (exactly one of voltage/grad) |
+| `structure_type`     | str   | no       | `"TW"` \| `"SW"` \| `"RFCA"` (default `"TW"`)               |
+| `phase_advance_deg`  | float | no       | Cell-to-cell phase advance in degrees (TW/SW, default 120°) |
+| `n_cells`            | float | no       | Number of cells (TW/SW); auto-derived if omitted            |
+| `cell_length_m`      | float | no       | Explicit cell length (SW only); default synchronous β_wave=1|
+
+In FELsim's native tracking RF_CAVITY behaves as a drift. True acceleration
+and phase-slippage are modeled only by downstream adapters (RF-Track,
+elegant). `structure_type="RFCA"` has no direct RF-Track equivalent and is
+approximated as TW with a warning.
 
 #### SEXTUPOLE
 

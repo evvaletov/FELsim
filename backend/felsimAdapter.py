@@ -224,7 +224,8 @@ class FELsimAdapter(SimulatorBase):
             'qpfLattice': 'QUAD_F',
             'qpdLattice': 'QUAD_D',
             'dipole': 'DIPOLE',
-            'dipole_wedge': 'DIPOLE_WEDGE'
+            'dipole_wedge': 'DIPOLE_WEDGE',
+            'rfCavityLattice': 'RF_CAVITY',
         }
 
         elem_type = type_map.get(cls_name, cls_name)
@@ -236,6 +237,11 @@ class FELsimAdapter(SimulatorBase):
             params['angle'] = native_elem.angle
         if hasattr(native_elem, 'fringeType'):
             params['fringe_type'] = native_elem.fringeType
+        for attr in ('frequency_hz', 'phase_deg', 'voltage_mv',
+                     'gradient_mv_per_m', 'structure_type',
+                     'phase_advance_deg', 'n_cells'):
+            if hasattr(native_elem, attr):
+                params[attr] = getattr(native_elem, attr)
 
         return BeamlineElement(
             element_type=elem_type,
