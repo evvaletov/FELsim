@@ -24,9 +24,16 @@
   dispatching to TW/SW/RFCA; linac-only JSON `var/slac_linac.json`;
   integration test passes (0.005% standalone↔adapter agreement); no
   regressions (32 smoke + 22 JSON/YAML equivalence tests pass)
-- **Remaining:** Phase 3 (benchmark driver + figures), Phase 4 (cell-by-cell
-  transcription from SLAC-two-mile-report10.pdf Tables I+II), Phase 5
-  (LaTeX report at reports/2026/Apr/13/), Phase 6 (polish)
+- **Phase 3 DONE (2026-04-05):** `benchmark_vs_elegant.py` adapter-path
+  benchmark producing 3 figures in `reports/2026/Apr/13/figures/`:
+  phase_vs_Eout.pdf, detRx_vs_phase.pdf, twiss_evolution.pdf. Agreement:
+  energy gain 0.063% at peak, det(R_x) 5.7% at peak, exit Twiss β_x 2.8%
+  / α_x 1.4%. R-matrix extraction via 3-particle unit-perturbation;
+  Twiss evolution via 30 progressively-longer sub-lattices with their
+  own autophase (approximation, small systematic error)
+- **Remaining:** Phase 4 (cell-by-cell transcription from
+  SLAC-two-mile-report10.pdf Tables I+II, risky), Phase 5 (LaTeX report
+  at reports/2026/Apr/13/), Phase 6 (polish)
 
 ### L2. COSY SC interspersed transfer-map demo (Demo B) [TODO]
 - **Git-bug:** 0a70783 (P2-medium) — quick win
