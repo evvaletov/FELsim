@@ -31,9 +31,17 @@
   / α_x 1.4%. R-matrix extraction via 3-particle unit-perturbation;
   Twiss evolution via 30 progressively-longer sub-lattices with their
   own autophase (approximation, small systematic error)
-- **Remaining:** Phase 4 (cell-by-cell transcription from
-  SLAC-two-mile-report10.pdf Tables I+II, risky), Phase 5 (LaTeX report
-  at reports/2026/Apr/13/), Phase 6 (polish)
+- **Phase 4 DONE (2026-04-05):** Cell data extracted from
+  SLAC-two-mile-report10.pdf Tables I+II (86 cells, all 4 columns,
+  both disk thicknesses). **Critical finding:** these tables are for a
+  tau=0.40 prototype that was REJECTED — production SLAC structure uses
+  tau=0.57. Cell-by-cell data for the production structure is not in our
+  documents (would require SLAC engineering drawings). Our analytical
+  single-Fourier-coefficient model is the CORRECT approach for the
+  constant-gradient TW benchmark. Extracted data saved as archival
+  reference in `docs/sbend_linac/slac_cells_tau040_table{I,II}.csv`.
+- **Remaining:** Phase 5 (LaTeX report at reports/2026/Apr/13/),
+  Phase 6 (polish)
 
 ### L2. COSY SC interspersed transfer-map demo (Demo B) [TODO]
 - **Git-bug:** 0a70783 (P2-medium) — quick win
