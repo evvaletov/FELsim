@@ -44,12 +44,15 @@
   Phase 6 (polish)
 - **Open TODOs (from 2026-04-20 review):**
   - **n_cells fractional:** benchmark plots show a non-integer cell
-    count — explain why. Likely because `n_cells = L / L_cell_sync`
-    auto-derives a fractional value (87.11 for L=3.048 m at 2856 MHz,
-    2π/3) so the structure matches the nominal section length rather
-    than snapping to an integer cell count. Decide whether to round
-    and absorb the length mismatch, or document the fractional
-    convention explicitly in the benchmark figure.
+    count. Working hypothesis communicated to Niels (2026-04-20):
+    the fraction comes from the entrance/exit coupler cavities —
+    SLAC structures have 84 regular cells + 2 couplers, and the
+    couplers have different geometry (reduced 2b), so a single
+    synchronous-cell length doesn't cleanly tile the full 3.048 m.
+    `n_cells = L / L_cell_sync` ≈ 87.11 lumps the coupler offset
+    into a fractional tail. Confirm by modelling the two couplers
+    explicitly (or as a short end-drift) and checking that the
+    regular cell count lands on exactly 84.
   - **β_x = β_y = 1 in Twiss plot:** investigate why the adapter-path
     Twiss evolution flattens at β=1. Suspected uninitialised Twiss
     input (default identity) vs. a physical injector β; confirm
