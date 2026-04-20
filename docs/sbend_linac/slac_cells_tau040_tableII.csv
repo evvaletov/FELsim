@@ -1,5 +1,6 @@
 # SLAC 3-m S-band CG-TW structure cell geometry — Table II from SLAC-10 (1962)
 # CAUTION: This is a tau=0.40 prototype design, NOT the production tau=0.57 structure.
+# The production structure (used in UH FEL) has different cell dimensions.
 # Source: "Two-Mile Accelerator Project," SLAC Report No. 10, Oct-Dec 1962, p. 24
 # Disk thickness t = 0.120 inches, rho = 0.0625 in.
 # Units: inches (all dimensions), dimensionless (v_g/c)

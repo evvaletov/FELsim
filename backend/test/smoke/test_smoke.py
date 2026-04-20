@@ -12,10 +12,10 @@ import sys
 import os
 from pathlib import Path
 
-# Prevent RF-Track C library from loading — it prints a startup banner on import
-# and a license notice at interpreter exit. Smoke tests don't exercise RF-Track.
-if 'RF_Track' not in sys.modules:
-    sys.modules['RF_Track'] = None
+# NOTE: RF-Track C library is NOT blocked here. When running smoke tests
+# in isolation, use: python run_smoke.py (which blocks it).
+# In a combined pytest session, we let RF_Track load normally to avoid
+# poisoning sys.modules for other test directories that need the real module.
 
 import numpy as np
 import pytest

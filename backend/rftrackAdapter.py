@@ -194,21 +194,8 @@ class RFTrackAdapter(SimulatorBase):
         self._bunch: Optional[rft.Bunch6d] = None
         self._native_elements: List[Any] = []
 
-        # Element type mapping
-        self._element_type_map = {
-            'DRIFT': 'Drift',
-            'QUAD_F': 'Quadrupole',
-            'QPF': 'Quadrupole',
-            'QUAD_D': 'Quadrupole',
-            'QPD': 'Quadrupole',
-            'DIPOLE': 'SBend',
-            'DPH': 'SBend',
-            'DIPOLE_WEDGE': 'SBend',
-            'DPW': 'SBend',
-            'SOLENOID': 'Solenoid',
-            'RF_CAVITY': 'Cavity',
-            'SEXTUPOLE': 'Sextupole',
-        }
+        # NOTE: _element_type_map removed (was unused dead code).
+        # Element dispatch is handled by _convert_element_to_native().
 
         # Load beamline if provided
         path = lattice_path or excel_path
@@ -444,6 +431,8 @@ class RFTrackAdapter(SimulatorBase):
         if gradient_vpm is not None:
             e0_vpm = float(gradient_vpm) * 1e6
         elif voltage_mv is not None:
+            if length <= 0:
+                raise ValueError("RF_CAVITY: cannot derive gradient from voltage_mv with zero length")
             e0_vpm = float(voltage_mv) * 1e6 / length
         else:
             raise ValueError(
@@ -457,7 +446,7 @@ class RFTrackAdapter(SimulatorBase):
         if structure_type == 'TW':
             n_cells = params.get('n_cells')
             if n_cells is None:
-                n_cells = length / l_cell_sync
+                n_cells = max(1.0, length / l_cell_sync)
             else:
                 # User-supplied n_cells: warn if it yields a length
                 # significantly different from the element's length_m.
@@ -482,7 +471,7 @@ class RFTrackAdapter(SimulatorBase):
             if n_cells is None:
                 n_cells = length / float(cell_length)
             elem = rft.SW_Structure(
-                float(e0_vpm), float(freq),
+                [float(e0_vpm)], float(freq),
                 float(cell_length), float(n_cells)
             )
             elem.set_phid(phase_deg)

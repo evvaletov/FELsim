@@ -1064,10 +1064,21 @@ class rfCavityLattice(lattice):
 
         if gradient_mv_per_m is not None:
             self.gradient_mv_per_m = float(gradient_mv_per_m)
-            self.voltage_mv = float(voltage_mv) if voltage_mv is not None \
-                else float(gradient_mv_per_m) * length
+            if voltage_mv is not None:
+                self.voltage_mv = float(voltage_mv)
+                expected_v = float(gradient_mv_per_m) * length
+                if abs(float(voltage_mv) - expected_v) / max(abs(float(voltage_mv)), 1e-30) > 0.01:
+                    import warnings
+                    warnings.warn(
+                        f"rfCavityLattice: voltage_mv={voltage_mv} inconsistent with "
+                        f"gradient_mv_per_m={gradient_mv_per_m} * L={length} = {expected_v:.4f} MV"
+                    )
+            else:
+                self.voltage_mv = float(gradient_mv_per_m) * length
         elif voltage_mv is not None:
             self.voltage_mv = float(voltage_mv)
+            if length <= 0:
+                raise ValueError("rfCavityLattice: cannot derive gradient from voltage with zero length")
             self.gradient_mv_per_m = float(voltage_mv) / length
         else:
             raise ValueError(
@@ -1075,26 +1086,49 @@ class rfCavityLattice(lattice):
             )
 
     def useMatrice(self, val, **kwargs):
+        if not self.chromatic:
+            return super().useMatrice(val, **kwargs)
         particles = np.asarray(val, dtype=np.float64)
         l = kwargs.get('length', self.length)
+        delta = particles[:, 5]
+        gamma_p = (self.E * (1 + delta * 1e-3) + self.E0) / self.E0
+        beta_p = np.sqrt(np.maximum(1 - 1 / gamma_p**2, 1e-30))
+        M56 = -(l * self.f / (self.C * beta_p * gamma_p * (gamma_p + 1)))
         out = particles.copy()
         out[:, 0] = particles[:, 0] + l * particles[:, 1]
         out[:, 2] = particles[:, 2] + l * particles[:, 3]
+        out[:, 4] = particles[:, 4] + M56 * particles[:, 5]
         return out
 
     def _compute_numeric_matrix(self, length=None, **kwargs):
         l = self.length if length is None else length
+        M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
         return np.array([
             [1.0, l,   0.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
             [0.0, 0.0, 1.0, l,   0.0, 0.0],
             [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 1.0, M56],
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
         ], dtype=np.float64)
 
     def _compute_symbolic_matrix(self, length=None, **kwargs):
-        return self._compute_numeric_matrix(length=length)
+        if length is None:
+            l = self.length
+        else:
+            if isinstance(length, str):
+                l = symbols(length, real=True)
+            else:
+                l = length
+        M56 = -(l * self.f / (self.C * self.beta * self.gamma * (self.gamma + 1)))
+        return Matrix([
+            [1, l, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0],
+            [0, 0, 1, l, 0, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 1, M56],
+            [0, 0, 0, 0, 0, 1],
+        ])
 
     def __str__(self):
         return (f"RF cavity ({self.structure_type}) {self.length} m, "

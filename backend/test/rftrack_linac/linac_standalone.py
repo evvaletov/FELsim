@@ -3,14 +3,13 @@ Standalone RF-Track model of the SLAC 3-m S-band constant-gradient
 travelling-wave linac.
 
 Phase scan of a single 1 MeV electron, single Fourier coefficient
-(peak gradient 13.3 MV/m). Benchmarks against the elegant TWLA
-reference (29.3 MeV on-crest at 1 MeV injection).
+(peak gradient 13.3 MeV/m). Compares with the elegant RFCA reference
+(41.4 MeV peak at φ=70°) and TWLA with field attenuation (29.3 MeV).
 
 Eremey Valetov, 2026-04-05
 """
 
 import argparse
-import os
 from pathlib import Path
 
 import numpy as np
@@ -44,8 +43,9 @@ def build_structure(gradient_vpm=PEAK_GRADIENT, n_cells=None, phi_deg=0.0):
 
         L_cell = c · Δφ / (2π · f)  = c / (3 · f)  for Δφ = 2π/3
 
-    For f = 2856 MHz: L_cell ≈ 35.01 mm, so 87 cells → L ≈ 3.046 m,
-    matching the nominal 3.048 m section length to better than 0.1%.
+    For f = 2856 MHz: L_cell ≈ 34.99 mm, so 87 cells → L ≈ 3.044 m
+    (0.13% shorter than the nominal 3.048 m section; fractional cells
+    are used to match the exact length).
 
     Args:
         gradient_vpm: peak on-axis Ez [V/m]

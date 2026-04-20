@@ -32,6 +32,17 @@ npm run dev
 
 - [RF-Track Reference Manual](manuals/RF_Track_reference_manual.pdf) - Documentation for RF-Track beam dynamics simulation
 
+## CTest-Like Orchestration
+
+For sustained development tasks, define CTest-style acceptance criteria before coding. Work in a loop: run tests, fix failures, re-test until green. Applies to FELsim as a whole and to subcomponents (backend API, frontend, transport line simulation, field handling, etc.).
+
+Example acceptance tests for this project:
+- **Deterministic**: backend starts (`uvicorn felAPI:app`), frontend builds (`npm run build`), `pip install -r requirements.txt` succeeds
+- **Output validation**: simulation output matches reference beam parameters within tolerance
+- **AI-judged**: Haiku evaluates API endpoint correctness or physics model implementation (via `ai_judge.py` in `~/.claude-orchestrator/`)
+
+See global CLAUDE.md for the full pattern description.
+
 ## Coding Style Guidelines
 
 - Write code aligned with the standards of a senior software engineer or senior computational physicist: favour clarity, maintainability, and best practices over cleverness

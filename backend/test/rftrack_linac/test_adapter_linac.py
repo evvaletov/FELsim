@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND = REPO_ROOT / 'backend'
@@ -16,30 +17,21 @@ LATTICE_JSON = REPO_ROOT / 'var' / 'slac_linac.json'
 
 sys.path.insert(0, str(BACKEND))
 
-from rftrackAdapter import RFTrackAdapter
-
 MC2_MEV = 0.510998950
 K_INJECT = 1.0
+EXPECTED_K_OUT = 41.47  # MeV, from standalone script (phid=0, autophased)
+TOLERANCE = 0.05        # MeV
 
 
-def main():
-    print(f"Loading linac lattice: {LATTICE_JSON}")
-    adapter = RFTrackAdapter(lattice_path=str(LATTICE_JSON))
-
-    # Verify the loaded element
-    print(f"\nLoaded {len(adapter.beamline)} element(s):")
-    for i, elem in enumerate(adapter.beamline):
-        print(f"  [{i}] type={elem.element_type}, length={elem.length:.4f} m, "
-              f"params={elem.parameters}")
-
-    # Build the RF-Track lattice by converting the single RFC element
+def _track_linac():
+    """Load SLAC linac JSON via adapter, track one electron, return K_out."""
+    from rftrackAdapter import RFTrackAdapter
     import RF_Track as rft
-    native = adapter._convert_element_to_native(adapter.beamline[0])
-    print(f"\nNative element: {type(native).__name__}")
-    print(f"  length = {native.get_length():.4f} m")
-    print(f"  frequency = {native.get_frequency()/1e9:.4f} GHz")
 
-    # Track a single electron at K=1 MeV
+    adapter = RFTrackAdapter(lattice_path=str(LATTICE_JSON))
+    assert len(adapter.beamline) == 1, f"Expected 1 element, got {len(adapter.beamline)}"
+
+    native = adapter._convert_element_to_native(adapter.beamline[0])
     P_in = np.sqrt((K_INJECT + MC2_MEV)**2 - MC2_MEV**2)
     bunch = rft.Bunch6d(MC2_MEV, 1.0, -1.0,
                         np.array([[0.0, 0.0, 0.0, 0.0, 0.0, P_in]]))
@@ -48,28 +40,29 @@ def main():
     lat.append(native)
     bunch_out = lat.track(bunch)
     M = bunch_out.get_phase_space('%x %xp %y %yp %t %Pc')
-
-    if M.shape[0] == 0:
-        print("PARTICLE LOST")
-        return 1
+    assert M.shape[0] > 0, "Particle lost during tracking"
 
     P_out = M[0, 5]
     K_out = np.sqrt(P_out**2 + MC2_MEV**2) - MC2_MEV
-    print(f"\nTracking result:")
-    print(f"  Input:  K = {K_INJECT:.3f} MeV, P = {P_in:.4f} MeV/c")
-    print(f"  Output: K = {K_out:.3f} MeV, P = {P_out:.4f} MeV/c")
+    return K_out
 
-    # Compare to standalone reference (41.47 MeV at phid=0, autophased)
-    expected = 41.47
-    tol = 0.05
-    delta = K_out - expected
-    status = "PASS" if abs(delta) < tol else "FAIL"
-    print(f"\nExpected (standalone): {expected} MeV")
-    print(f"Delta:                 {delta:+.3f} MeV")
-    print(f"Tolerance:             {tol} MeV")
-    print(f"Status:                {status}")
-    return 0 if abs(delta) < tol else 1
+
+def test_slac_linac_energy_gain():
+    """Adapter-path energy gain matches standalone reference (41.47 MeV)."""
+    K_out = _track_linac()
+    assert abs(K_out - EXPECTED_K_OUT) < TOLERANCE, (
+        f"K_out = {K_out:.4f} MeV, expected {EXPECTED_K_OUT} ± {TOLERANCE} MeV"
+    )
+
+
+def test_slac_linac_element_type():
+    """Loaded element has correct type and length."""
+    from rftrackAdapter import RFTrackAdapter
+    adapter = RFTrackAdapter(lattice_path=str(LATTICE_JSON))
+    elem = adapter.beamline[0]
+    assert elem.element_type == 'RF_CAVITY'
+    assert abs(elem.length - 3.048) < 1e-6
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    pytest.main([__file__, '-v'])

@@ -129,11 +129,11 @@ def rft_phase_scan(phases_deg):
 def rft_R_matrix(phid_deg=0.0, dx=0.01):
     """
     Extract the 2x2 transverse R-matrix at phid_deg by tracking unit
-    perturbations. Returns (R11, R12, R21, R22, det_Rx).
+    perturbations. Returns (R11, R12, R21, R22, det_Rx, P_out).
     Units: dx in mm, dxp in mrad. R11, R22 dimensionless; R12 in [mm/mrad]
-    = [m/rad], R21 in [mrad/mm] = [rad/m].
+    = [m/rad], R21 in [mrad/mm] = [rad/m]. P_out in MeV/c.
     """
-    # Reference particle
+    # Reference particle + two perturbations
     ps = np.array([
         [0,   0,   0, 0, 0, P_INJECT],   # reference
         [dx,  0,   0, 0, 0, P_INJECT],   # +dx
@@ -144,35 +144,30 @@ def rft_R_matrix(phid_deg=0.0, dx=0.01):
     bout = lat.track(bunch)
     M = bout.get_phase_space('%x %xp %y %yp %t %Pc')
     if M.shape[0] < 3:
-        return (np.nan,) * 5
+        return (np.nan,) * 6
     # Finite differences
     R11 = (M[1, 0] - M[0, 0]) / dx
     R21 = (M[1, 1] - M[0, 1]) / dx
     R12 = (M[2, 0] - M[0, 0]) / dx
     R22 = (M[2, 1] - M[0, 1]) / dx
     det = R11 * R22 - R12 * R21
-    return R11, R12, R21, R22, det
+    P_out = M[0, 5]  # reference particle momentum
+    return R11, R12, R21, R22, det, P_out
 
 
 def rft_detRx_scan(phases_deg):
-    """Compute det(R_x) at each phase via unit-perturbation tracking."""
+    """Compute det(R_x) and P_out at each phase via unit-perturbation tracking."""
     out = {'phase_deg': [], 'R11': [], 'R12': [], 'R21': [], 'R22': [],
            'det_Rx': [], 'P_out': []}
     for phi in phases_deg:
-        R11, R12, R21, R22, det = rft_R_matrix(phid_deg=phi)
+        R11, R12, R21, R22, det, P_out = rft_R_matrix(phid_deg=phi)
         out['phase_deg'].append(phi)
         out['R11'].append(R11)
         out['R12'].append(R12)
         out['R21'].append(R21)
         out['R22'].append(R22)
         out['det_Rx'].append(det)
-        # Also read P_out
-        lat = build_rft_lattice_from_json(phid_deg=phi)
-        bunch = rft.Bunch6d(MC2, 1.0, -1.0,
-                            np.array([[0, 0, 0, 0, 0, P_INJECT]]))
-        bout = lat.track(bunch)
-        M = bout.get_phase_space('%Pc')
-        out['P_out'].append(M[0, 0] if M.shape[0] > 0 else np.nan)
+        out['P_out'].append(P_out)
     for k in out:
         out[k] = np.array(out[k])
     return out
@@ -352,7 +347,6 @@ def plot_detRx_vs_phase(eleg, rft_det):
              'r--', ms=4, lw=1.2,
              label='RF-Track TW det(R_x) (phid+70° shift)')
     # Analytical p_in/p_out
-    p_ratio_eleg = BGAMMA_INJECT / (eleg['K_out'] + MC2) * np.sqrt((eleg['K_out'] + MC2)**2 - MC2**2) / eleg['K_out']
     # Use raw momenta from elegant CSV (pCentral-equivalent)
     p_out_eleg = np.sqrt((eleg['K_out'] + MC2)**2 - MC2**2) / MC2  # βγ
     ax1.plot(eleg['phase_deg'], BGAMMA_INJECT / p_out_eleg, 'k:', lw=1,
