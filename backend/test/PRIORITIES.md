@@ -43,16 +43,29 @@
 - **Remaining:** Phase 5 (LaTeX report at reports/2026/Apr/13/),
   Phase 6 (polish)
 - **Open TODOs (from 2026-04-20 review):**
-  - **n_cells fractional:** benchmark plots show a non-integer cell
-    count. Working hypothesis communicated to Niels (2026-04-20):
-    the fraction comes from the entrance/exit coupler cavities —
-    SLAC structures have 84 regular cells + 2 couplers, and the
-    couplers have different geometry (reduced 2b), so a single
-    synchronous-cell length doesn't cleanly tile the full 3.048 m.
-    `n_cells = L / L_cell_sync` ≈ 87.11 lumps the coupler offset
-    into a fractional tail. Confirm by modelling the two couplers
-    explicitly (or as a short end-drift) and checking that the
-    regular cell count lands on exactly 84.
+  - **n_cells fractional:** initial coupler hypothesis was wrong
+    (tested empirically 2026-04-20). The 0.11-cell tail is only
+    3.89 mm, too small to be 2 couplers (~35 mm each). Real cause:
+    (i) 3.048 m is nominal/round (10 ft) vs. synchronous 87 × 34.99
+    = 3.0441 m, and (ii) production tau=0.57 is constant-gradient
+    with slightly varying cell lengths along the structure — our
+    uniform-L_cell_sync model absorbs both into a fractional tail.
+    Document in the Phase 5 report; no code change needed.
+  - **β_x = β_y = 1 [RESOLVED 2026-04-20]:** not a flat line —
+    both codes evolve from β=1 m → ~14 m. The "1" is just the
+    placeholder initial Twiss (`linac_twiss.ele` line 17 and
+    `rft_twiss_evolution` default). Substitute RF-gun-matched
+    injector β once Niels's repo run finishes; benchmark script
+    now accepts `--beta0 / --alpha0` overrides.
+  - **Niels's repo reviewed [DONE 2026-04-20]:** identified
+    `ode_epsabs` as the "to.l." tolerance knob; `dt_mm` equivalent
+    on Structure is `set_nsteps`. Documented in `linac_model.md`.
+  - **Δt/to.l. convergence study [DONE 2026-04-20]:**
+    `backend/test/rftrack_linac/convergence_study.py`. K_out
+    converges ~1/n² under RK2; default nsteps=872 is conservative
+    (nsteps=200 gives ~8e-6 MeV error at 0.012 s vs 0.033 s).
+    `epsabs` has negligible effect above 1e-5. All GSL integrators
+    agree to 1e-5 MeV — no reason to switch from rk2.
   - **β_x = β_y = 1 in Twiss plot:** investigate why the adapter-path
     Twiss evolution flattens at β=1. Suspected uninitialised Twiss
     input (default identity) vs. a physical injector β; confirm

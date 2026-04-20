@@ -9,9 +9,17 @@ through the adapter path, and produces three comparison figures:
   - detRx_vs_phase.pdf — det(R_x) vs phase, with analytical p_in/p_out
   - twiss_evolution.pdf — βx/y along the structure
 
+The initial Twiss at the linac entrance is a placeholder: β_x = β_y = 1 m,
+α = 0 (matched to elegant's linac_twiss.ele, which hard-codes the same
+values). The UH FEL physical injector delivers its own matched β_inj from
+the thermionic RF gun — substitute via --beta0 / --alpha0 once that value
+is taken from Niels's RF-TRACK_UH_ThermionicRFgun repo. Re-running elegant
+with matching initial Twiss requires editing linac_twiss.ele accordingly.
+
 Eremey Valetov, 2026-04-05
 """
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -381,7 +389,7 @@ def plot_detRx_vs_phase(eleg, rft_det):
     plt.close()
 
 
-def plot_twiss_evolution(eleg_twi, rft_twi):
+def plot_twiss_evolution(eleg_twi, rft_twi, beta0=1.0, alpha0=0.0):
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(eleg_twi['s'], eleg_twi['betax'], 'b-', lw=1.3,
             label='elegant β_x')
@@ -394,8 +402,11 @@ def plot_twiss_evolution(eleg_twi, rft_twi):
                 label='RF-Track β_y')
     ax.set_xlabel('s (m)')
     ax.set_ylabel('β (m)')
-    ax.set_title('Twiss β Evolution Through SLAC 3-m Linac\n'
-                 '(initial β_x=β_y=1 m, α=0, on-crest/optimal phase)')
+    ax.set_title(
+        'Twiss β Evolution Through SLAC 3-m Linac\n'
+        f'(placeholder initial β_x=β_y={beta0} m, α={alpha0}; '
+        'replace with RF-gun-matched values once available)'
+    )
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3)
     fig.tight_layout()
@@ -406,6 +417,13 @@ def plot_twiss_evolution(eleg_twi, rft_twi):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--beta0', type=float, default=1.0,
+                        help='initial β_x=β_y (m) for Twiss evolution plot')
+    parser.add_argument('--alpha0', type=float, default=0.0,
+                        help='initial α_x=α_y for Twiss evolution plot')
+    args = parser.parse_args()
+
     print("Loading elegant phase scan...")
     eleg = load_elegant_phase_scan()
     print(f"  {len(eleg['phase_deg'])} phase points")
@@ -427,9 +445,11 @@ def main():
     print("Computing RF-Track R-matrix...")
     rft_det = rft_detRx_scan(phases_rft)
 
-    print("Computing RF-Track Twiss evolution...")
+    print(f"Computing RF-Track Twiss evolution (β0={args.beta0} m, α0={args.alpha0})...")
     try:
-        rft_twi = rft_twiss_evolution(n_slices=30)
+        rft_twi = rft_twiss_evolution(n_slices=30,
+                                       betax0=args.beta0,
+                                       alphax0=args.alpha0)
         print(f"  transport table: {np.asarray(rft_twi).shape}")
     except Exception as e:
         print(f"  Twiss evolution failed: {e}")
@@ -439,7 +459,8 @@ def main():
     plot_phase_vs_Eout(eleg, rft_scan)
     plot_detRx_vs_phase(eleg, rft_det)
     if eleg_twi is not None:
-        plot_twiss_evolution(eleg_twi, rft_twi)
+        plot_twiss_evolution(eleg_twi, rft_twi,
+                             beta0=args.beta0, alpha0=args.alpha0)
 
     print("\nSummary")
     print("-" * 50)
