@@ -42,6 +42,27 @@
   reference in `docs/sbend_linac/slac_cells_tau040_table{I,II}.csv`.
 - **Remaining:** Phase 5 (LaTeX report at reports/2026/Apr/13/),
   Phase 6 (polish)
+- **Open TODOs (from 2026-04-20 review):**
+  - **n_cells fractional:** benchmark plots show a non-integer cell
+    count — explain why. Likely because `n_cells = L / L_cell_sync`
+    auto-derives a fractional value (87.11 for L=3.048 m at 2856 MHz,
+    2π/3) so the structure matches the nominal section length rather
+    than snapping to an integer cell count. Decide whether to round
+    and absorb the length mismatch, or document the fractional
+    convention explicitly in the benchmark figure.
+  - **β_x = β_y = 1 in Twiss plot:** investigate why the adapter-path
+    Twiss evolution flattens at β=1. Suspected uninitialised Twiss
+    input (default identity) vs. a physical injector β; confirm
+    whether `Bunch6d`/sub-lattice autophase wipes the initial Twiss,
+    and pass a matched β from the injector design instead.
+  - **Niels's GH repo:** review Ioniels/RF-TRACK_UH_ThermionicRFgun
+    modelling patterns (field-map handling, autophase workflow,
+    COMSOL integration) for ideas applicable to our linac model.
+  - **RF-Track convergence study:** profile how quickly RF-Track
+    converges as integration step Δt is refined. Use Δt as a
+    metaparameter (sweep, compare K_out / Twiss / R-matrix). Also
+    clarify `to.l.` option from the manual — likely the length-step
+    / longitudinal tolerance control — and sweep it in the same way.
 
 ### L2. COSY SC interspersed transfer-map demo (Demo B) [TODO]
 - **Git-bug:** 0a70783 (P2-medium) — quick win
