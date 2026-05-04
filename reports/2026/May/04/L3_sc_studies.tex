@@ -42,6 +42,11 @@ L3 follow-ups in \texttt{backend/test/PRIORITIES.md}:
       $\sim 80\times$ speedup at $N_p=6000$); $N_p \to \infty$
       extrapolation confirms the L3.6 shot-noise hypothesis;
       high-$N_p$ charge sweep illustrates partial convergence.
+\item \textbf{L2 / Demo B} (closes git-bug \texttt{0a70783}) -- pure-FOX
+      linearised Bassetti-Erskine SC gives \emph{exactly} zero RMS
+      emittance growth across the full charge sweep, isolating the
+      nonlinear-BE contribution as the source of the $\sim 0.5\%$
+      smooth-field growth seen in xsuite and the L3.7 extrapolation.
 \end{itemize}
 
 L3.5 (longitudinal SC) is deferred per plan.
@@ -567,6 +572,92 @@ extrapolation. A smeared-particle FMM kernel (Plummer softening or
 Gaussian-cloud charge distribution) would close the gap between
 DA-FMM and the smooth-field engines without requiring the
 $N_p \gg 10^5$ scaling.
+
+\section{L2 Demo B: linearised analytical Gaussian SC, pure FOX}
+
+Quick win after L3.7. git-bug 0a70783 (P2-medium) was the original
+``simplest realisation of the split-operator pattern entirely in FOX''
+and predates the L3.6 / L3.7 cross-validation. Now that L3.6 has
+shown the smooth-field SC growth at our $Q$ range is dominated by
+the nonlinear Bassetti-Erskine response, Demo B becomes the
+``smooth-field reference inside COSY'' that bookends the comparison.
+
+\paragraph{Implementation.}
+\texttt{\textasciitilde/COSY/cosy-fmm/demo/demob\_gaussian/demob\_gaussian.fox}
+inlines the linearised Bassetti-Erskine kick (Reiser, \emph{Theory and
+Design of Charged Particle Beams} §4.5):
+\[
+  K_{xx} = \frac{Q\, k_e\, \sqrt{2/\pi}}
+                {\sigma_{z,\mathrm{rest}}\, \sigma_x\, (\sigma_x + \sigma_y)}, \quad
+  K_{yy} = \frac{Q\, k_e\, \sqrt{2/\pi}}
+                {\sigma_{z,\mathrm{rest}}\, \sigma_y\, (\sigma_x + \sigma_y)},
+\]
+applied as $\Delta a = \texttt{SC\_SCALE} \cdot K_{xx} \cdot x \cdot \Delta s$
+and analogously for $\Delta b$. The $\sigma_x, \sigma_y$ are recomputed
+from the bunch each slice (auto-update). Same lattice, same bunch as
+\texttt{spch\_demo}; no DA-FMM, no Fortran bridge, no Python
+intermediary -- all in COSYScript.
+
+\paragraph{Result on the spch\_demo lattice.}
+
+\begin{table}[h]
+\caption{Demo B charge sweep (linearised analytical Gaussian SC, pure
+FOX), $N_p=1000$, $N_\mathrm{slice}=80$.}
+\centering
+\begin{tabular}{rrrrr}
+\toprule
+$Q$ [nC] & $\sigma_x$ exit [mm] & $\sigma_y$ exit [mm]
+         & $\Delta\varepsilon_{n,x}$ & $\Delta\varepsilon_{n,y}$ \\
+\midrule
+ 0.1 & 2.983 & 1.018 & $0\%$ & $0\%$ \\
+ 0.3 & 2.978 & 1.020 & $0\%$ & $0\%$ \\
+ 1   & 2.961 & 1.030 & $0\%$ & $0\%$ \\
+ 3   & 2.913 & 1.059 & $0\%$ & $0\%$ \\
+10   & 2.740 & 1.156 & $0\%$ & $0\%$ \\
+30   & 2.210 & 1.418 & $0\%$ & $0\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The emittance is identical to seven significant figures across the
+entire $Q$ range, with no rounding artefact: a purely linear force is
+a symplectic linear coordinate transformation and preserves second
+moments exactly. The envelope evolves substantially ($\sigma_x$ drops
+from $\SI{2.98}{mm}$ to $\SI{2.21}{mm}$ between $Q=\SI{0.1}{\nano\coulomb}$
+and $Q=\SI{30}{\nano\coulomb}$ as the strong SC defocusing reshapes
+the matched orbit) but $\varepsilon$ does not move.
+
+\paragraph{Cross-validation.}
+At $Q=\SI{1}{\nano\coulomb}$:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\toprule
+Engine & $\Delta\varepsilon_{n,y}$ growth \\
+\midrule
+Demo B (linearised, this code)              & $0.000\%$ \\
+xsuite frozen-Gaussian (full Bassetti-Erskine) & $0.526\%$ \\
+xsuite 3D PIC                                & $0.543\%$ \\
+DA-FMM $N_p\!\to\!\infty$ extrap.\ (L3.7)    & $0.563\%$ \\
+DA-FMM $N_p=6000$ (FOX driver)               & $1.16\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This decomposes cleanly: the $\sim 0.5\%$ smooth-field growth in
+xsuite/L3.7-extrap is \emph{entirely} the nonlinear part of
+Bassetti-Erskine (the part Demo B drops by linearising). The DA-FMM
+excess at finite $N_p$ on top of $0.5\%$ is the macroparticle shot
+noise (L3.6 / L3.7).
+
+\paragraph{What Demo B is not.}
+The linearised formula is faithful for paraxial particles within
+$\sim 1\sigma$. Tail particles see the full nonlinear field, which
+this demo drops. A complete Bassetti-Erskine FOX implementation would
+require the Faddeeva function $w(z)$ via a polynomial approximation;
+out of scope here. SC Option~3 (git-bug \texttt{baefe0e}) is the
+production path for an elliptical-Gaussian SC FOX module.
 
 \section{Summary and follow-ups}
 

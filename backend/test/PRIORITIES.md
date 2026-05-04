@@ -107,10 +107,15 @@ file handshake; 45 MeV / 1 nC / 1k macroparticles / 2 m FODO; presented
 - **L3.5 — Longitudinal SC.** Deferred. Re-evaluate after L3.1–L3.4
   if longitudinal coupling shows up in σ_z growth or energy chirp drift.
 
-### L2. COSY SC interspersed transfer-map demo (Demo B) [TODO]
-- **Git-bug:** 0a70783 (P2-medium) — quick win
-- **Scope:** FOX script, analytical linear SC kicks in split-operator with
-  drift maps, compare to envelope equation
+### L2. COSY SC interspersed transfer-map demo (Demo B) [DONE 2026-05-04]
+- **Git-bug:** 0a70783 (P2-medium) — closed
+- **Implementation:** `~/COSY/cosy-fmm/demo/demob_gaussian/demob_gaussian.fox`
+  (pure FOX, linearised Bassetti-Erskine kick, no DA-FMM, no Fortran bridge)
+- **Result:** RMS emittance preserved to 7 sig figs at all Q ∈ {0.1…30} nC
+  (linear forces ⇒ symplectic ⇒ second moments invariant). Cross-validates
+  with L3.6/L3.7: the ~0.5% smooth-field growth in xsuite/L3.7-extrap is
+  the nonlinear-BE contribution that this demo deliberately drops.
+- **Write-up:** L2 section in `reports/2026/May/04/L3_sc_studies.pdf` (15 pages now).
 
 ## Due by 2026-02-18 (Wednesday)
 
