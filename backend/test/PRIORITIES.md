@@ -80,6 +80,33 @@
     clarify `to.l.` option from the manual — likely the length-step
     / longitudinal tolerance control — and sweep it in the same way.
 
+### L3. Linac + COSY space-charge follow-ups [DONE 2026-05-04 — see reports/2026/May/04/L3_sc_studies.pdf, 14 pages, includes L3.1-L3.7]
+The "COSY SC demo" referenced here is **`~/COSY/cosy-fmm/demo/spch_demo/`**
+(DA-FMM kicks driven from a COSY INFINITY FOX program via Fortran-bridge
+file handshake; 45 MeV / 1 nC / 1k macroparticles / 2 m FODO; presented
+2026-04-22). It is the shipped Demo-A-flavored deliverable, not Demo B
+(0a70783, analytical linear Gaussian, still TODO).
+
+- **L3.1 — N_p convergence (spch_demo).** Sweep
+  N_p ∈ {500, 1k, 2k, 5k, 10k, 20k, 50k} at fixed
+  N_slice=20, Q=1 nC, θ=0.3. Diagnostics: ε_n,x/y(2 m), σ_x/y(s),
+  wall-time. Identify N_p* where moments stabilise <1% relative.
+- **L3.2 — N_slice convergence (spch_demo).** Sweep
+  N_slice ∈ {5, 10, 20, 40, 80, 160, 320} at N_p=N_p*, Q=1 nC, θ=0.3.
+  Verify second-order convergence in Δs. Identify N_slice*. Bonus axis:
+  θ ∈ {0.1, 0.3, 0.5} (DA-FMM MAC).
+- **L3.3 — RF-Track ↔ xsuite linac comparison.** Git-bug 343b42f
+  (P2-medium). Same input bunch + cavity-chain xsuite approximation of
+  the SLAC TW structure; compare moments along s. Distinct from the
+  COSY spch_demo work — this is the linac SC validation axis.
+- **L3.4 — Bunch charge sweep (spch_demo).** Q logarithmically spaced:
+  Q ∈ {0.1, 0.3, 1, 3, 10, 30} nC at converged (N_p*, N_slice*).
+  Watch ε_n growth ∝ Q in the linear regime; identify the charge at
+  which DA-FMM nonlinear corrections become non-negligible. Maps to
+  README extension #1 in spch_demo.
+- **L3.5 — Longitudinal SC.** Deferred. Re-evaluate after L3.1–L3.4
+  if longitudinal coupling shows up in σ_z growth or energy chirp drift.
+
 ### L2. COSY SC interspersed transfer-map demo (Demo B) [TODO]
 - **Git-bug:** 0a70783 (P2-medium) — quick win
 - **Scope:** FOX script, analytical linear SC kicks in split-operator with
