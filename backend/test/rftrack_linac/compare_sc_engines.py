@@ -228,6 +228,12 @@ def run_xsuite(bunch, Q_C, sc_kind):
 
 
 def run_rftrack(bunch, Q_C):
+    """RF-Track PIC SC adapter (L3.6 Phase 2).
+
+    Correct Volume pattern: explicit per-element add(elem, x, y, z) with
+    set_s0/set_s1 boundaries; SC_engine set globally via rft.cvar.SC_engine.
+    The earlier vol.add(lattice, ...) attempt core-dumped on RF-Track 2.5.5.
+    """
     gamma, beta = gamma_beta()
     bg = beta * gamma
     P_ref_MeVc = beta * gamma * MC2_MEV  # MeV/c
@@ -244,36 +250,27 @@ def run_rftrack(bunch, Q_C):
         -bunch["z"] * 1e3,
         P_per,
     ])
-
-    # Population: real electrons / macroparticle
     n_e_per_macro = (Q_C / QE) / n_part
     bunch_in = rft.Bunch6d(MC2_MEV, n_e_per_macro, -1.0, phase_space)
 
-    # Build lattice: alternating short drifts, thin quads, with SC engine
-    # applied as a Volume integrated over the structure.  The SpaceCharge_PIC_FreeSpace
-    # is attached to a Volume; the Lattice contains the Volume which integrates SC.
-    # Simplest pattern: build a `rft.Volume` with the SC engine, and Lattice
-    # elements (drifts + quads) inside the volume.  For RF-Track 2.5.5 the exact
-    # pattern is `Volume(SC_engine, lattice)`.
+    # Set the PIC SC engine globally before building the volume
+    sc = rft.SpaceCharge_PIC_FreeSpace(64, 64, 64)
+    rft.cvar.SC_engine = sc
 
-    # Build the bare lattice (no SC yet)
-    lat = rft.Lattice()
-    n_slice = N_SLICE_SC
-    ds = L_TOT / n_slice
-    s = 0.0
-    for i in range(n_slice):
-        lat.append(rft.Drift(ds))
-        s_new = (i + 1) * ds
-        if s < S_QF <= s_new:
-            # Thin Multipole: knl convention identical to xsuite
-            lat.append(rft.Multipole(0.0, [0.0, +K_FOCUS]))
-        if s < S_QD <= s_new:
-            lat.append(rft.Multipole(0.0, [0.0, -K_FOCUS]))
-        s = s_new
-
-    # Attach SC: Volume wraps the lattice, SC engine integrates kicks at internal steps
-    sc = rft.SpaceCharge_PIC_FreeSpace(64, 64, 64)  # nx, ny, nz
-    vol = rft.Volume(lat, sc)
+    # Build a Volume bounded by [0, L_TOT] with two thin Multipoles at
+    # the QF / QD positions. No drifts: Volume time-integrates between
+    # elements, drifts are implicit.
+    vol = rft.Volume()
+    vol.set_s0(0.0)
+    vol.set_s1(L_TOT)
+    vol.add(rft.Multipole(0.0, [0.0, +K_FOCUS]), 0.0, 0.0, S_QF,
+            reference="center")
+    vol.add(rft.Multipole(0.0, [0.0, -K_FOCUS]), 0.0, 0.0, S_QD,
+            reference="center")
+    # Integration time step in mm/c. For beta=0.94 over 2 m, total time
+    # is ~2128 mm/c. dt_mm=25 gives ~85 steps, comparable to N_slice=80.
+    vol.dt_mm = 25.0
+    vol.odeint_algorithm = "rk2"
 
     line = rft.Lattice()
     line.append(vol)
@@ -287,14 +284,11 @@ def run_rftrack(bunch, Q_C):
         return dict(sigx=np.nan, sigy=np.nan, sigz=np.nan,
                     epsnx=np.nan, epsny=np.nan, wall=wall, alive=0)
 
-    x_mm, xp_mrad, y_mm, yp_mrad, t_mmc, P_mevc = (
-        M[:, 0], M[:, 1], M[:, 2], M[:, 3], M[:, 4], M[:, 5]
-    )
-    x = x_mm * 1e-3
-    xp = xp_mrad * 1e-3
-    y = y_mm * 1e-3
-    yp = yp_mrad * 1e-3
-    z = -t_mmc * 1e-3  # invert sign of the t->z mapping
+    x = M[:, 0] * 1e-3
+    xp = M[:, 1] * 1e-3
+    y = M[:, 2] * 1e-3
+    yp = M[:, 3] * 1e-3
+    z = -M[:, 4] * 1e-3
 
     sigx, sigy, sigz = moments_from_arrays(x, y, z)
     epsnx = emittance_n(x, xp, bg)
