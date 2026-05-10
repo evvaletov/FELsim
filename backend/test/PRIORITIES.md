@@ -385,6 +385,17 @@ file handshake; 45 MeV / 1 nC / 1k macroparticles / 2 m FODO; presented
 - Quality thresholds (MSE): <1e-3 excellent, <0.01 acceptable, <0.1 marginal
   (RMS equivalents: <3.2e-2, <1e-1, <3.2e-1)
 
+### O-Abl. Objective-design ablation for Niels IPAC paper [DONE 2026-05-10]
+- Scripts: `ablation_run.py`, `ablation_analyze.py`, `diagnose_seed91.py`
+- Results: `results/ablation/` (60 random + 3 Sobol JSONs, plots, summary.md)
+- Configs: **A** verbatim, **B** mild rescale (dispersion ref=0.5 m), **C** B + Stage 1 weight=0→0.5 typo fix + Stage 7 envelope 0→1.5 mm
+- 20 seeds + 1 Sobol per config; ~5 min on starfield01
+- Headline: A fails 10% (2/20), B fails 15% (3/20), **C fails 75% (15/20)**
+- Failure mechanism: Stage 11 NM gets stuck in local min after Stage 10 shifts the starting basin
+- Sobol deterministic beam also lands in the bad basin for C (consistent with multi-seed result, not an independent confirmation)
+- Implication for IPAC paper: Config C is a useful stress case for global-search optimisers (BO, CMA-ES). Whether BO actually recovers NM's 75% failure rate is the open empirical question; A is the correct NM baseline.
+- Open follow-ups: S4 CMA-ES drop-in, S5 joint 26-var, S6 BO baseline, S7 warm-chain starting points
+
 ---
 
 ## Category S: Parameter Studies
