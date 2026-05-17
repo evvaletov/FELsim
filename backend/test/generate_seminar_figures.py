@@ -75,7 +75,12 @@ RCPARAMS_OVERRIDE = {'lines.linewidth': 2.5}
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
-def compute_params():
+def compute_params(beta_xm=1.4, alpha_xm=0.47):
+    """Stage 11 horizontal Twiss targets are overridable.
+
+    Defaults (1.4 m, 0.47) from arXiv:2510.14061v1 Table I.
+    TUPM005 (IPAC 2026) uses (1.267 m, 0.560).
+    """
     relat = lattice(1, fringeType=None)
     relat.setE(E=ENERGY)
     norm = relat.gamma * relat.beta
@@ -83,15 +88,15 @@ def compute_params():
     beta_ym = relat.gamma * LAMBDA_U / (2 * np.pi * K_UND)
     beta_0 = X_STD**2 / epsilon
     return {
-        'beta_xm': 1.4, 'alpha_xm': 0.47,
+        'beta_xm': beta_xm, 'alpha_xm': alpha_xm,
         'beta_ym': beta_ym, 'alpha_ym': 0.0,
         'epsilon': epsilon, 'beta_0': beta_0,
         'gamma': relat.gamma, 'beta_rel': relat.beta, 'norm': norm,
     }
 
 
-def generate_beam(params, n=NB_PARTICLES):
-    np.random.seed(42)
+def generate_beam(params, n=NB_PARTICLES, seed=42):
+    np.random.seed(seed)
     eps = params['epsilon']
     ebeam_gen = beam()
     dist = ebeam_gen.gen_6d_gaussian(
@@ -673,10 +678,21 @@ def figure_envelope_dispersion(twiss, line):
 # ── Main ──────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--beta-xm', type=float, default=1.4,
+                        help='Stage 11 target beta_x in m (default 1.4 from '
+                             'arXiv:2510.14061v1; use 1.267 for TUPM005)')
+    parser.add_argument('--alpha-xm', type=float, default=0.47,
+                        help='Stage 11 target alpha_x (default 0.47 from '
+                             'arXiv:2510.14061v1; use 0.560 for TUPM005)')
+    parser.add_argument('--seed', type=int, default=42)
+    cli_args = parser.parse_args()
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     plt.style.use(str(STYLE_PATH))
     plt.rcParams.update(RCPARAMS_OVERRIDE)
-    params = compute_params()
+    params = compute_params(beta_xm=cli_args.beta_xm, alpha_xm=cli_args.alpha_xm)
 
     print("UH FEL Seminar Figures")
     print(f"  Targets: beta_x={params['beta_xm']}, beta_y={params['beta_ym']:.4f}, "
@@ -684,7 +700,7 @@ if __name__ == '__main__':
     print(f"  Output: {OUTPUT_DIR}\n")
 
     line = build_line()
-    beam_dist = generate_beam(params)
+    beam_dist = generate_beam(params, seed=cli_args.seed)
 
     print("Running 11-stage Nelder-Mead optimization...")
     currents, convergence = run_11_stage_optimization(line, beam_dist, params)
