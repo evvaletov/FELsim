@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
-"""Generate figures for the IPAC 2026 (TUPM005) optimisation talk.
+"""Generate the IPAC 2026 (TUPM005) talk figures from saved FELsim outputs.
 
-Two parts:
+  P1  Multi-code capability matrix
+  P2  RF-Track linac model vs elegant (0.06% at peak)
+  P3  Space-charge model comparison (DA-FMM vs Xsuite frozen/PIC3D)
+  P4  Cross-code transport-line Twiss match quality
+  F1  Twiss(s) with the TUPM005 undulator target band
+  F2  Objective-design ablation: A/B/C failure-rate bar
+  F3  Per-seed undulator-RMS distribution
+  F4  Per-stage MSE divergence, good vs trapped seed
+  F5  Twiss ellipse at the undulator, good vs trapped seed
+  F6  GD vs BO outlook (NM real, BO template pending S6)
 
-  Part I  — multi-code modelling stack (context / credibility)
-    P1  Multi-code capability matrix
-    P2  RF-Track linac model vs elegant (0.06% at peak)
-    P3  Space-charge capability (DA-FMM vs Xsuite frozen/PIC3D)
-    P4  Cross-code transport-line Twiss match quality
-
-  Part II — the optimisation result (core narrative)
-    F1  Twiss(s) with the TUPM005 undulator target band
-    F2  Objective-design ablation: A/B/C failure-rate bar
-    F3  Per-seed undulator-RMS distribution (basin structure)
-    F4  Per-stage MSE divergence, good vs trapped seed
-    F5  Twiss ellipse at the undulator, good vs trapped basin
-    F6  GD vs BO outlook (NM real, BO template pending S6)
-
-All Part I/II data is read from disk; nothing is re-simulated except the
-lightweight single-pass particle tracking used by F1 and F5.
+F1 and F5 run a single-pass tracking step; the rest read saved data.
 
 Author: Eremey Valetov
 """
@@ -39,8 +33,8 @@ from matplotlib.patches import Patch, Ellipse
 THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
 
-# Reuse the seminar script's lattice/beam helpers and constants — single
-# source of truth for the model, not a re-implementation.
+# Reuse the seminar script's lattice/beam helpers and constants.
+# Single source of truth for the model, not a re-implementation.
 from generate_seminar_figures import (
     build_line, compute_params, generate_beam, load_currents,
     propagate_particles_full, element_spans,
@@ -163,7 +157,7 @@ def f1_twiss(params):
     axin.scatter([s[-1]], [bym], color=C_RED, marker='*', s=180,
                  edgecolor='k', linewidth=0.5, zorder=5)
     axin.set_ylim(0, max(bx[mask].max(), bxm) * 1.12)
-    axin.set_title('final 0.6 m → undulator', fontsize=13)
+    axin.set_title('final 0.6 m to undulator', fontsize=13)
     axin.tick_params(labelsize=11)
     ax.indicate_inset_zoom(axin, edgecolor='gray')
 
@@ -171,13 +165,13 @@ def f1_twiss(params):
     ax.set_xlabel('s (m)')
     ax.set_ylabel(r'$\beta$ (m)')
     ax.legend(loc='upper left')
-    fig.suptitle('UH FEL transport line — matched to the undulator',
+    fig.suptitle('UH FEL transport line: matched to the undulator',
                  fontsize=22)
     _save(fig, 'F1_twiss_target')
 
 
 def f2_failrate(abl):
-    """F2: A/B/C failure-rate bar — the headline."""
+    """F2: A/B/C failure-rate bar (the headline)."""
     print("F2: failure-rate bar...")
     fig, ax = plt.subplots(figsize=(12.8, 7.2))
     rates, medians, labels = [], [], []
@@ -201,7 +195,7 @@ def f2_failrate(abl):
                 fontsize=14, color='white')
 
     ax.set_ylim(0, 100)
-    ax.set_ylabel('Nelder–Mead failure rate (%)')
+    ax.set_ylabel('Nelder-Mead failure rate (%)')
     ax.set_xlabel('Objective configuration')
     ax.set_xticks(range(len(CONFIGS)))
     ax.set_xticklabels([CONFIG_DESC[c] for c in CONFIGS], fontsize=15)
@@ -272,7 +266,7 @@ def f4_perstage(abl):
                   f"RMS {bad['undulator_rms']:.1e})")
     ax.axvspan(10.5, 11.5, color=C_ORANGE, alpha=0.18)
     ax.annotate('Stage 11\nundulator match\n'
-                f'{b[-1] / g[-1]:.0f}× worse',
+                f'{b[-1] / g[-1]:.0f}x worse',
                 xy=(11, b[-1]), xytext=(8.0, b[-1] * 0.6),
                 fontsize=17, ha='center',
                 arrowprops=dict(arrowstyle='->', color='k', lw=1.5))
@@ -284,7 +278,7 @@ def f4_perstage(abl):
     ax.set_xlabel('Sequential optimisation stage')
     ax.set_ylabel('Stage final MSE')
     ax.set_title('The sequential chain breaks at the final undulator match\n'
-                 '(Config A objective, two beam seeds — '
+                 '(Config A objective, two beam seeds, '
                  'each separately optimised)', fontsize=19)
     ax.legend(loc='lower left', fontsize=16)
     _save(fig, 'F4_perstage')
@@ -299,7 +293,7 @@ def _ellipse_xy(beta, alpha, emit, n=200):
 
 
 def f5_ellipse(params, abl):
-    """F5: vertical Twiss ellipse at the undulator — cost of trapping.
+    """F5: vertical Twiss ellipse at the undulator (cost of trapping).
 
     The bad basin keeps beta_x near target but collapses beta_y, so the
     physical cost is a vertical-plane mismatch. Uses the exact converged
@@ -353,7 +347,7 @@ def f6_gd_vs_bo(abl, bo_results):
         rms = np.array([s['undulator_rms'] for s in abl[cfg]])
         nm_med.append(np.median(rms))
     ax.bar(xs - width / 2, nm_med, width, color=[CONFIG_COLOR[c]
-           for c in CONFIGS], edgecolor='k', label='Nelder–Mead (this work)')
+           for c in CONFIGS], edgecolor='k', label='Nelder-Mead (this work)')
 
     bo_med = None
     if bo_results and Path(bo_results).exists():
@@ -366,7 +360,7 @@ def f6_gd_vs_bo(abl, bo_results):
                 raise ValueError('median_rms values must be finite scalars')
             bo_med = vals
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
-            print(f"  ! {bo_results} unusable ({e}) — using placeholder")
+            print(f"  ! {bo_results} unusable ({e}); using placeholder")
     if bo_med is not None:
         ax.bar(xs + width / 2, bo_med, width, color=C_GREY,
                edgecolor='k', hatch='//', label='Bayesian optimisation')
@@ -375,7 +369,7 @@ def f6_gd_vs_bo(abl, bo_results):
             ax.bar(x + width / 2, max(nm_med), width, color='none',
                    edgecolor=C_GREY, hatch='..', linewidth=1.5)
         ax.text(np.mean(xs), max(nm_med) * 0.30,
-                'BO — work in progress\n(git-bug 7f690aa S6)',
+                'BO: work in progress\n(git-bug 7f690aa S6)',
                 fontsize=17, color='dimgray', ha='center', style='italic')
 
     ax.set_yscale('log')
@@ -391,9 +385,10 @@ def f6_gd_vs_bo(abl, bo_results):
 # ── Part I ────────────────────────────────────────────────────────────────
 
 def p1_capability_matrix():
-    """P1: multi-code capability matrix — the modelling stack at a glance."""
+    """P1: multi-code capability matrix (the modelling stack at a glance)."""
     print("P1: capability matrix...")
-    blocks = ['Injector\n(α-magnet)', 'S-band linac', 'Diagnostic\nchicane',
+    blocks = ['Injector\n' r'($\alpha$-magnet)', 'S-band linac',
+              'Diagnostic\nchicane',
               'Transport line', 'Space charge']
     codes = ['FELsim\n(1st order)', 'COSY\nINFINITY', 'RF-Track', 'elegant']
     # 0 = n/a, 1 = implemented, 2 = cross-validated
@@ -406,7 +401,7 @@ def p1_capability_matrix():
         [0, 2, 2, 0],   # space charge (COSY SC + DA-FMM/Xsuite)
     ])
     cmap = {0: '#EEEEEE', 1: C_TEAL, 2: C_BLUE}
-    txt = {0: '–', 1: 'model', 2: 'validated'}
+    txt = {0: 'n/a', 1: 'model', 2: 'validated'}
 
     fig, ax = plt.subplots(figsize=(12.8, 7.2))
     for i in range(len(blocks)):
@@ -466,11 +461,11 @@ def p2_linac_vs_elegant():
                 xy=(pk_phase, pk_rft), xytext=(pk_phase + 18, pk_rft * 0.55),
                 fontsize=18, arrowprops=dict(arrowstyle='->', lw=1.5))
 
-    ax.set_xlabel('RF phase, elegant convention (deg) — accelerating lobe')
+    ax.set_xlabel('RF phase, elegant convention (deg), accelerating lobe')
     ax.set_ylabel('Output kinetic energy (MeV)')
     ax.set_title('Linac peak output energy agrees with an independent '
                  'tracker to 0.06%\n(on-crest accelerating lobe; off-crest '
-                 'omitted — code phase conventions diverge there)',
+                 'omitted; code phase conventions diverge there)',
                  fontsize=16)
     ax.legend(loc='lower center', fontsize=17)
     _save(fig, 'P2_linac_vs_elegant')
@@ -495,7 +490,7 @@ def p3_space_charge():
 
     ax.set_xlabel('Bunch charge (nC)')
     ax.set_ylabel(r'Norm. emittance growth $\Delta\varepsilon_{nx}$ (%)')
-    ax.set_title('Three space-charge models now in the FELsim stack',
+    ax.set_title('Three space-charge models in the FELsim stack',
                  fontsize=21)
     ax.legend(loc='upper left', fontsize=17)
     _save(fig, 'P3_space_charge')
@@ -551,7 +546,7 @@ def main():
     params = compute_params(beta_xm=args.beta_xm, alpha_xm=args.alpha_xm)
     abl = load_ablation()
 
-    print(f"IPAC TUPM005 figures — targets beta_x={args.beta_xm}, "
+    print(f"IPAC TUPM005 figures: targets beta_x={args.beta_xm}, "
           f"alpha_x={args.alpha_xm}, beta_y={params['beta_ym']:.4f}")
     print(f"Output: {OUTPUT_DIR}\n")
 

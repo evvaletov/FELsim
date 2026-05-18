@@ -1,4 +1,4 @@
-# FELsim talk style — derived from felsim.mplstyle, sized for projected slides.
+# FELsim talk style, derived from felsim.mplstyle, sized for projected slides.
 # 16:9 default canvas, large fonts, thick lines, minimal in-figure clutter.
 # Usage: plt.style.use(Path(__file__).parent / 'felsim_talk.mplstyle')
 
