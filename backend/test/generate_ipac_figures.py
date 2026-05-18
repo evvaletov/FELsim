@@ -394,10 +394,10 @@ def p1_capability_matrix():
     codes = ['FELsim\n(1st order)', 'COSY\nINFINITY', 'RF-Track', 'elegant']
     # 0 = n/a, 1 = implemented, 2 = cross-validated
     grid = np.array([
-        [1, 2, 1, 0],   # injector
+        [0, 2, 0, 0],   # injector (alpha-magnet): COSY only per project
         [1, 1, 2, 2],   # linac (RF-Track validated vs elegant, 0.06%)
-        [1, 2, 1, 0],   # chicane
-        [2, 2, 2, 0],   # transport line
+        [2, 2, 1, 0],   # chicane (FELsim core + R2; RF-Track adapter model)
+        [2, 2, 2, 0],   # transport line (R2 3-code agreement)
         [0, 2, 2, 0],   # space charge (COSY SC + DA-FMM/Xsuite)
     ])
     cmap = {0: '#EEEEEE', 1: C_TEAL, 2: C_BLUE}
