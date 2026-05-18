@@ -152,8 +152,8 @@ def f1_twiss(params):
                 fontsize=16, ha='left',
                 arrowprops=dict(arrowstyle='->', color='k', lw=1.5))
 
-    # Inset: zoom on the last metre so the sub-metre targets are visible
-    # against the 60 m mid-line excursions.
+    # Inset: zoom on the final 0.6 m so the sub-metre targets are visible
+    # against the ~60 m mid-line excursions.
     axin = ax.inset_axes([0.66, 0.42, 0.32, 0.46])
     mask = s >= s[-1] - 0.6
     axin.plot(s[mask], bx[mask], color=C_BLUE)
@@ -398,7 +398,8 @@ def p1_capability_matrix():
     codes = ['FELsim\n(1st order)', 'COSY\nINFINITY', 'RF-Track', 'elegant']
     # 0 = n/a, 1 = implemented, 2 = cross-validated
     grid = np.array([
-        [0, 2, 0, 0],   # injector (alpha-magnet): COSY only per project
+        [0, 1, 0, 0],   # injector (alpha-magnet): COSY model only in-matrix
+                        # (cross-val is vs Xsuite, off this 4-code grid)
         [1, 1, 2, 2],   # linac (RF-Track validated vs elegant, 0.06%)
         [2, 2, 1, 0],   # chicane (FELsim core + R2; RF-Track adapter model)
         [2, 2, 2, 0],   # transport line (R2 3-code agreement)
@@ -467,10 +468,10 @@ def p2_linac_vs_elegant():
 
     ax.set_xlabel('RF phase, elegant convention (deg) — accelerating lobe')
     ax.set_ylabel('Output kinetic energy (MeV)')
-    ax.set_title('Linac model validated against an independent tracker\n'
-                 '(accelerating lobe through crest; off-crest region '
+    ax.set_title('Linac peak output energy agrees with an independent '
+                 'tracker to 0.06%\n(on-crest accelerating lobe; off-crest '
                  'omitted — code phase conventions diverge there)',
-                 fontsize=17)
+                 fontsize=16)
     ax.legend(loc='lower center', fontsize=17)
     _save(fig, 'P2_linac_vs_elegant')
 
