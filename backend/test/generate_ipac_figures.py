@@ -273,7 +273,6 @@ def f4_perstage(abl):
 
 
 def _ellipse_xy(beta, alpha, emit, n=200):
-    gamma = (1 + alpha ** 2) / beta
     t = np.linspace(0, 2 * np.pi, n)
     # Parametric phase-space ellipse for given Twiss + geometric emittance.
     x = np.sqrt(emit * beta) * np.cos(t)
@@ -433,10 +432,12 @@ def p2_linac_vs_elegant():
                 xy=(pk_phase, pk_rft), xytext=(pk_phase + 18, pk_rft * 0.55),
                 fontsize=18, arrowprops=dict(arrowstyle='->', lw=1.5))
 
-    ax.set_xlabel('RF phase, elegant convention (deg)')
+    ax.set_xlabel('RF phase, elegant convention (deg) — accelerating lobe')
     ax.set_ylabel('Output kinetic energy (MeV)')
-    ax.set_title('Linac model validated against an independent tracker',
-                 fontsize=21)
+    ax.set_title('Linac model validated against an independent tracker\n'
+                 '(accelerating lobe through crest; off-crest region '
+                 'omitted — code phase conventions diverge there)',
+                 fontsize=17)
     ax.legend(loc='lower center', fontsize=17)
     _save(fig, 'P2_linac_vs_elegant')
 
@@ -484,8 +485,9 @@ def p4_cross_code():
         ax.text(b.get_x() + b.get_width() / 2, m * 1.4,
                 f'MSE {m:.1e}\n' + r['Model'], ha='center', fontsize=14)
     ax.set_ylabel('Twiss-match MSE at the undulator')
-    ax.set_title('Independent codes reach the same match '
-                 r'($\varepsilon_n=8$)', fontsize=21)
+    ax.set_title('Cross-code Twiss match at the undulator\n'
+                 r'(COSY DA maps to $10^{-9}$; RF-Track fringe-limited '
+                 r'in $\beta_y$; $\varepsilon_n=8$ baseline)', fontsize=18)
     ax.annotate(f'RF-Track $\\beta_y$ deficit\n({by[-1]:.3f} vs '
                 f'{by[0]:.3f} m — missing fringe $\\varphi$)',
                 xy=(2, mse[2]), xytext=(0.6, mse[2] * 0.12),
