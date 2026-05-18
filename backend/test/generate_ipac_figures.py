@@ -144,11 +144,28 @@ def f1_twiss(params):
                edgecolor='k', linewidth=0.6)
     ax.scatter([s[-1]], [bym], color=C_RED, marker='*', s=320, zorder=5,
                edgecolor='k', linewidth=0.6)
-    ax.annotate(f'undulator target\n'
-                rf'$\beta_x={bxm:.3f}$ m, $\alpha_x={params["alpha_xm"]:.3f}$',
-                xy=(s[-1], bxm), xytext=(s[-1] * 0.62, bxm + 2.4),
-                fontsize=17, ha='left',
+    ax.annotate('undulator target\n'
+                rf'$\beta_x={bxm:.3f}$ m, $\alpha_x='
+                rf'{params["alpha_xm"]:.3f}$' '\n'
+                rf'$\beta_y={bym:.3f}$ m, $\alpha_y=0$',
+                xy=(s[-1], bxm), xytext=(s[-1] * 0.58, bxm + 6),
+                fontsize=16, ha='left',
                 arrowprops=dict(arrowstyle='->', color='k', lw=1.5))
+
+    # Inset: zoom on the last metre so the sub-metre targets are visible
+    # against the 60 m mid-line excursions.
+    axin = ax.inset_axes([0.66, 0.42, 0.32, 0.46])
+    mask = s >= s[-1] - 1.5
+    axin.plot(s[mask], bx[mask], color=C_BLUE)
+    axin.plot(s[mask], by[mask], color=C_RED)
+    axin.scatter([s[-1]], [bxm], color=C_BLUE, marker='*', s=180,
+                 edgecolor='k', linewidth=0.5, zorder=5)
+    axin.scatter([s[-1]], [bym], color=C_RED, marker='*', s=180,
+                 edgecolor='k', linewidth=0.5, zorder=5)
+    axin.set_ylim(0, max(bxm, bym) * 1.8)
+    axin.set_title('undulator entrance', fontsize=13)
+    axin.tick_params(labelsize=11)
+    ax.indicate_inset_zoom(axin, edgecolor='gray')
 
     ax.set_xlim(s[0], s[-1])
     ax.set_xlabel('s (m)')
@@ -318,7 +335,13 @@ def f5_ellipse(params, abl):
 
 
 def f6_gd_vs_bo(abl, bo_results):
-    """F6: GD vs BO. NM curves are real; BO is a gated template."""
+    """F6: GD vs BO. NM curves are real; BO is a gated template.
+
+    Expected --bo-results schema (S6 deliverable, git-bug 7f690aa):
+        {"A": {"median_rms": <float>}, "B": {...}, "C": {...}}
+    A file missing that schema is reported and treated as absent
+    (placeholder) rather than crashing.
+    """
     print("F6: GD vs BO outlook...")
     fig, ax = plt.subplots(figsize=(12.8, 7.2))
 
@@ -331,10 +354,16 @@ def f6_gd_vs_bo(abl, bo_results):
     ax.bar(xs - width / 2, nm_med, width, color=[CONFIG_COLOR[c]
            for c in CONFIGS], edgecolor='k', label='Nelder–Mead (this work)')
 
+    bo_med = None
     if bo_results and Path(bo_results).exists():
         with open(bo_results) as fh:
             bo = json.load(fh)
-        bo_med = [bo[c]['median_rms'] for c in CONFIGS]
+        try:
+            bo_med = [bo[c]['median_rms'] for c in CONFIGS]
+        except (KeyError, TypeError):
+            print(f"  ! {bo_results} lacks the expected "
+                  f"{{config: {{median_rms}}}} schema — using placeholder")
+    if bo_med is not None:
         ax.bar(xs + width / 2, bo_med, width, color=C_GREY,
                edgecolor='k', hatch='//', label='Bayesian optimisation')
     else:
@@ -532,6 +561,10 @@ def main():
         'F6': lambda: f6_gd_vs_bo(abl, args.bo_results),
     }
     todo = args.only if args.only else list(figures)
+    unknown = [k for k in todo if k not in figures]
+    if unknown:
+        parser.error(f"unknown figure id(s) {unknown}; "
+                     f"valid: {', '.join(figures)}")
     for key in todo:
         figures[key]()
 
