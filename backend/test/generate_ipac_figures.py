@@ -155,15 +155,15 @@ def f1_twiss(params):
     # Inset: zoom on the last metre so the sub-metre targets are visible
     # against the 60 m mid-line excursions.
     axin = ax.inset_axes([0.66, 0.42, 0.32, 0.46])
-    mask = s >= s[-1] - 1.5
+    mask = s >= s[-1] - 0.6
     axin.plot(s[mask], bx[mask], color=C_BLUE)
     axin.plot(s[mask], by[mask], color=C_RED)
     axin.scatter([s[-1]], [bxm], color=C_BLUE, marker='*', s=180,
                  edgecolor='k', linewidth=0.5, zorder=5)
     axin.scatter([s[-1]], [bym], color=C_RED, marker='*', s=180,
                  edgecolor='k', linewidth=0.5, zorder=5)
-    axin.set_ylim(0, max(bxm, bym) * 1.8)
-    axin.set_title('undulator entrance', fontsize=13)
+    axin.set_ylim(0, max(bx[mask].max(), bxm) * 1.12)
+    axin.set_title('final 0.6 m → undulator', fontsize=13)
     axin.tick_params(labelsize=11)
     ax.indicate_inset_zoom(axin, edgecolor='gray')
 
@@ -284,7 +284,8 @@ def f4_perstage(abl):
     ax.set_xlabel('Sequential optimisation stage')
     ax.set_ylabel('Stage final MSE')
     ax.set_title('The sequential chain breaks at the final undulator match\n'
-                 '(Config A, same lattice, two beam seeds)', fontsize=20)
+                 '(Config A objective, two beam seeds — '
+                 'each separately optimised)', fontsize=19)
     ax.legend(loc='lower left', fontsize=16)
     _save(fig, 'F4_perstage')
 
@@ -356,13 +357,16 @@ def f6_gd_vs_bo(abl, bo_results):
 
     bo_med = None
     if bo_results and Path(bo_results).exists():
-        with open(bo_results) as fh:
-            bo = json.load(fh)
         try:
-            bo_med = [bo[c]['median_rms'] for c in CONFIGS]
-        except (KeyError, TypeError):
-            print(f"  ! {bo_results} lacks the expected "
-                  f"{{config: {{median_rms}}}} schema — using placeholder")
+            with open(bo_results) as fh:
+                bo = json.load(fh)
+            vals = [bo[c]['median_rms'] for c in CONFIGS]
+            if not all(isinstance(v, (int, float)) and np.isfinite(v)
+                       for v in vals):
+                raise ValueError('median_rms values must be finite scalars')
+            bo_med = vals
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            print(f"  ! {bo_results} unusable ({e}) — using placeholder")
     if bo_med is not None:
         ax.bar(xs + width / 2, bo_med, width, color=C_GREY,
                edgecolor='k', hatch='//', label='Bayesian optimisation')
@@ -515,10 +519,11 @@ def p4_cross_code():
                 f'MSE {m:.1e}\n' + r['Model'], ha='center', fontsize=14)
     ax.set_ylabel('Twiss-match MSE at the undulator')
     ax.set_title('Cross-code Twiss match at the undulator\n'
-                 r'(COSY DA maps to $10^{-9}$; RF-Track fringe-limited '
-                 r'in $\beta_y$; $\varepsilon_n=8$ baseline)', fontsize=18)
+                 r'(COSY DA maps to $10^{-9}$; RF-Track $\beta_y$-limited; '
+                 r'$\varepsilon_n=8$, R2 $\beta_x{=}1.4$ baseline)',
+                 fontsize=17)
     ax.annotate(f'RF-Track $\\beta_y$ deficit\n({by[-1]:.3f} vs '
-                f'{by[0]:.3f} m — missing fringe $\\varphi$)',
+                f'{by[0]:.3f} m; known fringe-$\\varphi$ limitation)',
                 xy=(2, mse[2]), xytext=(0.6, mse[2] * 0.12),
                 fontsize=15, arrowprops=dict(arrowstyle='->', lw=1.4))
     ax.set_ylim(min(mse) * 0.05, max(mse) * 6)
