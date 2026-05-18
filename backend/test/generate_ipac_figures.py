@@ -234,8 +234,8 @@ def f3_distribution(abl):
     ax.set_xticks(range(len(CONFIGS)))
     ax.set_xticklabels([CONFIG_DESC[c] for c in CONFIGS], fontsize=15)
     ax.set_ylabel('Final undulator RMS')
-    ax.set_title('Outcomes are bimodal — a basin problem, not variance',
-                 fontsize=21)
+    ax.set_title('Outcomes are bimodal: a good-basin / trapped-basin split',
+                 fontsize=20)
     ax.legend(handles=[
         plt.Line2D([], [], marker='o', ls='', color=C_GREY, mec='k',
                    label='converged (good basin)'),
@@ -521,7 +521,8 @@ def p4_cross_code():
     ax.set_ylabel('Twiss-match MSE at the undulator')
     ax.set_title('Cross-code Twiss match at the undulator\n'
                  r'(COSY DA maps to $10^{-9}$; RF-Track $\beta_y$-limited; '
-                 r'$\varepsilon_n=8$, R2 $\beta_x{=}1.4$ baseline)',
+                 r'$\varepsilon_n=8\ \pi$ mm$\cdot$mrad, R2 '
+                 r'$\beta_x{=}1.4$ m baseline)',
                  fontsize=17)
     ax.annotate(f'RF-Track $\\beta_y$ deficit\n({by[-1]:.3f} vs '
                 f'{by[0]:.3f} m; known fringe-$\\varphi$ limitation)',
