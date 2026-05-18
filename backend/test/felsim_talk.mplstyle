@@ -1,0 +1,30 @@
+# FELsim talk style — derived from felsim.mplstyle, sized for projected slides.
+# 16:9 default canvas, large fonts, thick lines, minimal in-figure clutter.
+# Usage: plt.style.use(Path(__file__).parent / 'felsim_talk.mplstyle')
+
+font.family: serif
+font.size: 20
+
+figure.figsize: 12.8, 7.2
+figure.dpi: 150
+
+axes.labelsize: 24
+axes.titlesize: 24
+axes.grid: True
+axes.linewidth: 1.4
+
+grid.alpha: 0.3
+
+xtick.labelsize: 19
+ytick.labelsize: 19
+xtick.major.width: 1.4
+ytick.major.width: 1.4
+
+legend.fontsize: 18
+legend.framealpha: 0.85
+
+lines.linewidth: 3.0
+lines.markersize: 9
+
+savefig.dpi: 300
+savefig.bbox: tight
