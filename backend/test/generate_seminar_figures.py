@@ -79,7 +79,7 @@ def compute_params(beta_xm=1.4, alpha_xm=0.47):
     """Stage 11 horizontal Twiss targets are overridable.
 
     Defaults (1.4 m, 0.47) from arXiv:2510.14061v1 Table I.
-    TUPM005 (IPAC 2026) uses (1.267 m, 0.560).
+    MOP6318 (IPAC 2026) uses (1.267 m, 0.560).
     """
     relat = lattice(1, fringeType=None)
     relat.setE(E=ENERGY)
@@ -682,10 +682,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--beta-xm', type=float, default=1.4,
                         help='Stage 11 target beta_x in m (default 1.4 from '
-                             'arXiv:2510.14061v1; use 1.267 for TUPM005)')
+                             'arXiv:2510.14061v1; use 1.267 for MOP6318)')
     parser.add_argument('--alpha-xm', type=float, default=0.47,
                         help='Stage 11 target alpha_x (default 0.47 from '
-                             'arXiv:2510.14061v1; use 0.560 for TUPM005)')
+                             'arXiv:2510.14061v1; use 0.560 for MOP6318)')
     parser.add_argument('--seed', type=int, default=42)
     cli_args = parser.parse_args()
 

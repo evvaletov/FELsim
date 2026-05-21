@@ -1,0 +1,15 @@
+To: Niels Bidault <nbidault@hawaii.edu>
+Subject: MOP6318 figure set and follow-up notes (BO baseline, Twiss provenance)
+
+Hi Niels,
+
+Now that MOP6318 is presented, here is the cleaned figure set generated from that work (10 PNGs attached: P1-P4 are the multi-code modelling stack, F1-F6 are the optimisation result), for the proceedings write-up and our records.
+
+Ablation result: At the undulator target values used in MOP6318, and by the undulator-RMS success criterion shown in F2/F3, the original objective (A) fails 35% of the time across 20 seeds and the "fixed" objective (C) fails 80%. Under this seed set and criterion, sequential Nelder-Mead was not consistently robust for this match across the tested objective designs.
+
+Twiss provenance: The figures use beta_x = 1.267 m, alpha_x = 0.560, which I took from a code comment rather than the abstract. I can reconcile the figures using the values from the paper.
+
+The GD-vs-BO figure (F6) is a template: the Nelder-Mead bars are real, the BO bars are a placeholder until the BO baseline (S6) runs. When you have a moment, your xopt hyperparameters would let me run that comparison on the same setup as the next step.
+
+Cheers,
+Eremey

@@ -83,14 +83,24 @@ MEASURE_REF = {
 }
 
 
-def compute_params():
+def compute_params(beta_xm=1.4, alpha_xm=0.47):
+    """Stage 11 horizontal Twiss targets are CLI-overridable.
+
+    Defaults (1.4 m, 0.47) come from Weinberg, Fisher & Li
+    (arXiv:2510.14061v1) Table I -- radiation-mode matching.
+    Bidault, Weinberg, Purwar & Li (MOP6318, IPAC 2026, Monday poster) Table 1
+    uses (1.267 m, 0.560), derived from the Rayleigh-length
+    formula beta_x,o = Z_R * eps_r / eps_x.
+    Vertical-plane target beta_y = gamma*lambda_u/(2*pi*K) is
+    fixed by FEL natural focusing.
+    """
     relat = lattice(1, fringeType=None)
     relat.setE(E=ENERGY)
     norm = relat.gamma * relat.beta
     epsilon = EPSILON_N / norm
     beta_ym = relat.gamma * LAMBDA_U / (2 * np.pi * K_UND)
     return {
-        "beta_xm": 1.4, "alpha_xm": 0.47,
+        "beta_xm": beta_xm, "alpha_xm": alpha_xm,
         "beta_ym": beta_ym, "alpha_ym": 0.0,
         "epsilon": epsilon, "gamma": relat.gamma,
         "beta_rel": relat.beta, "norm": norm,
@@ -297,6 +307,12 @@ def main():
     p.add_argument("--seed", type=int, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--beam-method", choices=["random", "sobol"], default="random")
+    p.add_argument("--beta-xm", type=float, default=1.4,
+                   help="Stage 11 target beta_x in m (default 1.4 from "
+                        "arXiv:2510.14061v1; use 1.267 for MOP6318)")
+    p.add_argument("--alpha-xm", type=float, default=0.47,
+                   help="Stage 11 target alpha_x (default 0.47 from "
+                        "arXiv:2510.14061v1; use 0.560 for MOP6318)")
     args = p.parse_args()
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -304,7 +320,7 @@ def main():
     print(f"=== ablation_run config={args.config} seed={args.seed} ===")
     t0 = time.perf_counter()
 
-    params = compute_params()
+    params = compute_params(beta_xm=args.beta_xm, alpha_xm=args.alpha_xm)
     line = build_line()
     beam_dist = generate_beam(params, args.seed, method=args.beam_method)
     currents, stage_traces = run_ablation(line, beam_dist, params, args.config)
@@ -317,6 +333,8 @@ def main():
         "config": args.config,
         "seed": args.seed,
         "beam_method": args.beam_method,
+        "beta_xm": args.beta_xm,
+        "alpha_xm": args.alpha_xm,
         "nb_particles": NB_PARTICLES,
         "currents": currents,
         "final_twiss": final_twiss,

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Generate the IPAC 2026 (TUPM005) talk figures from saved FELsim outputs.
+"""Generate the IPAC 2026 (MOP6318) figures from saved FELsim outputs.
 
   P1  Multi-code capability matrix
   P2  RF-Track linac model vs elegant (0.06% at peak)
   P3  Space-charge model comparison (DA-FMM vs Xsuite frozen/PIC3D)
   P4  Cross-code transport-line Twiss match quality
-  F1  Twiss(s) with the TUPM005 undulator target band
+  F1  Twiss(s) with the MOP6318 undulator target band
   F2  Objective-design ablation: A/B/C failure-rate bar
   F3  Per-seed undulator-RMS distribution
   F4  Per-stage MSE divergence, good vs trapped seed
@@ -43,7 +43,7 @@ from generate_seminar_figures import (
 )
 
 RESULTS_DIR = THIS_DIR / 'results'
-ABL_DIR = RESULTS_DIR / 'ablation_TUPM005'
+ABL_DIR = RESULTS_DIR / 'ablation_MOP6318'
 OUTPUT_DIR = RESULTS_DIR / 'ipac'
 STYLE_PATH = THIS_DIR / 'felsim_talk.mplstyle'
 
@@ -60,7 +60,7 @@ CONFIG_COLOR = {'A': C_BLUE, 'B': C_TEAL, 'C': C_RED}
 # ── Data loaders ──────────────────────────────────────────────────────────
 
 def load_ablation():
-    """Return {config: [seed_dict, ...]} for the TUPM005-target ablation."""
+    """Return {config: [seed_dict, ...]} for the MOP6318-target ablation."""
     out = {}
     for cfg in CONFIGS:
         seeds = []
@@ -99,8 +99,8 @@ def _save(fig, name):
 # ── Part II ───────────────────────────────────────────────────────────────
 
 def f1_twiss(params):
-    """F1: matched Twiss(s) with the TUPM005 undulator target band."""
-    print("F1: Twiss with TUPM005 target band...")
+    """F1: matched Twiss(s) with the MOP6318 undulator target band."""
+    print("F1: Twiss with MOP6318 target band...")
     best = min(glob.glob(str(ABL_DIR / 'A_seed*.json')),
                key=lambda f: json.load(open(f))['undulator_rms'])
     line = line_at_seed(best)
@@ -200,7 +200,7 @@ def f2_failrate(abl):
     ax.set_xticks(range(len(CONFIGS)))
     ax.set_xticklabels([CONFIG_DESC[c] for c in CONFIGS], fontsize=15)
     ax.set_title('Objective design dominates optimiser robustness\n'
-                 '(20 seeds/config, TUPM005 undulator targets)',
+                 '(20 seeds/config, MOP6318 undulator targets)',
                  fontsize=21)
     _save(fig, 'F2_failrate')
 
@@ -532,9 +532,9 @@ def p4_cross_code():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--beta-xm', type=float, default=1.267,
-                        help='TUPM005 target beta_x in m (default 1.267)')
+                        help='MOP6318 target beta_x in m (default 1.267)')
     parser.add_argument('--alpha-xm', type=float, default=0.560,
-                        help='TUPM005 target alpha_x (default 0.560)')
+                        help='MOP6318 target alpha_x (default 0.560)')
     parser.add_argument('--bo-results', type=str, default=None,
                         help='JSON of BO results (S6); placeholder if absent')
     parser.add_argument('--only', nargs='*', default=None,
@@ -546,7 +546,7 @@ def main():
     params = compute_params(beta_xm=args.beta_xm, alpha_xm=args.alpha_xm)
     abl = load_ablation()
 
-    print(f"IPAC TUPM005 figures: targets beta_x={args.beta_xm}, "
+    print(f"IPAC MOP6318 figures: targets beta_x={args.beta_xm}, "
           f"alpha_x={args.alpha_xm}, beta_y={params['beta_ym']:.4f}")
     print(f"Output: {OUTPUT_DIR}\n")
 
