@@ -209,13 +209,19 @@ def save(fig, name):
 def overview():
     """2x2 montage by re-importing the saved PNGs."""
     import matplotlib.image as mpimg
+    # F1-F4 from this script; F5-F7 from the cosy-fmm diagnostic scripts
+    # (sc_field_profile.py, sc_energy_scaling.py). Montage whatever exists.
     names = ["F1_macroparticle_charge", "F2_three_code_charge",
-             "F3_np_convergence", "F4_nslice_convergence"]
-    fig, axs = plt.subplots(2, 2, figsize=(13, 9.5))
+             "F3_np_convergence", "F4_nslice_convergence",
+             "F5_field_profile", "F6_energy_scaling", "F7_bunch_spot"]
+    names = [n for n in names if (OUT / f"{n}.png").exists()]
+    fig, axs = plt.subplots(4, 2, figsize=(15, 18))
+    for ax in axs.ravel():
+        ax.axis("off")
     for ax, n in zip(axs.ravel(), names):
-        ax.imshow(mpimg.imread(OUT / f"{n}.png")); ax.axis("off")
-    fig.suptitle("Space-charge campaign — Phase 1 (2 m FODO, 45 MeV; L3 data re-analysis)",
-                 fontsize=13, y=0.995)
+        ax.imshow(mpimg.imread(OUT / f"{n}.png"))
+    fig.suptitle("Space-charge campaign — Phase 1 (2 m FODO; COSY DA-FMM, "
+                 "45 MeV unless noted)", fontsize=14, y=0.998)
     fig.tight_layout()
     fig.savefig(OUT / "overview.png", dpi=150, bbox_inches="tight")
     plt.close(fig)

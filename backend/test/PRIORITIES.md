@@ -14,14 +14,14 @@ Verbatim items captured 2026-05-29; cross-referenced to existing roadmap/git-bug
 - [ ] **TW (travelling-wave).** COSY TW extension (N28 Phase 2, designed not coded — see `meeting_slides.txt`). RF-Track TW_Structure already done in L1.
 
 ### COSY space charge (`~/COSY/cosy-fmm/demo/spch_demo/`)
-- [ ] **Analyse as a function of equivalent macroparticle charge** (Q/N_p weight per macroparticle). Extends L3.1 (N_p convergence) / L3.4 (bunch-charge sweep).
-- [ ] **Check SC charge-density profile + potential** — visualise ρ(r) and Φ(r) from the DA-FMM kicks, not just moments.
-- [ ] **Run at 1 MeV** (demo currently 45 MeV; SC is far stronger at low β — injector-relevant).
-- [ ] **Check longitudinal SC effects.** ↔ L3.5 (was deferred — now active per Niels).
+- [x] **Analyse as a function of equivalent macroparticle charge** (Q/N_p). DONE — F1: excess growth ∝ q_mp^0.46 (≈√, = 1/√N_p shot noise); threshold q_mp\*≈0.037 pC.
+- [x] **Check SC charge-density profile + potential** — DONE — F5: ρ(r), Φ(r), E_r(r); exposed φ via `phi.dat` in `spch_kick.f90`; E_r matches analytic 2D Gaussian.
+- [x] **Run at 1 MeV** — DONE (preliminary, F6): fixed-beam FODO; 1 MeV @0.001 nC = 123% vs 45 MeV @1 nC = 1.8%. Rigorous SC-matched 1 MeV comparison deferred to Phase 3 (Risk R1).
+- [ ] **Check longitudinal SC effects.** ↔ L3.5 (was deferred — now active per Niels). Phase 4 (Fortran treecode edit).
 
 ### COSY ↔ RF-Track ↔ Xsuite three-code SC comparison (1 MeV and 45 MeV)
-- [ ] **16 ps bunch and 1 ps bunch.**
-- [ ] **Small spot size** (strong-SC regime).
+- [x] **16 ps bunch and 1 ps bunch** — COSY FODO done (F7): 1 ps=3.99%, 16 ps=0.58%. Three-code/line version = Phase 3.
+- [x] **Small spot size** — COSY FODO done (F7): 0.25 mm=26%, 4 mm=0.01%. Three-code/line version = Phase 3.
 - [ ] **Enable SC in RF-Track and in Xsuite** (try `w/SC` in both).
 - [ ] **Add BEAMPATH ("Beampass") simulation — for the injector** (confirmed by Niels 2026-05-29; NOT the linac). Batygin code; Niels already uses it for the injector (gun + α-magnet + matching quads, tickler 2026-04-05). Scope = injector cross-check.
 - [ ] **Later: full PIC in COSY.** ↔ git-bug `1cbd8ea` (SC Option 1).

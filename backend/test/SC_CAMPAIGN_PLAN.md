@@ -69,3 +69,8 @@ The L3 finding (DA-FMM emittance growth ∝ macroparticle shot noise ~1/√N_p) 
 
 ## Execution log
 - **2026-05-29** — Plan authored + 3-way reviewed. Phase 1 result plots generated from existing L3 data (`results/sc_campaign/`): see `sc_campaign_plots.py`. Items addressed: (c) headline + N_p convergence, three-code FODO comparison (i/l preview), N_slice robustness.
+- **2026-05-29** — Phase 1 extended with new COSY DA-FMM runs (`cosy-fmm`: `spch_kick.f90` now dumps `phi.dat`; `spch_demo.py` parameterised by energy/spot/bunch via `sc_field_profile.py`, `sc_energy_scaling.py`):
+  - **F5** (d): ρ(r)/Φ(r)/E_r(r) profiles, 1 nC/45 MeV; E_r matches the analytic 2D-Gaussian field (peak Φ≈609 V, E_r≈5.9e4 V/m).
+  - **F6** (e): energy scaling — 1 MeV @0.001 nC = 123% vs 45 MeV @1 nC = 1.8%; ~6 decades over 1→45 MeV (1/β²γ³). *Fixed-beam; SC-matched comparison is Phase 3.*
+  - **F7** (g/h): bunch length 1→16 ps (3.99→0.58%) and spot 0.25→4 mm (26→0.01%).
+  - Full montage: `results/sc_campaign/overview.png`.
