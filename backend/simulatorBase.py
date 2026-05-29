@@ -20,6 +20,7 @@ class CoordinateSystem(Enum):
     COSY = "cosy"  # [x(m), a, y(m), b, l(m), δK]
     ELEGANT = "elegant"  # [x(m), x'(rad), y(m), y'(rad), t(s), δ]
     RFTRACK = "rftrack"  # [x(mm), x'(mrad), y(mm), y'(mrad), ct(mm/c), P(MeV/c)]
+    XSUITE = "xsuite"  # [x(m), px=p_x/p0, y(m), py=p_y/p0, zeta(m), δ=(p-p0)/p0]
 
 
 class SimulationMode(Enum):

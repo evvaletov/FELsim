@@ -24,12 +24,21 @@ except ImportError:
     _RFTRACK_AVAILABLE = False
     RFTrackAdapter = None
 
+# xsuite is optional - import if available
+try:
+    from xsuiteAdapter import XsuiteAdapter
+    _XSUITE_AVAILABLE = True
+except ImportError:
+    _XSUITE_AVAILABLE = False
+    XsuiteAdapter = None
+
 
 class SimulatorType(Enum):
     """Supported simulator backends."""
     FELSIM = "felsim"
     COSY = "cosy"
     RFTRACK = "rftrack"
+    XSUITE = "xsuite"
     MULTICODE = "multicode"
 
 
@@ -51,6 +60,10 @@ class SimulatorFactory:
     if _RFTRACK_AVAILABLE:
         _registry[SimulatorType.RFTRACK.value] = RFTrackAdapter
 
+    # Register xsuite if available
+    if _XSUITE_AVAILABLE:
+        _registry[SimulatorType.XSUITE.value] = XsuiteAdapter
+
     # Known configuration keys per simulator type
     _KNOWN_KEYS: Dict[str, frozenset] = {
         'felsim': frozenset({
@@ -67,6 +80,11 @@ class SimulatorFactory:
             'particle_mass', 'particle_charge', 'aperture',
             'G_quad', 'dipole_slices', 'rf_frequency',
         }),
+        'xsuite': frozenset({
+            'lattice_path', 'excel_path', 'mode', 'debug',
+            'space_charge', 'sc_mesh', 'sc_method', 'n_slice_sc',
+            'bunch_charge_nc', 'beam_energy', 'particle_mass', 'particle_charge',
+        }),
         'multicode': frozenset({
             'sections', 'lattice_path', 'beam_energy', 'debug',
         }),
@@ -74,8 +92,11 @@ class SimulatorFactory:
 
     # Features only supported by specific simulators
     _FEATURE_SUPPORT: Dict[str, frozenset] = {
-        'space_charge': frozenset({'rftrack'}),
-        'sc_mesh': frozenset({'rftrack'}),
+        'space_charge': frozenset({'rftrack', 'xsuite'}),
+        'sc_mesh': frozenset({'rftrack', 'xsuite'}),
+        'sc_method': frozenset({'xsuite'}),
+        'n_slice_sc': frozenset({'xsuite'}),
+        'bunch_charge_nc': frozenset({'xsuite'}),
         'transfer_matrix_order': frozenset({'cosy'}),
         'fringe_field_order': frozenset({'cosy'}),
         'use_mge_for_dipoles': frozenset({'cosy'}),
@@ -431,6 +452,71 @@ class CoordinateTransformer:
         return out
 
     @staticmethod
+    def _felsim_to_xsuite(particles: np.ndarray, energy_mev: float,
+                          particle_mass_mev: float = None) -> np.ndarray:
+        """FELsim -> xsuite. xsuite: x[m], px=p_x/p0, y[m], py=p_y/p0,
+        zeta[m]=-v0*Δt, delta=(p-p0)/p0. Transverse momenta use the same exact
+        3D decomposition as the COSY transform; longitudinal is a plain
+        path-length offset (no COSY γ/(1+γ) factor)."""
+        from physicalConstants import PhysicalConstants
+        E0 = particle_mass_mev or PhysicalConstants.E0_electron
+        C = float(PhysicalConstants.C)
+        T_RF = 1.0 / PhysicalConstants.f_RF_default
+
+        KE0 = energy_mev
+        gamma = 1 + KE0 / E0
+        p0c = np.sqrt(KE0 ** 2 + 2 * KE0 * E0)
+        v0 = (p0c / (gamma * E0)) * C
+
+        out = np.zeros_like(particles)
+        out[:, 0] = particles[:, 0] * 1e-3
+        out[:, 2] = particles[:, 2] * 1e-3
+
+        tan_xp = np.tan(particles[:, 1] * 1e-3)
+        tan_yp = np.tan(particles[:, 3] * 1e-3)
+        KE = KE0 * (1 + particles[:, 5] * 1e-3)
+        pc = np.sqrt(KE ** 2 + 2 * KE * E0)
+        denom = np.sqrt(1 + tan_xp ** 2 + tan_yp ** 2)
+        out[:, 1] = pc * tan_xp / (denom * p0c)
+        out[:, 3] = pc * tan_yp / (denom * p0c)
+        out[:, 5] = pc / p0c - 1.0
+
+        DeltaToF = particles[:, 4] * 1e-3 * T_RF
+        out[:, 4] = -v0 * DeltaToF
+        return out
+
+    @staticmethod
+    def _xsuite_to_felsim(particles: np.ndarray, energy_mev: float,
+                          particle_mass_mev: float = None) -> np.ndarray:
+        from physicalConstants import PhysicalConstants
+        E0 = particle_mass_mev or PhysicalConstants.E0_electron
+        C = float(PhysicalConstants.C)
+        T_RF = 1.0 / PhysicalConstants.f_RF_default
+
+        KE0 = energy_mev
+        gamma = 1 + KE0 / E0
+        p0c = np.sqrt(KE0 ** 2 + 2 * KE0 * E0)
+        v0 = (p0c / (gamma * E0)) * C
+
+        out = np.zeros_like(particles)
+        out[:, 0] = particles[:, 0] * 1e3
+        out[:, 2] = particles[:, 2] * 1e3
+
+        pc = p0c * (1.0 + particles[:, 5])
+        KE = np.sqrt(np.maximum(pc ** 2 + E0 ** 2, 0)) - E0
+        out[:, 5] = (KE / KE0 - 1.0) * 1e3
+
+        px = particles[:, 1] * p0c
+        py = particles[:, 3] * p0c
+        pz = np.sqrt(np.maximum(pc ** 2 - px ** 2 - py ** 2, 0))
+        with np.errstate(divide='ignore', invalid='ignore'):
+            out[:, 1] = np.where(pz > 0, np.arctan(px / pz) * 1e3, 0)
+            out[:, 3] = np.where(pz > 0, np.arctan(py / pz) * 1e3, 0)
+
+        out[:, 4] = -particles[:, 4] / v0 / T_RF * 1e3
+        return out
+
+    @staticmethod
     def transform(particles: np.ndarray,
                   from_system: CoordinateSystem,
                   to_system: CoordinateSystem,
@@ -471,6 +557,10 @@ class CoordinateTransformer:
                 lambda: CoordinateTransformer._cosy_to_rftrack(particles, energy_mev, mass, f_RF),
             (CoordinateSystem.RFTRACK, CoordinateSystem.COSY):
                 lambda: CoordinateTransformer._rftrack_to_cosy(particles, energy_mev, mass, f_RF),
+            (CoordinateSystem.FELSIM, CoordinateSystem.XSUITE):
+                lambda: CoordinateTransformer._felsim_to_xsuite(particles, energy_mev, mass),
+            (CoordinateSystem.XSUITE, CoordinateSystem.FELSIM):
+                lambda: CoordinateTransformer._xsuite_to_felsim(particles, energy_mev, mass),
         }
 
         if key not in dispatch:
