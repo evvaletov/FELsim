@@ -16,7 +16,7 @@ Verbatim items captured 2026-05-29; cross-referenced to existing roadmap/git-bug
 ### COSY space charge (`~/COSY/cosy-fmm/demo/spch_demo/`)
 - [x] **Analyse as a function of equivalent macroparticle charge** (Q/N_p). DONE — F1: excess growth ∝ q_mp^0.46 (≈√, = 1/√N_p shot noise); threshold q_mp\*≈0.037 pC.
 - [x] **Check SC charge-density profile + potential** — DONE — F5: ρ(r), Φ(r), E_r(r); exposed φ via `phi.dat` in `spch_kick.f90`; E_r matches analytic 2D Gaussian.
-- [x] **Run at 1 MeV** — DONE (preliminary, F6): fixed-beam FODO; 1 MeV @0.001 nC = 123% vs 45 MeV @1 nC = 1.8%. Rigorous SC-matched 1 MeV comparison deferred to Phase 3 (Risk R1).
+- [x] **Run at 1 MeV** — DONE (F6, matched). Matched beam on a STABLE FODO (1/f=1, μ=60°, 4 cells); the demo 1/f=2 cell is at μ=180° (no matched optics). 45 MeV @1 nC = 0.31% (matched) vs 1 MeV @1 nC = 4.6e4% (SC-limit blowup); ~7-order gap is pure SC since both start matched. Risk R1 resolved.
 - [ ] **Check longitudinal SC effects.** ↔ L3.5 (was deferred — now active per Niels). Phase 4 (Fortran treecode edit).
 
 ### COSY ↔ RF-Track ↔ Xsuite three-code SC comparison (1 MeV and 45 MeV)

@@ -74,3 +74,15 @@ The L3 finding (DA-FMM emittance growth ∝ macroparticle shot noise ~1/√N_p) 
   - **F6** (e): energy scaling — 1 MeV @0.001 nC = 123% vs 45 MeV @1 nC = 1.8%; ~6 decades over 1→45 MeV (1/β²γ³). *Fixed-beam; SC-matched comparison is Phase 3.*
   - **F7** (g/h): bunch length 1→16 ps (3.99→0.58%) and spot 0.25→4 mm (26→0.01%).
   - Full montage: `results/sc_campaign/overview.png`.
+- **2026-05-29** — Phase 2/3 enabler + F6 matched fix:
+  - **XsuiteAdapter** added (`backend/xsuiteAdapter.py`) and wired into the
+    multi-code framework (CoordinateSystem.XSUITE + FELSIM↔XSUITE transforms +
+    factory registration). Verified: roundtrip 5.5e-13, drift vs FELsim 7.8e-10,
+    stable FODO vs FELsim 7.5e-5, SC frozen smoke test; test_multicode 38/38.
+    Unblocks the three-code transport-line capstone (item l).
+  - **F6 re-done as a matched comparison** (Risk R1 resolved): the demo FODO
+    (1/f=2) is at μ=180° with no matched optics, so the study moved to a stable
+    FODO (1/f=1) with a beam matched to its bare optics over 4 cells. 45 MeV @1 nC
+    = 0.31% vs 1 MeV @1 nC = 4.6e4% (SC-limit blowup). Tracker gained
+    `bare_matched_twiss` / `make_matched_bunch` and k_focus/n_cells params.
+  - Results mirrored to `/mnt/hgfs/Documents/003_Niels/sc_campaign/` (PNG + ASCII).
