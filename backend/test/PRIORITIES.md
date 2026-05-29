@@ -1,7 +1,33 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-04-05)
+**Date:** 2026-02-11 (updated 2026-05-29)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
+
+---
+
+## Action items from 2026-05-04 meeting with Niels [NEW — git-bug umbrella]
+
+Verbatim items captured 2026-05-29; cross-referenced to existing roadmap/git-bug.
+
+### Linac
+- [ ] **Xsuite — more detail.** Extend the xsuite linac model. ↔ L3.3 / git-bug `343b42f` (RF-Track ↔ xsuite linac SC comparison).
+- [ ] **TW (travelling-wave).** COSY TW extension (N28 Phase 2, designed not coded — see `meeting_slides.txt`). RF-Track TW_Structure already done in L1.
+
+### COSY space charge (`~/COSY/cosy-fmm/demo/spch_demo/`)
+- [ ] **Analyse as a function of equivalent macroparticle charge** (Q/N_p weight per macroparticle). Extends L3.1 (N_p convergence) / L3.4 (bunch-charge sweep).
+- [ ] **Check SC charge-density profile + potential** — visualise ρ(r) and Φ(r) from the DA-FMM kicks, not just moments.
+- [ ] **Run at 1 MeV** (demo currently 45 MeV; SC is far stronger at low β — injector-relevant).
+- [ ] **Check longitudinal SC effects.** ↔ L3.5 (was deferred — now active per Niels).
+
+### COSY ↔ RF-Track ↔ Xsuite three-code SC comparison (1 MeV and 45 MeV)
+- [ ] **16 ps bunch and 1 ps bunch.**
+- [ ] **Small spot size** (strong-SC regime).
+- [ ] **Enable SC in RF-Track and in Xsuite** (try `w/SC` in both).
+- [ ] **Add BEAMPATH ("Beampass") simulation — for the injector** (confirmed by Niels 2026-05-29; NOT the linac). Batygin code; Niels already uses it for the injector (gun + α-magnet + matching quads, tickler 2026-04-05). Scope = injector cross-check.
+- [ ] **Later: full PIC in COSY.** ↔ git-bug `1cbd8ea` (SC Option 1).
+- [ ] **DA-FMM + RF-Track + Xsuite on the focusing/transport line, at 45 MeV and 1 MeV:**
+  - [ ] with dipoles
+  - [ ] without dipoles
 
 ---
 
