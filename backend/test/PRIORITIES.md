@@ -1,6 +1,6 @@
 # UH MkV FEL Beamline Optimization — Priorities & Roadmap
 
-**Date:** 2026-02-11 (updated 2026-05-29)
+**Date:** 2026-02-11 (updated 2026-06-19)
 **Scripts:** `backend/test/UHM_beamline_opt_*.py`
 
 ---
@@ -28,6 +28,22 @@ Verbatim items captured 2026-05-29; cross-referenced to existing roadmap/git-bug
 - [ ] **DA-FMM + RF-Track + Xsuite on the focusing/transport line, at 45 MeV and 1 MeV:**
   - [ ] with dipoles
   - [ ] without dipoles
+
+---
+
+## Action items from early-June 2026 meeting with Niels [NEW — git-bug umbrella `1aa5c44`]
+
+Captured 2026-06-19 from handwritten notes; cross-referenced to repo/git-bug/memory via a per-item investigation pass. **Target: complete by Mon 2026-06-22. Delivery: results emailed to Niels, off the regular Monday-meeting cadence.** Exact meeting date TBC (Monday cadence → 2026-06-01 or 2026-06-08; recalled "~June 3").
+
+1. **elegant scope / channel** *(largely settled — confirm scope with Niels in the email).* Note: *"Don't need elegant for the diag[nostic] chicane — maybe for RF gun."* (Channel read by Eremey 2026-06-19 as the **diagnostic chicane**.) Reading: elegant is **not** needed for the diagnostic chicane — its optics are already covered by COSY / Xsuite / FELsim-1st-order, and elegant's chicane/CSR strengths aren't required at 40 MeV / this charge; elegant stays scoped to **RF acceleration**. *"maybe for RF gun"* = the gun (RF-Track-only today) is the candidate next elegant cross-check. Fact check: elegant is currently wired ONLY as the linac reference (RFCA+TWLA, `elegant_linac/`); no `ElegantAdapter` for the chicane/gun/α-magnet/transport. Action: confirm in the email + offer an elegant gun cross-check. ↔ git-bug `35e31e6` (L1; Phase 5 report + Phase 6 polish still open).
+2. **Linac: codes × physics-feature table** *(in-progress / mostly new).* Existing P1 capability matrix (`generate_ipac_figures.py`, `results/ipac/P1_capability_matrix.*`) is codes × beamline-BLOCKS (0/1/2), not codes × PHYSICS-FEATURES, not linac-scoped, no implemented-vs-potential split. Build a new linac table (rows = codes, cols = TW/SW, field maps, SC, beam loading, wakefields/CSR, longitudinal; cells = implemented vs potential).
+3. **Linac: more complex / refined model** *(in-progress — continuation of 2026-05-04 (a)+(b)).* xsuite linac is a lumped single `Cavity` (`compare_xsuite.py`) and `XsuiteAdapter` treats `RF_CAVITY` as a drift; COSY TW designed-not-coded; RF-Track `TW_Structure` is the detailed one. Remaining: xsuite multi-cell TW, COSY TW DA map. **Not blocked** — production τ=0.57 cell geometry is in-repo (`docs/sbend_linac/slac_cells_tau057_table66.csv`, SLAC-75 Table 6-6); building the cell-by-cell model from it is the task (field map is a later refinement). ↔ `343b42f`, `35e31e6`, `f59e144`.
+4. **PALS beam-file standard?** *(not-started).* **Answer: NO** — PALS is a lattice standard only (whole submission package + I2/I3/I8 are lattice-only). Beam/particle-distribution interchange is undecided: git-bug `8d0d833` (P3) still open; FELsim writes only COSY rray/ascii (`cosyParticleSimulator.py`), no openPMD/SDDS/HDF5. Decide a format (recommend **openPMD-beamphysics**, ASCII fallback); ax3l/Axel Huebl (openPMD, a PALS participant) reachable via PALS Issue #176. Investigate Genesis4 native particle-input path (gates the choice).
+5. **Fringe-field (FF) mode comparison across codes** *(largely-done).* FF = fringe field. Already covered by R2 (FELsim / COSY FR0 / COSY FR1 / RF-Track) + W4 (FR0/FR1/FR3 convergence) + P8 (FR0-vs-FR3 across DA orders) + P11 (FELsim triangle-φ impact); tooling `--fr {0,1,2,3} --warm-start`, 18 `cosy_s1_fr*` JSONs. Remaining: add xsuite (no-fringe baseline — adapter treats edges as drift), **refresh the RF-Track column** (triangle-φ correction has since been added → R2-era β_y deficit narrative is stale), one consolidated full-lattice FR0–FR3 table. No git-bug yet.
+6. **Cross-calibration (between codes)** *(in-progress).* Backbone DONE: single anchor G=2.694 T/A/m, identical k1 formula in FELsim/RF-Track/xsuite, COSY same gradient; δ-convention conversions in `CoordinateTransformer` (COSY ΔK/K₀ vs xsuite Δp/p₀), verified vs MAD-X ~1e-10; xsuite tests pass. Remaining (= live ask): the three-code SC-on transport-line capstone at 45 & 1 MeV ±dipoles; xsuite still lacks dipole-edge/fringe + RF models. ↔ `f59e144` item l, `343b42f`.
+7. **FEL objectives A/B — continue iterations** *(in-progress).* Ablation done twice: `results/ablation/` (A 10% / B 15% / C 75% NM-fail) and corrected `results/ablation_MOP6318/` (A 35% / B 35% / C 80%). "Aware of diff between objectives" = at MOP6318 targets A and B BOTH fail ~35% (not robust as the abstract framed) → narrative shift to confirm (git-bug `cf11eb7`). Remaining: **S6 BO baseline** (P0 paper deliverable; needs Niels's xopt hyperparameters — requested in `email_niels_ipac.txt`, confirm if replied), write the MOP6318 `summary.md` interpretation (placeholder), reconcile undulator-Twiss provenance (β_x=1.267/α_x=0.560 from a code comment), S4/S5/S7. ↔ `7f690aa`, `cf11eb7`.
+8. **Try optimization with glyfada** *(largely-done).* Already tried + characterised: W6 (fails at ε_n=5/8/14, NM beats by 3–6 orders), W7 (conclusion = two-phase NM→pycma-CMA-ES; distributed glyfada not needed for this 4-var narrow-basin problem), O4 (26D Koa ~27k evals ~99% penalty), O5 (pycma adopted into production). Remaining (pick target with Niels): if the IPAC objective matrix, run glyfada on **Config C** (stress case) + report head-to-head with NM/BO (overlaps `7f690aa` S4/S6); likely a negative-result-report deliverable. Use the `NewFELsim` conda env (system python3 can't import glyfada).
+9. **COSY DA-FMM SC + PIC — continue work** *(in-progress).* Phase 1 DONE 2026-05-29 (FODO physics F1–F7; XsuiteAdapter enabler); no SC commits since. Remaining: Phase 3 capstone (three-code DA-FMM+RF-Track+xsuite on the transport line, item l, now unblocked); unblock/route around the RF-Track 2.5.5 full-line PIC core-dump (`af9d56c` / Risk R5); Phase 2 linac TW; Phase 4 longitudinal SC, BEAMPATH injector (blocked on LANL access), full PIC (cosy-pic Phase 3 native SPCKICK). ↔ `f59e144`, `35e03f2`, `1cbd8ea`, `343b42f`.
 
 ---
 
@@ -61,11 +77,20 @@ Verbatim items captured 2026-05-29; cross-referenced to existing roadmap/git-bug
   SLAC-two-mile-report10.pdf Tables I+II (86 cells, all 4 columns,
   both disk thicknesses). **Critical finding:** these tables are for a
   tau=0.40 prototype that was REJECTED — production SLAC structure uses
-  tau=0.57. Cell-by-cell data for the production structure is not in our
-  documents (would require SLAC engineering drawings). Our analytical
+  tau=0.57. Tables I+II are the tau=0.40 prototype; archival reference in
+  `docs/sbend_linac/slac_cells_tau040_table{I,II}.csv`. Our analytical
   single-Fourier-coefficient model is the CORRECT approach for the
-  constant-gradient TW benchmark. Extracted data saved as archival
-  reference in `docs/sbend_linac/slac_cells_tau040_table{I,II}.csv`.
+  constant-gradient TW benchmark.
+  - **CORRECTION (2026-06-19):** the earlier claim that production tau=0.57
+    cell data "is not in our documents" is STALE. The production tau=0.57
+    cell-by-cell geometry WAS located the next day (2026-04-06) in a different
+    source — SLAC-75 "The Stanford Two-Mile Accelerator," Table 6-6 (p. 145) —
+    and extracted to `docs/sbend_linac/slac_cells_tau057_table66.csv` (100
+    cells, 2a/2b, 2pi/3 mode, rho=0.1215 in, t=0.23 in), cross-checked vs
+    SLAC-75 Fig 6-22 (`plot_cell_geometry.py`). So a cell-by-cell multi-cell TW
+    model is a BUILD task, not blocked on external input. A measured/simulated
+    on-axis field map would be a later refinement (derivable from the geometry
+    via constant-gradient relations).
 - **Remaining:** Phase 5 (LaTeX report at reports/2026/Apr/13/),
   Phase 6 (polish)
 - **Open TODOs (from 2026-04-20 review):**

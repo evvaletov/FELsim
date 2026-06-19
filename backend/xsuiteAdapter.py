@@ -157,8 +157,11 @@ class XsuiteAdapter(SimulatorBase):
         if etype in ('DIPOLE', 'DPH'):
             ang = float(elem.parameters.get('angle', 0.0))
             full = elem.length or length
-            h = ang / full if full else 0.0
-            return [xt.Bend(length=length, k0=h, h=h)]
+            h = ang / full if full else 0.0       # curvature 1/rho (sector body)
+            ang_sub = ang * (length / full) if full else 0.0
+            # Define the bend by length+angle (xtrack derives h); k0=h gives the
+            # on-momentum sector body. No edge/fringe model (see module docstring).
+            return [xt.Bend(length=length, angle=ang_sub, k0=h)]
         if etype in ('DIPOLE_WEDGE', 'DPW', 'RF_CAVITY'):
             logger.warning("Xsuite: %s not modelled; treated as drift", etype)
             return [xt.Drift(length=length)]
