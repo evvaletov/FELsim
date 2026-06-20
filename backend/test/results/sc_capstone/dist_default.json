@@ -1,0 +1,25 @@
+{
+  "alfx": 0.0,
+  "alfy": 0.0,
+  "array_sha256": "b02d509d4426c7712d9f1aa28962f4143e677dbc0e5d9d10f9f569ad94ed2922",
+  "betx_m": 3.0,
+  "bety_m": 3.0,
+  "energy_mev": 45.0,
+  "eps_n_mm_mrad": 8.0,
+  "label": "capstone_default",
+  "n_p": 6000,
+  "q_nc": 1.0,
+  "seed": 20260619,
+  "sig_delta": 0.005,
+  "sig_z_m": 0.0006,
+  "versions": {
+    "RF_Track": "unknown",
+    "cosy_fmm_git": "77d2f16+dirty",
+    "felsim_git": "00bf44e+dirty",
+    "numpy": "2.4.4",
+    "python": "3.12.11",
+    "xfields": "0.25.18",
+    "xpart": "0.23.12",
+    "xtrack": "0.104.2"
+  }
+}
