@@ -127,32 +127,134 @@ class XsuiteAdapter(SimulatorBase):
         for attr in ('current', 'angle'):
             if hasattr(elem, attr):
                 params[attr] = getattr(elem, attr)
+        # carry RF-cavity parameters so the TW model can be built downstream
+        for attr in ('frequency_hz', 'gradient_mv_per_m', 'voltage_mv',
+                     'structure_type', 'phase_advance_deg', 'n_cells', 'phase_deg'):
+            if getattr(elem, attr, None) is not None:
+                params[attr] = getattr(elem, attr)
         return BeamlineElement(etype, getattr(elem, 'length', 0.0), **params)
 
     def _convert_element_to_native(self, element: BeamlineElement) -> Any:
         # xsuite elements are built lazily in _build_line; nothing to do here.
         return element
 
-    def _current_to_k1(self, current: float, focusing: bool) -> float:
-        """k1 = |Q·G·I| / (m·c·β·γ), matching FELsim / RF-Track."""
+    def _current_to_k1(self, current: float, focusing: bool,
+                       betagamma: Optional[float] = None) -> float:
+        """k1 = |Q·G·I| / (m·c·β·γ), matching FELsim / RF-Track. betagamma
+        defaults to the adapter energy; pass a local value for elements after an
+        accelerating section, since the same physical magnet is weaker at higher
+        energy (k1 scales as 1/p)."""
         if current == 0:
             return 0.0
         mass_kg = self.particle_mass * PhysicalConstants.MeV_to_J / PhysicalConstants.C ** 2
         charge_C = abs(self.particle_charge) * PhysicalConstants.Q
+        bg = betagamma if betagamma is not None else self._betagamma
         k1 = abs(charge_C * self.G_quad * current) / (
-            mass_kg * PhysicalConstants.C * self._beta * self._gamma)
+            mass_kg * PhysicalConstants.C * bg)
         return _FOCUS_SIGN * (k1 if focusing else -k1)
 
+    def _betagamma_at(self, K_mev: float) -> float:
+        gamma = 1.0 + K_mev / self.particle_mass
+        return np.sqrt(gamma ** 2 - 1.0)
+
+    def _tw_synchronous_profile(self, K_in, E0_vpm, freq, phi_adv, n_cells, L_cell):
+        """Autophasing RK4 of the synchronous particle through a TW structure;
+        kinetic energy [MeV] at each cell boundary (length n_cells+1), injected at
+        the phase that maximises the gain. None if the particle is lost."""
+        c = PhysicalConstants.C
+        mc2 = self.particle_mass
+        omega = 2.0 * np.pi * freq
+
+        def run(phi0):
+            K, psi, Ks = K_in, phi0, [K_in]
+            for n in range(n_cells):
+                zs = np.linspace(n * L_cell, (n + 1) * L_cell, 11)
+                for i in range(len(zs) - 1):
+                    h = zs[i + 1] - zs[i]
+
+                    def d(K, psi):
+                        g = 1.0 + K / mc2
+                        if g <= 1.0:
+                            return None
+                        b = np.sqrt(1.0 - 1.0 / g ** 2)
+                        return (E0_vpm * np.cos(psi)) / 1e6, (omega / c) * (1.0 / b - 1.0)
+                    k1 = d(K, psi)
+                    if k1 is None:
+                        return None
+                    k2 = d(K + .5 * h * k1[0], psi + .5 * h * k1[1])
+                    k3 = d(K + .5 * h * k2[0], psi + .5 * h * k2[1]) if k2 else None
+                    k4 = d(K + h * k3[0], psi + h * k3[1]) if k3 else None
+                    if None in (k2, k3, k4):
+                        return None
+                    K += h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0])
+                    psi += h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])
+                Ks.append(K)
+            return np.array(Ks)
+
+        best = None
+        for phi in np.deg2rad(np.arange(0, 360, 2.0)):
+            prof = run(phi)
+            if prof is not None and (best is None or prof[-1] > best[-1]):
+                best = prof
+        return best
+
+    def _build_tw_cavity(self, elem, K_in):
+        """xtrack multi-cell TW chain (Cavity + ReferenceEnergyIncrease) for one
+        RF_CAVITY, injected at K_in [MeV]. Returns (elements, delta_K_MeV). The
+        per-cell energy gains come from the autophasing model; the reference ramps
+        so the synchronous particle stays at delta~0 and downstream optics see the
+        right energy."""
+        p = elem.parameters
+        L = elem.length
+        if p.get('frequency_hz') is None:
+            logger.warning("Xsuite RF_CAVITY missing frequency_hz; drift")
+            return [xt.Drift(length=L)], 0.0
+        freq = float(p['frequency_hz'])
+        phi_adv = np.deg2rad(float(p.get('phase_advance_deg', 120.0)))
+        if p.get('gradient_mv_per_m') is not None:
+            E0_vpm = float(p['gradient_mv_per_m']) * 1e6
+        elif p.get('voltage_mv') is not None and L > 0:
+            E0_vpm = float(p['voltage_mv']) * 1e6 / L
+        else:
+            logger.warning("Xsuite RF_CAVITY missing gradient/voltage; drift")
+            return [xt.Drift(length=L)], 0.0
+        l_sync = PhysicalConstants.C * phi_adv / (2.0 * np.pi * freq)
+        n_cells = p.get('n_cells')
+        n_cells = int(round(L / l_sync)) if not n_cells else int(round(float(n_cells)))
+        n_cells = max(1, n_cells)
+        L_cell = L / n_cells          # span elem.length exactly (no drift mismatch)
+        Ks = self._tw_synchronous_profile(K_in, E0_vpm, freq, phi_adv, n_cells, L_cell)
+        if Ks is None:
+            logger.warning("Xsuite RF_CAVITY: synchronous particle lost; drift")
+            return [xt.Drift(length=L)], 0.0
+        mc2 = self.particle_mass
+        def mom(K):
+            return np.sqrt((K + mc2) ** 2 - mc2 ** 2) * 1e6   # eV/c
+        elems = []
+        for n in range(len(Ks) - 1):
+            dK = (Ks[n + 1] - Ks[n]) * 1e6                     # eV
+            dp = mom(Ks[n + 1]) - mom(Ks[n])                   # eV/c
+            elems += [xt.Drift(length=L_cell / 2),
+                      xt.Cavity(frequency=freq, voltage=dK, phase=np.pi / 2),
+                      xt.ReferenceEnergyIncrease(Delta_p0c=dp),
+                      xt.Drift(length=L_cell / 2)]
+        return elems, float(Ks[-1] - K_in)
+
     # ----------------------------------------------------------- line builder
-    def _xsuite_elements_for(self, elem: BeamlineElement, length: float):
+    def _xsuite_elements_for(self, elem: BeamlineElement, length: float,
+                             e_run: Optional[float] = None):
         """Return the xsuite element(s) for one FELsim element of given length
-        (length may be a sub-slice of the full element when space charge is on)."""
+        (length may be a sub-slice of the full element when space charge is on).
+        e_run is the local reference kinetic energy [MeV] (for energy-aware k1
+        after an accelerating section); defaults to the adapter energy."""
         etype = elem.element_type.upper()
         if etype == 'DRIFT' or length <= 0:
             return [xt.Drift(length=length)]
         if etype in ('QUAD_F', 'QPF', 'QUAD_D', 'QPD'):
             focusing = etype in ('QUAD_F', 'QPF')
-            k1 = self._current_to_k1(elem.parameters.get('current', 0.0), focusing)
+            bg = self._betagamma_at(e_run) if e_run is not None else None
+            k1 = self._current_to_k1(elem.parameters.get('current', 0.0),
+                                     focusing, betagamma=bg)
             return [xt.Quadrupole(length=length, k1=k1)]
         if etype in ('DIPOLE', 'DPH'):
             ang = float(elem.parameters.get('angle', 0.0))
@@ -162,7 +264,7 @@ class XsuiteAdapter(SimulatorBase):
             # Define the bend by length+angle (xtrack derives h); k0=h gives the
             # on-momentum sector body. No edge/fringe model (see module docstring).
             return [xt.Bend(length=length, angle=ang_sub, k0=h)]
-        if etype in ('DIPOLE_WEDGE', 'DPW', 'RF_CAVITY'):
+        if etype in ('DIPOLE_WEDGE', 'DPW'):
             logger.warning("Xsuite: %s not modelled; treated as drift", etype)
             return [xt.Drift(length=length)]
         logger.warning("Xsuite: unknown element %s; treated as drift", etype)
@@ -185,23 +287,36 @@ class XsuiteAdapter(SimulatorBase):
 
     def _build_line(self, sc_on, sig_x=None, sig_y=None, sig_z=None, n_e=None):
         elements = []
+        e_run = self.beam_energy          # running reference kinetic energy [MeV]
         if not sc_on:
             for elem in self.beamline:
-                elements += self._xsuite_elements_for(elem, elem.length)
+                if elem.element_type.upper() == 'RF_CAVITY':
+                    tw, dK = self._build_tw_cavity(elem, e_run)
+                    elements += tw
+                    e_run += dK
+                else:
+                    elements += self._xsuite_elements_for(elem, elem.length, e_run)
         else:
             total_L = sum(e.length for e in self.beamline)
             ds = total_L / max(self.n_slice_sc, 1)
             long_profile = xf.LongitudinalProfileQGaussian(
                 number_of_particles=n_e, sigma_z=sig_z, z0=0.0, q_parameter=1.0)
             for elem in self.beamline:
+                if elem.element_type.upper() == 'RF_CAVITY':
+                    # cavity accelerates as a block; per-cell SC inside the linac
+                    # (with local gamma) is a future refinement
+                    tw, dK = self._build_tw_cavity(elem, e_run)
+                    elements += tw
+                    e_run += dK
+                    continue
                 L = elem.length
                 if L <= 0:
-                    elements += self._xsuite_elements_for(elem, 0.0)
+                    elements += self._xsuite_elements_for(elem, 0.0, e_run)
                     continue
                 n_sub = max(1, int(round(L / ds)))
                 sub_L = L / n_sub
                 for _ in range(n_sub):
-                    elements += self._xsuite_elements_for(elem, sub_L)
+                    elements += self._xsuite_elements_for(elem, sub_L, e_run)
                     elements.append(
                         self._make_sc_element(sub_L, sig_x, sig_y, long_profile))
 
