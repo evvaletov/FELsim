@@ -243,9 +243,15 @@ class XsuiteAdapter(SimulatorBase):
                 # local (post-cell) energy automatically; PIC gets the local
                 # gamma explicitly. This is what makes SC strong at the 1 MeV
                 # injection and ~1/(beta gamma)^3-suppressed downstream.
+                env = sc.get('sig_env')   # per-cell [(sx, sy), ...] matched envelope
+                if env is not None:
+                    sx, sy = env[min(n, len(env) - 1)]
+                    upd = False           # prescribed envelope, deterministic
+                else:
+                    sx, sy, upd = sc['sig_x'], sc['sig_y'], True   # self-consistent
                 elems.append(self._make_sc_element(
-                    L_cell, sc['sig_x'], sc['sig_y'], sc['long_profile'],
-                    gamma=1.0 + Ks[n + 1] / mc2))
+                    L_cell, sx, sy, sc['long_profile'],
+                    gamma=1.0 + Ks[n + 1] / mc2, update=upd))
         return elems, float(Ks[-1] - K_in)
 
     # ----------------------------------------------------------- line builder
@@ -278,15 +284,18 @@ class XsuiteAdapter(SimulatorBase):
         logger.warning("Xsuite: unknown element %s; treated as drift", etype)
         return [xt.Drift(length=length)]
 
-    def _make_sc_element(self, length, sig_x, sig_y, long_profile, gamma=None):
+    def _make_sc_element(self, length, sig_x, sig_y, long_profile, gamma=None,
+                         update=True):
         # gamma sets the relativistic factor for the PIC solver; the frozen
         # BiGaussian kick reads the line's (ramped) reference energy at track
         # time, so it needs no explicit gamma. Pass the local gamma inside an
         # accelerating section so the SC suppression (~1/(beta gamma)^3) is right.
+        # update=False uses the supplied sigma as a prescribed (matched-envelope)
+        # value instead of recomputing it from the bunch each step.
         if self.sc_method == "pic3d":
             nx, ny, nz = self.sc_mesh
             return xf.SpaceCharge3D(
-                length=length, update_on_track=True,
+                length=length, update_on_track=update,
                 x_range=(-8 * sig_x, 8 * sig_x),
                 y_range=(-8 * sig_y, 8 * sig_y),
                 z_range=(-8 * long_profile.sigma_z, 8 * long_profile.sigma_z),
@@ -295,9 +304,14 @@ class XsuiteAdapter(SimulatorBase):
         return xf.SpaceChargeBiGaussian(
             length=length, longitudinal_profile=long_profile,
             sigma_x=sig_x, sigma_y=sig_y, mean_x=0.0, mean_y=0.0,
-            update_on_track=True)
+            update_on_track=update)
 
-    def _build_line(self, sc_on, sig_x=None, sig_y=None, sig_z=None, n_e=None):
+    def _build_line(self, sc_on, sig_x=None, sig_y=None, sig_z=None, n_e=None,
+                    sig_env=None):
+        # sig_env: optional per-cell [(sigma_x, sigma_y), ...] matched envelope,
+        # indexed over the cells of a single RF_CAVITY. When given, each per-cell
+        # SC uses its local sigma (prescribed, deterministic); otherwise sigma is
+        # recomputed self-consistently from the bunch (update_on_track, default).
         elements = []
         e_run = self.beam_energy          # running reference kinetic energy [MeV]
         if not sc_on:
@@ -318,7 +332,8 @@ class XsuiteAdapter(SimulatorBase):
                     # per-cell SC interleaved inside the linac; each kick uses the
                     # local energy after that cell's reference ramp
                     tw, dK = self._build_tw_cavity(elem, e_run, sc=dict(
-                        sig_x=sig_x, sig_y=sig_y, long_profile=long_profile))
+                        sig_x=sig_x, sig_y=sig_y, long_profile=long_profile,
+                        sig_env=sig_env))
                     elements += tw
                     e_run += dK
                     continue
@@ -339,6 +354,32 @@ class XsuiteAdapter(SimulatorBase):
             kinetic_energy0=self.beam_energy * 1e6)
         line.build_tracker()
         return line
+
+    def sc_envelope_prepass(self, sig_x, sig_y, sig_xp, sig_yp, sig_z, n_e,
+                            n_part=2000, seed=0):
+        """Matched-envelope pre-pass: track a Gaussian bunch through the
+        SELF-CONSISTENT SC-on linac and return the per-cell (sigma_x, sigma_y)
+        the SC actually sees. Feed the result back as `sig_env` to drive a
+        deterministic, low-noise SC model that reproduces the self-consistent run.
+        Tracking through the SC-on (update_on_track) line is what converges the
+        envelope: an SC-off pre-pass underestimates sigma where SC grows the beam,
+        and a naive analytic adiabatic law is wrong without transverse focusing."""
+        line = self._build_line(sc_on=True, sig_x=sig_x, sig_y=sig_y,
+                                sig_z=sig_z, n_e=n_e)
+        et = list(line.get_table().element_type)
+        sc_idx = [i for i, t in enumerate(et) if t == 'SpaceChargeBiGaussian']
+        rng = np.random.default_rng(seed)
+        p = line.build_particles(
+            x=rng.normal(0, sig_x, n_part), px=rng.normal(0, sig_xp, n_part),
+            y=rng.normal(0, sig_y, n_part), py=rng.normal(0, sig_yp, n_part),
+            zeta=rng.normal(0, sig_z, n_part), delta=np.zeros(n_part))
+        env, prev = [], 0
+        for si in sc_idx:                       # sigma arriving at each SC kick
+            line.track(p, ele_start=prev, ele_stop=si)
+            prev = si
+            m = p.state == 1
+            env.append((float(np.std(p.x[m])), float(np.std(p.y[m]))))
+        return env
 
     # -------------------------------------------------------------- simulate
     def simulate(self, particles: Optional[np.ndarray] = None,
