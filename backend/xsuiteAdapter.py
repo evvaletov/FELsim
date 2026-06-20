@@ -198,7 +198,7 @@ class XsuiteAdapter(SimulatorBase):
                 best = prof
         return best
 
-    def _build_tw_cavity(self, elem, K_in):
+    def _build_tw_cavity(self, elem, K_in, sc=None):
         """xtrack multi-cell TW chain (Cavity + ReferenceEnergyIncrease) for one
         RF_CAVITY, injected at K_in [MeV]. Returns (elements, delta_K_MeV). The
         per-cell energy gains come from the autophasing model; the reference ramps
@@ -238,6 +238,14 @@ class XsuiteAdapter(SimulatorBase):
                       xt.Cavity(frequency=freq, voltage=dK, phase=np.pi / 2),
                       xt.ReferenceEnergyIncrease(Delta_p0c=dp),
                       xt.Drift(length=L_cell / 2)]
+            if sc is not None:
+                # SC kick after the reference ramp: the frozen model reads the
+                # local (post-cell) energy automatically; PIC gets the local
+                # gamma explicitly. This is what makes SC strong at the 1 MeV
+                # injection and ~1/(beta gamma)^3-suppressed downstream.
+                elems.append(self._make_sc_element(
+                    L_cell, sc['sig_x'], sc['sig_y'], sc['long_profile'],
+                    gamma=1.0 + Ks[n + 1] / mc2))
         return elems, float(Ks[-1] - K_in)
 
     # ----------------------------------------------------------- line builder
@@ -270,7 +278,11 @@ class XsuiteAdapter(SimulatorBase):
         logger.warning("Xsuite: unknown element %s; treated as drift", etype)
         return [xt.Drift(length=length)]
 
-    def _make_sc_element(self, length, sig_x, sig_y, long_profile):
+    def _make_sc_element(self, length, sig_x, sig_y, long_profile, gamma=None):
+        # gamma sets the relativistic factor for the PIC solver; the frozen
+        # BiGaussian kick reads the line's (ramped) reference energy at track
+        # time, so it needs no explicit gamma. Pass the local gamma inside an
+        # accelerating section so the SC suppression (~1/(beta gamma)^3) is right.
         if self.sc_method == "pic3d":
             nx, ny, nz = self.sc_mesh
             return xf.SpaceCharge3D(
@@ -279,7 +291,7 @@ class XsuiteAdapter(SimulatorBase):
                 y_range=(-8 * sig_y, 8 * sig_y),
                 z_range=(-8 * long_profile.sigma_z, 8 * long_profile.sigma_z),
                 nx=nx, ny=ny, nz=nz,
-                solver="FFTSolver2p5D", gamma0=self._gamma)
+                solver="FFTSolver2p5D", gamma0=(gamma or self._gamma))
         return xf.SpaceChargeBiGaussian(
             length=length, longitudinal_profile=long_profile,
             sigma_x=sig_x, sigma_y=sig_y, mean_x=0.0, mean_y=0.0,
@@ -303,9 +315,10 @@ class XsuiteAdapter(SimulatorBase):
                 number_of_particles=n_e, sigma_z=sig_z, z0=0.0, q_parameter=1.0)
             for elem in self.beamline:
                 if elem.element_type.upper() == 'RF_CAVITY':
-                    # cavity accelerates as a block; per-cell SC inside the linac
-                    # (with local gamma) is a future refinement
-                    tw, dK = self._build_tw_cavity(elem, e_run)
+                    # per-cell SC interleaved inside the linac; each kick uses the
+                    # local energy after that cell's reference ramp
+                    tw, dK = self._build_tw_cavity(elem, e_run, sc=dict(
+                        sig_x=sig_x, sig_y=sig_y, long_profile=long_profile))
                     elements += tw
                     e_run += dK
                     continue
