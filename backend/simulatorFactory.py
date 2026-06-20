@@ -101,7 +101,7 @@ class SimulatorFactory:
         'pic': frozenset({
             'lattice_path', 'excel_path', 'mode', 'debug',
             'space_charge', 'sc_mesh', 'sc_method', 'bunch_charge_nc',
-            'beam_energy', 'cli_path',
+            'sc_ds_max', 'beam_energy', 'cli_path',
         }),
         'multicode': frozenset({
             'sections', 'lattice_path', 'beam_energy', 'debug',

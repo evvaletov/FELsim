@@ -54,6 +54,7 @@ class PicAdapter(SimulatorBase):
                  sc_mesh: tuple = (64, 64, 64),
                  sc_method: str = "pic3d",
                  bunch_charge_nc: float = 1.0,
+                 sc_ds_max: float = 0.05,
                  cli_path: Optional[str] = None,
                  debug: bool = None, **kwargs):
         super().__init__(name="PIC", native_coordinates=CoordinateSystem.FELSIM)
@@ -67,6 +68,9 @@ class PicAdapter(SimulatorBase):
         self.sc_mesh = tuple(sc_mesh)
         self.sc_method = sc_method
         self.bunch_charge_C = bunch_charge_nc * 1e-9
+        # max SC integration step [m]: long drifts are split into sub-steps so
+        # SC is applied along them, not only at element boundaries (A3).
+        self.sc_ds_max = sc_ds_max
         self.debug = bool(debug)
         self._native_beamline: List[Any] = []
         self._ebeam = ebeam_class()
@@ -102,10 +106,11 @@ class PicAdapter(SimulatorBase):
             raise ValueError("Beamline not set")
 
         P = np.asarray(particles, dtype=float).copy()
-        bl = self._native_beamline
+        sc = self.space_charge_enabled and self.bunch_charge_C > 0.0
+        # With SC on, split long drifts so SC is integrated along them (A3).
+        bl = self._expanded_beamline(self._native_beamline) if sc else self._native_beamline
         n = len(bl)
         n_oob = 0
-        sc = self.space_charge_enabled and self.bunch_charge_C > 0.0
 
         # 2nd-order leapfrog: half-kick, then (map, boundary-kick) per element.
         if sc and n > 0 and bl[0].length > 0:
@@ -130,6 +135,8 @@ class PicAdapter(SimulatorBase):
                 'beam_energy_mev': self.beam_energy,
                 'space_charge': sc,
                 'sc_mesh': self.sc_mesh,
+                'sc_ds_max': self.sc_ds_max,
+                'num_sc_stations': n if sc else 0,
                 'bunch_charge_nc': self.bunch_charge_C * 1e9,
                 'max_particles_out_of_grid': n_oob,
             })
@@ -204,6 +211,27 @@ class PicAdapter(SimulatorBase):
         for elem in native:
             elem.setE(self.beam_energy)
         self._native_beamline = native
+
+    def _expanded_beamline(self, beamline):
+        """Split long drifts into <= sc_ds_max sub-drifts so the leapfrog SC
+        integration has multiple stations along them (drifts compose exactly:
+        driftLattice(L/n) applied n times == driftLattice(L)). Focusing/bending
+        elements are short and kept whole (boundary SC kicks)."""
+        from beamline import driftLattice
+        if not (self.sc_ds_max and self.sc_ds_max > 0):
+            return list(beamline)
+        out = []
+        for elem in beamline:
+            L = elem.length
+            if type(elem).__name__ == 'driftLattice' and L > self.sc_ds_max:
+                n = int(np.ceil(L / self.sc_ds_max))
+                for _ in range(n):
+                    d = driftLattice(L / n)
+                    d.setE(self.beam_energy)
+                    out.append(d)
+            else:
+                out.append(elem)
+        return out
 
     def set_beam_energy(self, energy_mev: float):
         self.beam_energy = energy_mev
