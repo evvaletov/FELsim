@@ -129,11 +129,19 @@ pytest test/sc_capstone/ -q
 ## What is next (panel-ranked)
 
 1. **xsuite dipole edge/fringe model + SC-inside-magnets element slicing** → unlocks the
-   full-line and +dipole comparison (currently the binding gap).
+   full-line and +dipole comparison (currently the binding gap). Tracked: git-bug `660da00`
+   (P1-high).
 2. **RF-Track full-line PIC core-dump (v2.5.5)** isolated as a parallel debug task, not a
    capstone blocker.
 3. **DA-level kick composition** (`fmm_eval_treecode_da`) — COSY's unique high-order-DA
    differentiator, the route Niels asked about; deferred until the baseline capstone
    defines the reference.
-4. **Ensemble (multi-seed) DA-FMM at 45 MeV** if a clean weak-SC physical number is wanted
-   there, or use Plummer softening to suppress the collisional shot noise.
+4. **Clean weak-SC number at 45 MeV** — now supported in `sc_capstone_run.py` via two
+   routes (added 2026-06-20): `--seeds s1 s2 …` averages DA-FMM over realizations
+   (reports mean ± std; at 45 MeV/1 nC, 3 seeds give 0.19 % ± 0.13 % — the physical value
+   is buried in sampling variance), and `--softening <eps_m | auto>` applies Plummer
+   softening to suppress the close-encounter collisional heating (validated: at 10 nC,
+   ε = 3e-4 m pulls DA-FMM 26.9 % → 18.5 % toward xsuite 4.3 %; ε must be a meaningful
+   fraction of σ_x — the `auto` = σ_x/√N_p ≈ 6.7 µm heuristic is too small to suppress
+   much). Multi-seed handles low-charge sampling variance; softening handles high-charge
+   collisional excess.

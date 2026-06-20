@@ -114,14 +114,25 @@ def growth_pct(exit_val, init_val):
     return (exit_val - init_val) / init_val * 100.0
 
 
-def run_point(energy_mev, q_nc, n_p, seed, eps_n, ds_target, optics_energy=None):
+def run_point(energy_mev, q_nc, n_p, seed, eps_n, ds_target, optics_energy=None,
+              softening="0"):
+    """softening: Plummer softening length [m] for the DA-FMM kernel, or 'auto' for
+    the eps = sigma_x_init/sqrt(N_p) heuristic, or '0'/0 for the bare 1/r kernel.
+    Softening suppresses the macroparticle-collision shot noise so the treecode
+    approximates the smooth mean field (the alternative to brute-force high N_p)."""
     arr, man = make_beam(energy_mev, n_p, seed, eps_n, q_nc)
     segs = scs.extract_segments(LATTICE, *NODIP_RANGE, energy_mev,
                                 optics_energy_mev=optics_energy)
-    enx0 = cd.array_sha256(arr)  # not used; keep determinism trace
+    si = cd.to_physical_si(arr, energy_mev)
+    if str(softening) == "auto":
+        eps = float(si["x"].std()) / np.sqrt(n_p)
+    else:
+        eps = float(softening)
     # DA-FMM
-    da_off = scs.track_dafmm(arr, segs, energy_mev, q_nc, ds_target, spch_on=False)
-    da_on = scs.track_dafmm(arr, segs, energy_mev, q_nc, ds_target, spch_on=True)
+    da_off = scs.track_dafmm(arr, segs, energy_mev, q_nc, ds_target, spch_on=False,
+                             softening_eps=eps)
+    da_on = scs.track_dafmm(arr, segs, energy_mev, q_nc, ds_target, spch_on=True,
+                            softening_eps=eps)
     # xsuite frozen
     xs_off = track_xsuite_frozen(arr, segs, energy_mev, q_nc, ds_target, spch_on=False)
     xs_on = track_xsuite_frozen(arr, segs, energy_mev, q_nc, ds_target, spch_on=True)
@@ -138,7 +149,21 @@ def run_point(energy_mev, q_nc, n_p, seed, eps_n, ds_target, optics_energy=None)
         "xsuite_off_gx": growth_pct(xs_off["epsnx_exit"], init_enx),
         "xs_sigx_off": xs_off["sigx_exit_mm"], "da_sigx_off": da_off["sigx_exit_mm"],
         "wall_dafmm": da_on["wall_sc"], "wall_xsuite": xs_on["wall"],
+        "seed": seed, "softening_eps": eps,
     }
+
+
+def _aggregate_seeds(per_seed):
+    """Mean +/- std over seed realizations; used to average down DA-FMM shot noise."""
+    out = dict(per_seed[0])
+    for key in ("dafmm_gx", "dafmm_gy", "xsuite_gx", "xsuite_gy"):
+        vals = np.array([r[key] for r in per_seed])
+        out[key] = float(vals.mean())
+        out[key + "_std"] = float(vals.std(ddof=1)) if len(vals) > 1 else 0.0
+    out["n_seeds"] = len(per_seed)
+    out["dafmm_off_gx"] = max(abs(r["dafmm_off_gx"]) for r in per_seed)
+    out["xsuite_off_gx"] = max(abs(r["xsuite_off_gx"]) for r in per_seed)
+    return out
 
 
 def main() -> int:
@@ -153,19 +178,32 @@ def main() -> int:
                     help="preserve the section optics (k0) at this energy across all "
                          "tracking energies; use 45 for the energy-scaling comparison "
                          "so a 1 MeV run isn't an over-focused blow-up (Risk R1)")
+    ap.add_argument("--softening", default="0",
+                    help="DA-FMM Plummer softening length [m], or 'auto' (sigma_x/sqrt(N_p)), "
+                         "or '0' (bare 1/r). Softening suppresses the macroparticle-collision "
+                         "shot noise -> the smooth mean-field comparison without huge N_p.")
+    ap.add_argument("--seeds", nargs="+", type=int, default=None,
+                    help="multiple seeds -> average DA-FMM growth over realizations "
+                         "(mean +/- std), to drive down the single-seed shot-noise scatter. "
+                         "Defaults to the single --seed.")
     ap.add_argument("--outdir", type=Path, default=Path("test/results/sc_capstone"))
     args = ap.parse_args()
 
+    seeds = args.seeds if args.seeds else [args.seed]
     rows = []
     for E in args.energies_mev:
         for q in args.charges_nc:
-            print(f"[capstone] E={E} MeV  Q={q} nC ...", flush=True)
-            r = run_point(E, q, args.n_p, args.seed, args.eps_n, args.ds_target,
-                          optics_energy=args.optics_energy)
+            print(f"[capstone] E={E} MeV  Q={q} nC  "
+                  f"(soft={args.softening}, {len(seeds)} seed(s)) ...", flush=True)
+            per_seed = [run_point(E, q, args.n_p, s, args.eps_n, args.ds_target,
+                                  optics_energy=args.optics_energy,
+                                  softening=args.softening) for s in seeds]
+            r = per_seed[0] if len(seeds) == 1 else _aggregate_seeds(per_seed)
             rows.append(r)
-            print(f"   DA-FMM  growth x/y = {r['dafmm_gx']:+.3f}% / {r['dafmm_gy']:+.3f}%   "
-                  f"xsuite-frozen x/y = {r['xsuite_gx']:+.3f}% / {r['xsuite_gy']:+.3f}%   "
-                  f"(SC-off check: DA {r['dafmm_off_gx']:+.2e}%, xs {r['xsuite_off_gx']:+.2e}%)")
+            sd = (f" +/-{r['dafmm_gx_std']:.3f}" if "dafmm_gx_std" in r else "")
+            print(f"   DA-FMM  growth x = {r['dafmm_gx']:+.3f}%{sd}   "
+                  f"xsuite-frozen x = {r['xsuite_gx']:+.3f}%   "
+                  f"(SC-off: DA {r['dafmm_off_gx']:+.2e}%, xs {r['xsuite_off_gx']:+.2e}%)")
 
     args.outdir.mkdir(parents=True, exist_ok=True)
     (args.outdir / "sc_capstone_results.json").write_text(json.dumps(rows, indent=2))
