@@ -32,6 +32,14 @@ except ImportError:
     _XSUITE_AVAILABLE = False
     XsuiteAdapter = None
 
+# cosy-pic PIC space-charge adapter is optional - import if available
+try:
+    from picAdapter import PicAdapter
+    _PIC_AVAILABLE = True
+except ImportError:
+    _PIC_AVAILABLE = False
+    PicAdapter = None
+
 
 class SimulatorType(Enum):
     """Supported simulator backends."""
@@ -39,6 +47,7 @@ class SimulatorType(Enum):
     COSY = "cosy"
     RFTRACK = "rftrack"
     XSUITE = "xsuite"
+    PIC = "pic"
     MULTICODE = "multicode"
 
 
@@ -64,6 +73,10 @@ class SimulatorFactory:
     if _XSUITE_AVAILABLE:
         _registry[SimulatorType.XSUITE.value] = XsuiteAdapter
 
+    # Register cosy-pic PIC adapter if available
+    if _PIC_AVAILABLE:
+        _registry[SimulatorType.PIC.value] = PicAdapter
+
     # Known configuration keys per simulator type
     _KNOWN_KEYS: Dict[str, frozenset] = {
         'felsim': frozenset({
@@ -85,6 +98,11 @@ class SimulatorFactory:
             'space_charge', 'sc_mesh', 'sc_method', 'n_slice_sc',
             'bunch_charge_nc', 'beam_energy', 'particle_mass', 'particle_charge',
         }),
+        'pic': frozenset({
+            'lattice_path', 'excel_path', 'mode', 'debug',
+            'space_charge', 'sc_mesh', 'sc_method', 'bunch_charge_nc',
+            'beam_energy', 'cli_path',
+        }),
         'multicode': frozenset({
             'sections', 'lattice_path', 'beam_energy', 'debug',
         }),
@@ -92,11 +110,11 @@ class SimulatorFactory:
 
     # Features only supported by specific simulators
     _FEATURE_SUPPORT: Dict[str, frozenset] = {
-        'space_charge': frozenset({'rftrack', 'xsuite'}),
-        'sc_mesh': frozenset({'rftrack', 'xsuite'}),
-        'sc_method': frozenset({'xsuite'}),
+        'space_charge': frozenset({'rftrack', 'xsuite', 'pic'}),
+        'sc_mesh': frozenset({'rftrack', 'xsuite', 'pic'}),
+        'sc_method': frozenset({'xsuite', 'pic'}),
         'n_slice_sc': frozenset({'xsuite'}),
-        'bunch_charge_nc': frozenset({'xsuite'}),
+        'bunch_charge_nc': frozenset({'xsuite', 'pic'}),
         'transfer_matrix_order': frozenset({'cosy'}),
         'fringe_field_order': frozenset({'cosy'}),
         'use_mge_for_dipoles': frozenset({'cosy'}),
