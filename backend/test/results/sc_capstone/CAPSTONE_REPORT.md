@@ -22,7 +22,8 @@ Three components:
    SHA-256. Every engine starts from the identical particles.
 2. **No-SC cross-code handoff** (`nosc_handoff.py`) — the cold-beam agreement table.
 3. **Reduced SC capstone** (`sc_section.py`, `sc_capstone_run.py`) — cosy-fmm DA-FMM vs
-   xsuite frozen-Gaussian on the real no-dipole section, same beam, SC on.
+   xsuite frozen-Gaussian vs **cosy-pic mesh PIC** (`--with-pic`) on the real no-dipole
+   section, same beam, SC on.
 
 All numbers below: N_p = 6000, ε_n = 8 mm·mrad, β_x = β_y = 3 m, seed 20260619.
 
@@ -58,33 +59,41 @@ scaled to preserve the 45-MeV optics (analytic re-match), so the energy comparis
 isolates space-charge scaling rather than a focusing instability (the 45-MeV-tuned quads
 are over-focused ~32× at 1 MeV and would blow up the beam on their own — Risk R1).
 
-ε_{n,x} growth (figure: `capstone_combined_growth.png`):
+Three SC engines on the one common distribution — DA-FMM (cosy-fmm N-body 1/r treecode),
+xsuite frozen-Gaussian (nonlinear Bassetti–Erskine, rms-self-consistent), and **cosy-pic
+(Hockney mesh PIC)** — ε_{n,x} growth (figure: `capstone_combined_growth.png`):
 
-| E [MeV] | Q [nC] | DA-FMM | xsuite-frozen | DA/xs |
-|---|---|---|---|---|
-| 45 | 0.1 | −0.017 % | −0.003 % | (noise) |
-| 45 | 0.3 | −0.005 % | −0.006 % | (noise) |
-| 45 | 1 | +0.255 % | +0.012 % | 21.7 |
-| 45 | 3 | +2.810 % | +0.292 % | 9.6 |
-| 45 | 10 | +26.95 % | +4.315 % | 6.2 |
-| 1 | 0.01 | +0.843 % | +3.992 % | 0.21 |
-| 1 | 0.03 | +8.901 % | +42.54 % | 0.21 |
-| 1 | 0.1 | +49.87 % | +245.1 % | 0.20 |
-| 1 | 0.3 | +150.7 % | +790.3 % | 0.19 |
+| E [MeV] | Q [nC] | DA-FMM | xsuite-frozen | cosy-pic | DA/xs |
+|---|---|---|---|---|---|
+| 45 | 0.3 | −0.005 % | −0.006 % | −0.005 % | (noise) |
+| 45 | 1 | +0.255 % | +0.012 % | +0.012 % | 21.7 |
+| 45 | 3 | +2.810 % | +0.292 % | +0.267 % | 9.6 |
+| 45 | 10 | +26.95 % | +4.315 % | +3.441 % | 6.2 |
+| 1 | 0.01 | +0.843 % | +3.992 % | — | 0.21 |
+| 1 | 0.03 | +8.901 % | +42.54 % | — | 0.21 |
+| 1 | 0.1 | +49.87 % | +245.1 % | — | 0.20 |
+| 1 | 0.3 | +150.7 % | +790.3 % | — | 0.19 |
 
-SC-off control (both engines, every point): |growth| < 1e-12 %.
+(cosy-pic not run at 1 MeV — it spawns a CLI per SC station and the 1 MeV story is already
+clear from DA-FMM vs xsuite.) SC-off control (DA-FMM and xsuite, every point):
+|growth| < 1e-12 %; cosy-pic is run SC-on only.
 
 Two regimes, two distinct physics findings:
 
-- **45 MeV (weak SC).** The DA-FMM excess over xsuite (6–22×) is *not* a physical
-  nonlinear effect — at N_p = 6000 the macroparticle charge q_mp = Q/N_p exceeds the
-  Phase-1 threshold q_mp* ≈ 0.037 pC for Q ≥ 1 nC, so the DA-FMM excess is **numerical
-  collisionality (shot noise ∝ q_mp^0.46)**, which the analytic frozen model does not
-  have. An N_p sweep at 45 MeV/1 nC (`np_convergence.png`) confirms the physical growth
-  here is only ≲ 0.05 % — below the DA-FMM single-realization shot-noise floor, so 45 MeV
-  is too weak-SC to resolve a clean code-vs-code physical difference at single seed. This
-  **re-demonstrates the Phase-1 q_mp* threshold on a real transport section** (previously
-  only the toy FODO).
+- **45 MeV (weak SC) — cosy-pic is the tie-breaker.** The DA-FMM excess over xsuite (6–22×)
+  is *not* a physical nonlinear effect: **cosy-pic (an independent mesh PIC) agrees with
+  xsuite-frozen to ~20 % at every charge** (1 nC: both 0.012 %; 3 nC: 0.267 vs 0.292 %;
+  10 nC: 3.44 vs 4.32 %), so two independent particle/field methods jointly pin the
+  physical mean-field growth, and the DA-FMM bare-treecode excess is confirmed as
+  **numerical collisionality (shot noise ∝ q_mp^0.46)** — at N_p = 6000, q_mp = Q/N_p
+  exceeds the Phase-1 threshold q_mp* ≈ 0.037 pC for Q ≥ 1 nC. (cosy-pic actually sits
+  slightly *below* xsuite-frozen at high charge, consistent with the frozen-Gaussian mildly
+  over-predicting — the same mechanism that dominates at 1 MeV, below.) This **re-demonstrates
+  the Phase-1 q_mp* threshold on a real transport section** (previously only the toy FODO)
+  and **upgrades it from a single-code observation to a three-code cross-validation**: with
+  only DA-FMM + xsuite one could not tell which code was the outlier; cosy-pic settles it.
+  An N_p sweep at 45 MeV/1 nC (`np_convergence.png`) independently shows the physical growth
+  is ≲ 0.05 %, below the DA-FMM single-realization shot-noise floor.
 
 - **1 MeV (strong SC), fair comparison.** At 1 MeV/0.01 nC, q_mp = 0.0017 pC ≪ q_mp*, so
   there is no shot-noise inflation and the comparison is physical. Here the ordering
@@ -121,6 +130,8 @@ python test/sc_capstone/common_distribution.py --out test/results/sc_capstone/di
 python test/sc_capstone/nosc_handoff.py --codes felsim xsuite rftrack --cases nodip full
 python test/sc_capstone/sc_capstone_run.py --charges-nc 0.1 0.3 1 3 10 --energies-mev 45 --optics-energy 45 --outdir test/results/sc_capstone/e45
 python test/sc_capstone/sc_capstone_run.py --charges-nc 0.01 0.03 0.1 0.3 --energies-mev 1 --optics-energy 45 --outdir test/results/sc_capstone/e1
+# 4-engine 45 MeV sweep with cosy-pic (needs ~/COSY/cosy-pic built; slower):
+python test/sc_capstone/sc_capstone_run.py --charges-nc 0.3 1 3 10 --energies-mev 45 --optics-energy 45 --with-pic --pic-mesh 64 64 64 --outdir test/results/sc_capstone/e45_4engine
 python test/sc_capstone/combine_capstone.py
 python test/sc_capstone/np_convergence.py
 pytest test/sc_capstone/ -q
