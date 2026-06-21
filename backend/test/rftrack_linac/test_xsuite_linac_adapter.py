@@ -86,7 +86,7 @@ def test_length_and_guard():
     assert abs(total_L - 3.048) < 1e-9, f"length mismatch {total_L}"
 
     sim2 = XsuiteAdapter(beam_energy=1.0)
-    el, dK = sim2._build_tw_cavity(
+    el, dK, _ = sim2._build_tw_cavity(
         BeamlineElement('RF_CAVITY', 1.0, gradient_mv_per_m=13.3), 1.0)
     print(f"[guard] no-frequency cavity -> {len(el)} elem(s), dK={dK}")
     assert dK == 0.0 and len(el) == 1

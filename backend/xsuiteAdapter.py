@@ -208,7 +208,7 @@ class XsuiteAdapter(SimulatorBase):
         L = elem.length
         if p.get('frequency_hz') is None:
             logger.warning("Xsuite RF_CAVITY missing frequency_hz; drift")
-            return [xt.Drift(length=L)], 0.0
+            return [xt.Drift(length=L)], 0.0, 0
         freq = float(p['frequency_hz'])
         phi_adv = np.deg2rad(float(p.get('phase_advance_deg', 120.0)))
         if p.get('gradient_mv_per_m') is not None:
@@ -217,7 +217,7 @@ class XsuiteAdapter(SimulatorBase):
             E0_vpm = float(p['voltage_mv']) * 1e6 / L
         else:
             logger.warning("Xsuite RF_CAVITY missing gradient/voltage; drift")
-            return [xt.Drift(length=L)], 0.0
+            return [xt.Drift(length=L)], 0.0, 0
         l_sync = PhysicalConstants.C * phi_adv / (2.0 * np.pi * freq)
         n_cells = p.get('n_cells')
         n_cells = int(round(L / l_sync)) if not n_cells else int(round(float(n_cells)))
@@ -226,7 +226,7 @@ class XsuiteAdapter(SimulatorBase):
         Ks = self._tw_synchronous_profile(K_in, E0_vpm, freq, phi_adv, n_cells, L_cell)
         if Ks is None:
             logger.warning("Xsuite RF_CAVITY: synchronous particle lost; drift")
-            return [xt.Drift(length=L)], 0.0
+            return [xt.Drift(length=L)], 0.0, 0
         mc2 = self.particle_mass
         def mom(K):
             return np.sqrt((K + mc2) ** 2 - mc2 ** 2) * 1e6   # eV/c
@@ -243,16 +243,17 @@ class XsuiteAdapter(SimulatorBase):
                 # local (post-cell) energy automatically; PIC gets the local
                 # gamma explicitly. This is what makes SC strong at the 1 MeV
                 # injection and ~1/(beta gamma)^3-suppressed downstream.
-                env = sc.get('sig_env')   # per-cell [(sx, sy), ...] matched envelope
+                env = sc.get('sig_env')   # flat [(sx, sy), ...] over all SC cells
                 if env is not None:
-                    sx, sy = env[min(n, len(env) - 1)]
+                    off = sc.get('env_offset', 0)   # this cavity's first cell
+                    sx, sy = env[min(off + n, len(env) - 1)]
                     upd = False           # prescribed envelope, deterministic
                 else:
                     sx, sy, upd = sc['sig_x'], sc['sig_y'], True   # self-consistent
                 elems.append(self._make_sc_element(
                     L_cell, sx, sy, sc['long_profile'],
                     gamma=1.0 + Ks[n + 1] / mc2, update=upd))
-        return elems, float(Ks[-1] - K_in)
+        return elems, float(Ks[-1] - K_in), len(Ks) - 1
 
     # ----------------------------------------------------------- line builder
     def _xsuite_elements_for(self, elem: BeamlineElement, length: float,
@@ -308,16 +309,18 @@ class XsuiteAdapter(SimulatorBase):
 
     def _build_line(self, sc_on, sig_x=None, sig_y=None, sig_z=None, n_e=None,
                     sig_env=None):
-        # sig_env: optional per-cell [(sigma_x, sigma_y), ...] matched envelope,
-        # indexed over the cells of a single RF_CAVITY. When given, each per-cell
-        # SC uses its local sigma (prescribed, deterministic); otherwise sigma is
-        # recomputed self-consistently from the bunch (update_on_track, default).
+        # sig_env: optional FLAT [(sigma_x, sigma_y), ...] matched envelope over
+        # all SC cells (across every RF_CAVITY, in order). When given, each
+        # per-cell SC uses its local sigma (prescribed, deterministic); otherwise
+        # sigma is recomputed self-consistently from the bunch (update_on_track,
+        # the default).
         elements = []
         e_run = self.beam_energy          # running reference kinetic energy [MeV]
+        sc_off = 0                        # running SC-cell index into sig_env
         if not sc_on:
             for elem in self.beamline:
                 if elem.element_type.upper() == 'RF_CAVITY':
-                    tw, dK = self._build_tw_cavity(elem, e_run)
+                    tw, dK, _ = self._build_tw_cavity(elem, e_run)
                     elements += tw
                     e_run += dK
                 else:
@@ -331,11 +334,12 @@ class XsuiteAdapter(SimulatorBase):
                 if elem.element_type.upper() == 'RF_CAVITY':
                     # per-cell SC interleaved inside the linac; each kick uses the
                     # local energy after that cell's reference ramp
-                    tw, dK = self._build_tw_cavity(elem, e_run, sc=dict(
+                    tw, dK, n_cells = self._build_tw_cavity(elem, e_run, sc=dict(
                         sig_x=sig_x, sig_y=sig_y, long_profile=long_profile,
-                        sig_env=sig_env))
+                        sig_env=sig_env, env_offset=sc_off))
                     elements += tw
                     e_run += dK
+                    sc_off += n_cells
                     continue
                 L = elem.length
                 if L <= 0:
@@ -426,8 +430,14 @@ class XsuiteAdapter(SimulatorBase):
             np.asarray(p.x[alive]), np.asarray(p.px[alive]),
             np.asarray(p.y[alive]), np.asarray(p.py[alive]),
             np.asarray(p.zeta[alive]), np.asarray(p.delta[alive])])
+        # the line may ramp the reference energy (linac); convert the output at the
+        # EXIT reference energy, not the injection energy, so delta and the angle
+        # terms are right
+        exit_energy = (float(np.asarray(p.energy0)[alive][0]) -
+                       self.particle_mass * 1e6) / 1e6        # MeV
         final = self.transform_coordinates(
-            xs_out, CoordinateSystem.XSUITE, CoordinateSystem.FELSIM)
+            xs_out, CoordinateSystem.XSUITE, CoordinateSystem.FELSIM,
+            energy=exit_energy)
 
         twiss = self._calc_twiss(final)
         return SimulationResult(
@@ -437,6 +447,7 @@ class XsuiteAdapter(SimulatorBase):
             metadata={
                 'num_particles': n_p, 'num_good': n_good, 'num_lost': n_lost,
                 'beam_energy_mev': self.beam_energy,
+                'exit_energy_mev': exit_energy,
                 'space_charge': self.space_charge_enabled,
                 'sc_method': self.sc_method if self.space_charge_enabled else None,
                 'bunch_charge_nc': self.bunch_charge_C * 1e9,
@@ -449,10 +460,15 @@ class XsuiteAdapter(SimulatorBase):
         return {axis: twiss_df.loc[axis].to_dict() for axis in twiss_df.index}
 
     # ----------------------------------------------------------- coordinates
-    def transform_coordinates(self, particles, from_system, to_system):
+    def transform_coordinates(self, particles, from_system, to_system,
+                              energy=None):
+        # energy [MeV] sets the reference for the delta / angle conversion;
+        # defaults to the injection energy. Pass the exit energy for the output
+        # of an accelerating (linac) line.
         from simulatorFactory import CoordinateTransformer
         return CoordinateTransformer.transform(
-            particles, from_system, to_system, self.beam_energy,
+            particles, from_system, to_system,
+            energy if energy is not None else self.beam_energy,
             particle_mass_mev=self.particle_mass)
 
     # ------------------------------------------------------------- SC config
