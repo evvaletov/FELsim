@@ -3,14 +3,14 @@
 
 The XsuiteAdapter interleaves an SC kick after every TW cell, each placed after
 that cell's reference-energy ramp so it acts at the local energy. Space charge is
-therefore strongest at 1 MeV injection and suppressed (~1/(beta gamma)^3) as the
-beam accelerates -- the relativistic shielding a single fixed-energy SC block
-would miss.
+therefore strongest at 1 MeV injection and suppressed (~1/(beta^2 gamma^3) for a
+fixed-charge bunch) as the beam accelerates -- the relativistic shielding a
+single fixed-energy SC block would miss.
 
 Three checks: (1) STRUCTURE -- one SC kick per cell, each right after a
 ReferenceEnergyIncrease; (2) ACCELERATION -- a bunch still reaches ~41 MeV with
-SC on and survives; (3) LOCAL-GAMMA LAW -- a frozen SC kick scales ~1/(beta
-gamma)^3 with the reference energy, so each interleaved cell (sitting after its
+SC on and survives; (3) LOCAL-GAMMA LAW -- a frozen SC kick scales ~1/(beta^2
+gamma^3) with the reference energy, so each interleaved cell (sitting after its
 ramp) acts at its own local energy.
 
 Author: Eremey Valetov
@@ -43,6 +43,14 @@ L_CELL = PhysicalConstants.C * (2 * np.pi / 3) / (2 * np.pi * 2.856e9)
 def betagamma(K_mev):
     g = 1 + K_mev * 1e6 / MC2_EV
     return np.sqrt(g ** 2 - 1)
+
+
+def b2g3(K_mev):
+    """beta^2 gamma^3 -- the scaling of the linear transverse SC defocus of a
+    FIXED-charge bunch. The fixed-current perveance form 1/(beta^3 gamma^3)
+    loses one power of beta because the line current I ~ beta at fixed charge."""
+    g = 1 + K_mev * 1e6 / MC2_EV
+    return (g ** 2 - 1) * g          # (beta gamma)^2 * gamma
 
 
 def build_sc_line(charge_nc=1.0, sig=1e-3, sig_z=1e-3):
@@ -101,10 +109,10 @@ def main():
     Ks = np.array([1, 2, 3, 5, 8, 13, 21, 34, 41.5])
     coeff = np.array([sc_kick_coeff(K) for K in Ks])
     supp = coeff[0] / coeff[-1]
-    bg_law = (betagamma(Ks[0]) / betagamma(Ks)) ** 3 * coeff[0]   # ref ~1/(bg)^3
+    sc_law = b2g3(Ks[0]) / b2g3(Ks) * coeff[0]   # fixed-charge ~1/(beta^2 gamma^3)
     print(f"[local-gamma] frozen SC defocus dpx/x: 1 MeV={coeff[0]:.3e}, "
           f"41.5 MeV={coeff[-1]:.3e} -> x{supp:.0f} suppression "
-          f"(1/(beta gamma)^3 predicts x{(betagamma(41.5)/betagamma(1))**3:.0f})")
+          f"(1/(beta^2 gamma^3) predicts x{b2g3(41.5)/b2g3(1):.0f})")
     assert supp > 1000
 
     md = [
@@ -119,8 +127,8 @@ def main():
         f"{K_out:.1f} MeV and all {alive} particles survive.",
         f"3. **Local-gamma law:** the frozen SC defocus dpx/x falls from "
         f"{coeff[0]:.2e} 1/m at 1 MeV to {coeff[-1]:.2e} 1/m at 41.5 MeV "
-        f"(**x{supp:.0f}**), tracking the 1/(beta gamma)^3 relativistic shielding "
-        f"(predicted x{(betagamma(41.5)/betagamma(1))**3:.0f}). A single "
+        f"(**x{supp:.0f}**), tracking the 1/(beta^2 gamma^3) fixed-charge "
+        f"relativistic shielding (predicted x{b2g3(41.5)/b2g3(1):.0f}). A single "
         "fixed-energy SC block would apply the 1 MeV strength throughout and "
         "over-estimate SC by this factor.",
         "",
@@ -134,10 +142,11 @@ def main():
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.loglog(betagamma(Ks), coeff, 'C3o-', label='frozen SC (measured)')
-    ax.loglog(betagamma(Ks), bg_law, 'k--', lw=1, label=r'$\propto 1/(\beta\gamma)^3$')
+    ax.loglog(betagamma(Ks), sc_law, 'k--', lw=1,
+              label=r'$\propto 1/(\beta^2\gamma^3)$')
     ax.set_xlabel(r'$\beta\gamma$ (1 MeV -> 41.5 MeV)')
     ax.set_ylabel('per-cell SC defocus |dpx/x| (1/m)')
-    ax.set_title('Per-cell SC follows the local energy (1/(beta gamma)^3)')
+    ax.set_title(r'Per-cell SC follows the local energy ($\propto 1/(\beta^2\gamma^3)$)')
     ax.legend()
     fig.tight_layout()
     for ext in ('png', 'pdf'):

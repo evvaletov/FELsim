@@ -162,9 +162,11 @@ def main():
         f"{n_cells} cells, optimal injection phase {phipk:.0f} deg. The reference",
         "ramps with the synchronous energy (delta stays ~0), and the transverse map",
         "shows the correct adiabatic damping det(R_x)=p_in/p_out. This Line is a",
-        "drop-in for the xsuite SC engines (frozen / PIC). Beam loading is available",
-        "via synchronous_profile(..., I_amp=...). Remaining: true-phase cavities for",
-        "self-consistent longitudinal bunching (this build is on-crest, energy-exact).",
+        "drop-in for the xsuite SC engines (frozen / PIC). Beam loading is modelled",
+        "in this standalone validation script via synchronous_profile(..., I_amp=...);",
+        "the production XsuiteAdapter cavity is currently unloaded (zero beam current).",
+        "Remaining: true-phase cavities for self-consistent longitudinal bunching",
+        "(this build is on-crest, energy-exact).",
     ]
     (OUT / "xsuite_linac_tw.md").write_text("\n".join(md))
 

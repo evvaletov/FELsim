@@ -11,9 +11,11 @@ calibration as FELsim/RF-Track), sector bend (basic, no edge/fringe model).
 Optional space charge via xfields (frozen-Gaussian or 3D PIC), inserted
 split-operator between short sub-slices of each element.
 
-Dipole edges/fringe and RF cavities are not yet modelled (treated as drift
-with a warning); the immediate use case is the focusing/transport line SC
-benchmark, with and without bends.
+RF cavities are modelled as a multi-cell autophasing TW chain (Cavity +
+ReferenceEnergyIncrease) that ramps the reference energy on-crest; off-crest
+phase and self-consistent longitudinal bunching are not modelled. Dipole
+edges/fringe are not yet modelled. The immediate use case is the
+focusing/transport line SC benchmark, with and without bends and acceleration.
 
 Author: Eremey Valetov
 """
@@ -200,12 +202,17 @@ class XsuiteAdapter(SimulatorBase):
 
     def _build_tw_cavity(self, elem, K_in, sc=None):
         """xtrack multi-cell TW chain (Cavity + ReferenceEnergyIncrease) for one
-        RF_CAVITY, injected at K_in [MeV]. Returns (elements, delta_K_MeV). The
-        per-cell energy gains come from the autophasing model; the reference ramps
-        so the synchronous particle stays at delta~0 and downstream optics see the
-        right energy."""
+        RF_CAVITY, injected at K_in [MeV]. Returns (elements, delta_K_MeV,
+        n_cells). The per-cell energy gains come from the autophasing model; the
+        reference ramps so the synchronous particle stays at delta~0 and
+        downstream optics see the right energy."""
         p = elem.parameters
         L = elem.length
+        phase_deg = float(p.get('phase_deg') or 0.0)
+        if abs(phase_deg) > 1e-6:
+            logger.warning("Xsuite RF_CAVITY phase_deg=%.1f off-crest is not "
+                           "modelled; treating as on-crest (max energy gain)",
+                           phase_deg)
         if p.get('frequency_hz') is None:
             logger.warning("Xsuite RF_CAVITY missing frequency_hz; drift")
             return [xt.Drift(length=L)], 0.0, 0
@@ -242,7 +249,9 @@ class XsuiteAdapter(SimulatorBase):
                 # SC kick after the reference ramp: the frozen model reads the
                 # local (post-cell) energy automatically; PIC gets the local
                 # gamma explicitly. This is what makes SC strong at the 1 MeV
-                # injection and ~1/(beta gamma)^3-suppressed downstream.
+                # injection and ~1/(beta^2 gamma^3)-suppressed downstream (fixed
+                # charge: the 1/(beta^3 gamma^3) perveance loses one power of
+                # beta because the line current scales with beta).
                 env = sc.get('sig_env')   # flat [(sx, sy), ...] over all SC cells
                 if env is not None:
                     off = sc.get('env_offset', 0)   # this cavity's first cell
@@ -290,7 +299,7 @@ class XsuiteAdapter(SimulatorBase):
         # gamma sets the relativistic factor for the PIC solver; the frozen
         # BiGaussian kick reads the line's (ramped) reference energy at track
         # time, so it needs no explicit gamma. Pass the local gamma inside an
-        # accelerating section so the SC suppression (~1/(beta gamma)^3) is right.
+        # accelerating section so the SC suppression (~1/(beta^2 gamma^3)) is right.
         # update=False uses the supplied sigma as a prescribed (matched-envelope)
         # value instead of recomputing it from the bunch each step.
         if self.sc_method == "pic3d":
@@ -349,8 +358,16 @@ class XsuiteAdapter(SimulatorBase):
                 sub_L = L / n_sub
                 for _ in range(n_sub):
                     elements += self._xsuite_elements_for(elem, sub_L, e_run)
-                    elements.append(
-                        self._make_sc_element(sub_L, sig_x, sig_y, long_profile))
+                    if sig_env is not None:
+                        sx, sy = sig_env[min(sc_off, len(sig_env) - 1)]
+                        elements.append(self._make_sc_element(
+                            sub_L, sx, sy, long_profile, update=False))
+                    else:
+                        elements.append(self._make_sc_element(
+                            sub_L, sig_x, sig_y, long_profile))
+                    sc_off += 1     # advance the flat sig_env index for every SC
+                                    # cell, so interspersed (non-cavity) SC stations
+                                    # don't desync a later cavity's envelope offset
 
         line = xt.Line(elements=elements)
         line.particle_ref = xp.Particles(
@@ -371,7 +388,7 @@ class XsuiteAdapter(SimulatorBase):
         line = self._build_line(sc_on=True, sig_x=sig_x, sig_y=sig_y,
                                 sig_z=sig_z, n_e=n_e)
         et = list(line.get_table().element_type)
-        sc_idx = [i for i, t in enumerate(et) if t == 'SpaceChargeBiGaussian']
+        sc_idx = [i for i, t in enumerate(et) if t.startswith('SpaceCharge')]
         rng = np.random.default_rng(seed)
         p = line.build_particles(
             x=rng.normal(0, sig_x, n_part), px=rng.normal(0, sig_xp, n_part),
@@ -409,8 +426,8 @@ class XsuiteAdapter(SimulatorBase):
             weight=(n_e / n_p if self.space_charge_enabled else 1.0))
 
         if self.space_charge_enabled:
-            sig_x = float(np.std(xs[:, 0]))
-            sig_y = float(np.std(xs[:, 2]))
+            sig_x = float(np.std(xs[:, 0])) or 1e-9
+            sig_y = float(np.std(xs[:, 2])) or 1e-9
             sig_z = float(np.std(xs[:, 4])) or 1e-6
             line = self._build_line(True, sig_x, sig_y, sig_z, n_e)
         else:
