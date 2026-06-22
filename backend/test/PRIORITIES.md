@@ -27,7 +27,7 @@ Verbatim items captured 2026-05-29; cross-referenced to existing roadmap/git-bug
 - [ ] **Later: full PIC in COSY.** ↔ git-bug `1cbd8ea` (SC Option 1).
 - [ ] **DA-FMM + RF-Track + Xsuite on the focusing/transport line, at 45 MeV and 1 MeV:** — groundwork DONE 2026-06-19, see `backend/test/sc_capstone/` + `results/sc_capstone/CAPSTONE_REPORT.md`. Common-distribution generator + reproducibility manifest, no-SC cross-code handoff, and the DA-FMM-vs-xsuite-frozen SC run all built + verified (11/11 tests).
   - [ ] **with dipoles** — BLOCKED: xsuite has no dipole edge/fringe model (full-line no-SC handoff: xsuite fails, FELsim-vs-RF-Track 18× on σ_x) + SC-inside-magnets slicing needed. The binding prerequisite.
-  - [x] **without dipoles** — DONE: DA-FMM vs xsuite-frozen on section [32,46) at 45 & 1 MeV. Cold-beam agrees <0.1%; 1 MeV (fair, q_mp≪q_mp*) shows the frozen Bassetti-Erskine model over-predicts ε_n growth ~5× vs the N-body treecode in strong SC; 45 MeV high-charge DA-FMM excess re-demonstrates the Phase-1 q_mp* shot-noise threshold on a real section.
+  - [x] **without dipoles** — DONE: DA-FMM vs xsuite-frozen at 45 & 1 MeV, plus **cosy-pic** (mesh PIC, `--with-pic`) as a 3rd engine at 45 MeV, on section [32,46). Cold-beam agrees <0.1%; 1 MeV (fair, q_mp≪q_mp*) shows the frozen Bassetti-Erskine model over-predicts ε_n growth ~5× vs the N-body treecode in strong SC; at 45 MeV cosy-pic agrees with xsuite-frozen to ~20% at every charge, jointly confirming the physical growth and proving the DA-FMM bare-treecode excess (6-22×) is q_mp* shot noise (Phase-1 threshold, now 3-code cross-validated on a real section).
 
 ---
 

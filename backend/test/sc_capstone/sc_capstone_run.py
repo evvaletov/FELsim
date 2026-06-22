@@ -19,8 +19,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
+
+# Point the cosy-pic adapter at the actual binary (its built-in default path is
+# stale: build/pic-core-cli vs build/pic_core/pic-core-cli). Must be set BEFORE the
+# simulatorFactory import chain so the 'pic' engine registers.
+os.environ.setdefault("COSY_PIC_DIR", os.path.expanduser("~/COSY/cosy-pic"))
+os.environ.setdefault(
+    "PIC_CORE_CLI",
+    os.path.expanduser("~/COSY/cosy-pic/build/pic_core/pic-core-cli"))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -32,6 +41,52 @@ import sc_section as scs
 from nosc_handoff import LATTICE, NODIP_RANGE, run_code
 
 QE = scs.QE
+
+
+def track_pic(felsim_arr, energy_mev, q_nc, mesh=(64, 64, 64), optics_energy=None):
+    """cosy-pic mesh-PIC space charge on the no-dipole section, same common
+    distribution. Returns None if the 'pic' engine is unavailable (cosy-pic not
+    built / env unset) or the run fails, so the column degrades gracefully.
+
+    The PicAdapter tracks FELsim's native element maps at `energy_mev`, so it
+    cannot apply the analytic optics re-match the DA-FMM/xsuite trackers use via
+    `optics_energy` (it would track at the wrong, over-focused optics). Skip with
+    a note when an optics re-match is requested, rather than report a mismatched
+    column."""
+    from simulatorFactory import SimulatorFactory
+    import latticeLoader
+    if "pic" not in getattr(SimulatorFactory, "_registry", {}):
+        return None
+    if optics_energy is not None and abs(optics_energy - energy_mev) > 1e-9:
+        return {"error": f"optics re-match to {optics_energy} MeV not supported for pic"}
+    try:
+        sim = SimulatorFactory.create("pic", lattice_path=LATTICE,
+                                      beam_energy=energy_mev,
+                                      bunch_charge_nc=q_nc, sc_mesh=mesh)
+        bl = latticeLoader.create_beamline(LATTICE)
+        for e in bl:
+            e.setE(energy_mev)
+        sim.set_beamline(bl[NODIP_RANGE[0]:NODIP_RANGE[1]])
+        sim.set_space_charge(True, mesh=mesh, bunch_charge_nc=q_nc)
+        t0 = time.perf_counter()
+        res = sim.simulate(particles=felsim_arr.copy())
+        wall = time.perf_counter() - t0
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    if not res.success or res.final_particles is None:
+        return {"error": "pic simulate failed"}
+    p = res.final_particles
+    if p.shape[0] == 0:
+        return {"error": "no particles survived"}
+    g, b = cd.gamma_beta(energy_mev)
+    bg = b * g
+    x, xp, y, yp = p[:, 0], p[:, 1], p[:, 2], p[:, 3]  # mm, mrad
+
+    def epsn(u, up):
+        du, dup = u - u.mean(), up - up.mean()
+        return bg * np.sqrt(max(np.mean(du**2) * np.mean(dup**2) - np.mean(du * dup)**2, 0.0))
+    return {"epsnx_exit": float(epsn(x, xp)), "epsny_exit": float(epsn(y, yp)),
+            "wall": wall, "n_out": int(p.shape[0])}
 
 
 def make_beam(energy_mev, n_p, seed, eps_n, q_nc):
@@ -115,7 +170,7 @@ def growth_pct(exit_val, init_val):
 
 
 def run_point(energy_mev, q_nc, n_p, seed, eps_n, ds_target, optics_energy=None,
-              softening="0"):
+              softening="0", with_pic=False, pic_mesh=(64, 64, 64)):
     """softening: Plummer softening length [m] for the DA-FMM kernel, or 'auto' for
     the eps = sigma_x_init/sqrt(N_p) heuristic, or '0'/0 for the bare 1/r kernel.
     Softening suppresses the macroparticle-collision shot noise so the treecode
@@ -137,7 +192,7 @@ def run_point(energy_mev, q_nc, n_p, seed, eps_n, ds_target, optics_energy=None,
     xs_off = track_xsuite_frozen(arr, segs, energy_mev, q_nc, ds_target, spch_on=False)
     xs_on = track_xsuite_frozen(arr, segs, energy_mev, q_nc, ds_target, spch_on=True)
     init_enx, init_eny = da_off["epsnx_init"], da_off["epsny_init"]
-    return {
+    out = {
         "energy_mev": energy_mev, "q_nc": q_nc, "n_p": n_p,
         "init_epsnx": init_enx, "init_epsny": init_eny,
         "dafmm_gx": growth_pct(da_on["epsnx_exit"], init_enx),
@@ -151,12 +206,27 @@ def run_point(energy_mev, q_nc, n_p, seed, eps_n, ds_target, optics_energy=None,
         "wall_dafmm": da_on["wall_sc"], "wall_xsuite": xs_on["wall"],
         "seed": seed, "softening_eps": eps,
     }
+    if with_pic:
+        pic = track_pic(arr, energy_mev, q_nc, mesh=pic_mesh, optics_energy=optics_energy)
+        if pic and "epsnx_exit" in pic:
+            out["pic_gx"] = growth_pct(pic["epsnx_exit"], init_enx)
+            out["pic_gy"] = growth_pct(pic["epsny_exit"], init_eny)
+            out["wall_pic"] = pic["wall"]
+        else:
+            out["pic_gx"] = None
+            out["pic_err"] = (pic or {}).get("error", "pic engine unavailable")
+    return out
 
 
 def _aggregate_seeds(per_seed):
     """Mean +/- std over seed realizations; used to average down DA-FMM shot noise."""
     out = dict(per_seed[0])
-    for key in ("dafmm_gx", "dafmm_gy", "xsuite_gx", "xsuite_gy"):
+    keys = ["dafmm_gx", "dafmm_gy", "xsuite_gx", "xsuite_gy"]
+    if all(r.get("pic_gx") is not None for r in per_seed):
+        keys += ["pic_gx", "pic_gy"]
+    elif "pic_gx" in out:
+        out["pic_gx"] = None  # any seed missing pic -> mark the aggregate N/A
+    for key in keys:
         vals = np.array([r[key] for r in per_seed])
         out[key] = float(vals.mean())
         out[key + "_std"] = float(vals.std(ddof=1)) if len(vals) > 1 else 0.0
@@ -186,23 +256,37 @@ def main() -> int:
                     help="multiple seeds -> average DA-FMM growth over realizations "
                          "(mean +/- std), to drive down the single-seed shot-noise scatter. "
                          "Defaults to the single --seed.")
+    ap.add_argument("--with-pic", action="store_true",
+                    help="add the cosy-pic mesh-PIC engine as a 3rd column (needs "
+                         "~/COSY/cosy-pic built; slower, spawns pic-core-cli per SC station)")
+    ap.add_argument("--pic-mesh", nargs=3, type=int, default=[64, 64, 64],
+                    help="cosy-pic Hockney mesh nx ny nz (default 64 64 64)")
     ap.add_argument("--outdir", type=Path, default=Path("test/results/sc_capstone"))
     args = ap.parse_args()
 
     seeds = args.seeds if args.seeds else [args.seed]
+    pic_mesh = tuple(args.pic_mesh)
     rows = []
     for E in args.energies_mev:
         for q in args.charges_nc:
             print(f"[capstone] E={E} MeV  Q={q} nC  "
-                  f"(soft={args.softening}, {len(seeds)} seed(s)) ...", flush=True)
+                  f"(soft={args.softening}, {len(seeds)} seed(s)"
+                  f"{', +pic' if args.with_pic else ''}) ...", flush=True)
             per_seed = [run_point(E, q, args.n_p, s, args.eps_n, args.ds_target,
                                   optics_energy=args.optics_energy,
-                                  softening=args.softening) for s in seeds]
+                                  softening=args.softening,
+                                  with_pic=args.with_pic, pic_mesh=pic_mesh)
+                        for s in seeds]
             r = per_seed[0] if len(seeds) == 1 else _aggregate_seeds(per_seed)
             rows.append(r)
             sd = (f" +/-{r['dafmm_gx_std']:.3f}" if "dafmm_gx_std" in r else "")
+            picstr = ""
+            if args.with_pic:
+                picstr = (f"   cosy-pic x = {r['pic_gx']:+.3f}%"
+                          if r.get("pic_gx") is not None
+                          else f"   cosy-pic = N/A ({r.get('pic_err', '?')})")
             print(f"   DA-FMM  growth x = {r['dafmm_gx']:+.3f}%{sd}   "
-                  f"xsuite-frozen x = {r['xsuite_gx']:+.3f}%   "
+                  f"xsuite-frozen x = {r['xsuite_gx']:+.3f}%{picstr}   "
                   f"(SC-off: DA {r['dafmm_off_gx']:+.2e}%, xs {r['xsuite_off_gx']:+.2e}%)")
 
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -214,16 +298,25 @@ def main() -> int:
              f"Section {NODIP_RANGE} (drift+quad, 6 quads, 1.65 m) of the FELsim line.",
              f"Common distribution: N_p={args.n_p}, eps_n={args.eps_n} mm.mrad, "
              f"sigma_delta=0, seed={args.seed}. Space charge: frozen-Gaussian (xsuite) "
-             f"vs full N-body 1/r treecode (DA-FMM).",
+             f"vs full N-body 1/r treecode (DA-FMM)"
+             + (" vs Hockney mesh PIC (cosy-pic)." if args.with_pic else "."),
              "",
-             "| E [MeV] | Q [nC] | DA-FMM dEx | DA-FMM dEy | xsuite dEx | xsuite dEy | DA-vs-xs (x) |",
-             "|---|---|---|---|---|---|---|"]
+             ("| E [MeV] | Q [nC] | DA-FMM dEx | DA-FMM dEy | xsuite dEx | xsuite dEy | "
+              + ("cosy-pic dEx | cosy-pic dEy | " if args.with_pic else "")
+              + "DA-vs-xs (x) |"),
+             "|---|---|---|---|---|---|" + ("---|---|" if args.with_pic else "") + "---|"]
     for r in rows:
         dvx = abs(r["dafmm_gx"] - r["xsuite_gx"])
+        piccols = ""
+        if args.with_pic:
+            if r.get("pic_gx") is not None:
+                piccols = f"{r['pic_gx']:+.3f}% | {r['pic_gy']:+.3f}% | "
+            else:
+                piccols = "N/A | N/A | "
         lines.append(f"| {r['energy_mev']:g} | {r['q_nc']:g} | "
                      f"{r['dafmm_gx']:+.3f}% | {r['dafmm_gy']:+.3f}% | "
                      f"{r['xsuite_gx']:+.3f}% | {r['xsuite_gy']:+.3f}% | "
-                     f"{dvx:.3f} pp |")
+                     f"{piccols}{dvx:.3f} pp |")
     lines += ["",
               "SC-off control (both engines should be ~0%): "
               f"max |DA-FMM off| = {max(abs(r['dafmm_off_gx']) for r in rows):.2e}%, "
@@ -238,6 +331,8 @@ def main() -> int:
         q = [r["q_nc"] for r in sub]
         ax.plot(q, [r["dafmm_gx"] for r in sub], "o-", label=f"DA-FMM {E:g} MeV")
         ax.plot(q, [r["xsuite_gx"] for r in sub], "s--", label=f"xsuite-frozen {E:g} MeV")
+        if args.with_pic and all(r.get("pic_gx") is not None for r in sub):
+            ax.plot(q, [r["pic_gx"] for r in sub], "^:", label=f"cosy-pic {E:g} MeV")
     ax.set_xlabel("bunch charge [nC]")
     ax.set_ylabel(r"$\epsilon_{n,x}$ growth [%]")
     ax.set_title(f"No-dipole section {NODIP_RANGE}: DA-FMM vs xsuite-frozen SC")

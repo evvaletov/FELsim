@@ -39,12 +39,25 @@ In progress, and where I need input from you:
   deliverable. Could you send your xopt hyperparameters so I run the BO baseline
   on the same setup? And confirm you are comfortable with the A/B-not-robust
   framing.
-- Linac model refinement: RF-Track is the detailed model (single-Fourier
-  uniform-cell). Next step is a cell-by-cell multi-cell travelling-wave model;
-  the production tau = 0.57 cell geometry (SLAC-75 Table 6-6) is already in hand,
-  so this is a build task on my side. I'll fold a field map in later if needed.
-- COSY space charge: Phase 1 is done; next is the three-code DA-FMM + RF-Track +
-  xsuite run on the transport line at 45 and 1 MeV, with and without dipoles.
+- Linac model refinement: done. On top of the RF-Track model I built a
+  cell-by-cell multi-cell travelling-wave linac (tau = 0.57, SLAC-75 Table 6-6),
+  validated to ~1.2% against elegant, and added steady-state beam loading. A
+  measured/simulated field map is the only later refinement.
+- COSY space charge: the transport-line comparison is set up and I have the first
+  cross-code results. The codes now share one macroparticle distribution (with a
+  reproducibility manifest), and at zero current they agree to <0.1% on the
+  focusing (no-dipole) section, so they are calibrated there. The full line is not
+  yet comparable: xsuite has no dipole edge/fringe model and the dipole/dispersion
+  handling diverges between codes, so the with-dipoles run needs that model (and
+  space charge inside the magnets) first. With space charge on the no-dipole
+  section I have three engines side by side -- the cosy-fmm DA-FMM treecode, xsuite
+  frozen-Gaussian, and the new cosy-pic mesh PIC solver (a fourth space-charge code
+  in the framework). Two results stand out: at 1 MeV the frozen-Gaussian
+  over-predicts emittance growth ~5x versus the two particle methods, and at 45 MeV
+  the cosy-pic mesh PIC and xsuite agree to ~20% while the bare treecode runs 6-22x
+  high -- that excess is macroparticle shot noise (the q_mp threshold from the
+  spring), not physics, so the two independent methods pin the physical value.
+  Write-up and figures are in the repo (results/sc_capstone/).
 
 Best,
 Eremey
