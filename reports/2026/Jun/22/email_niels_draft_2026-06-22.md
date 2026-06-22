@@ -9,11 +9,13 @@ Status on the items from our early-June meeting. Detail and figures are in the
 repo under reports/2026/Jun/22/; the short version:
 
 Settled / answered:
-- elegant stays scoped to the RF/linac section. It is our linac reference only
-  (0.06% vs RF-Track) and is not needed for the diagnostic chicane, which
-  COSY/xsuite/FELsim already cover. I'd suggest pointing elegant at the RF gun
-  next as an independent cross-check (the gun is RF-Track-only today) -- let me
-  know if you want that.
+- elegant stays scoped to the RF/linac section. It is the linac reference only
+  (0.06% vs RF-Track) and is not needed for the diagnostic chicane section, which
+  COSY/xsuite/FELsim already cover. For an independent gun cross-check I would
+  lean towards a dedicated photoinjector code (ASTRA or GPT) rather than elegant,
+  since the gun is space-charge-dominated at low energy where elegant's
+  relativistic assumptions do not hold; the gun is RF-Track-only today. Happy to
+  set that up if it would help.
 - PALS does not define a beam-file standard; it is lattice-only. For the
   particle-distribution interchange I recommend openPMD-beamphysics (HDF5), which
   reads ASTRA, elegant/SDDS, and Genesis4, with plain ASCII as a fallback.
@@ -28,13 +30,13 @@ Settled / answered:
   gradient calibration, consistent energy/dispersion conventions, agreement to
   the test tolerances).
 - glyfada: I had already benchmarked it; its evolutionary search underperforms
-  our Nelder-Mead + CMA-ES by several orders on this problem, so it is not the
+  my Nelder-Mead + CMA-ES by several orders on this problem, so it is not the
   production path. The one place it is worth a fresh run is the Config-C stress
   case for the optimisation paper.
 
-In progress, and where I need input from you:
+Recent work, and where I need input from you:
 - Objective design: at the MOP6318 targets both objective A and B fail ~35% of
-  seeds (C ~80%), so they are not as robust as the abstract framing implied.
+  seeds (C ~80%), so they are less robust than we initially expected.
   That strengthens the case for the Bayesian-optimisation baseline as the paper
   deliverable. Could you send your xopt hyperparameters so I run the BO baseline
   on the same setup? And confirm you are comfortable with the A/B-not-robust
@@ -50,14 +52,17 @@ In progress, and where I need input from you:
   yet comparable: xsuite has no dipole edge/fringe model and the dipole/dispersion
   handling diverges between codes, so the with-dipoles run needs that model (and
   space charge inside the magnets) first. With space charge on the no-dipole
-  section I have three engines side by side -- the cosy-fmm DA-FMM treecode, xsuite
-  frozen-Gaussian, and the new cosy-pic mesh PIC solver (a fourth space-charge code
-  in the framework). Two results stand out: at 1 MeV the frozen-Gaussian
-  over-predicts emittance growth ~5x versus the two particle methods, and at 45 MeV
-  the cosy-pic mesh PIC and xsuite agree to ~20% while the bare treecode runs 6-22x
-  high -- that excess is macroparticle shot noise (the q_mp threshold from the
-  spring), not physics, so the two independent methods pin the physical value.
-  Write-up and figures are in the repo (results/sc_capstone/).
+  section I have three engines side by side: the cosy-fmm DA-FMM treecode, xsuite
+  frozen-Gaussian, and the new cosy-pic mesh PIC solver (the fourth space-charge
+  engine in the framework, alongside RF-Track's PIC). Two results stand out. At
+  45 MeV the cosy-pic mesh PIC and xsuite frozen-Gaussian agree to ~20%, while the
+  bare treecode runs 6-22x high. That excess is consistent with macroparticle
+  shot noise (the q_mp threshold from the spring) rather than physics, so the two
+  independent methods give our best estimate of the physical value. At 1 MeV the
+  ordering reverses: there the frozen-Gaussian over-predicts emittance growth ~5x
+  versus the DA-FMM treecode (cosy-pic was run only at 45 MeV), consistent with
+  the frozen model re-imposing a Gaussian field instead of letting the
+  distribution relax. Write-up and figures are in the repo (results/sc_capstone/).
 
 Best,
 Eremey
