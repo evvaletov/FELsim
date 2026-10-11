@@ -9,6 +9,7 @@ each adapter handles its own internal transforms.
 Author: Eremey Valetov
 """
 
+import inspect
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -33,6 +34,7 @@ _ALL_SECTION_CONFIG_KEYS = _RUNTIME_CONFIG_KEYS | frozenset({
     'G_quad', 'particle_mass', 'particle_charge', 'rf_frequency',
     'transfer_matrix_order', 'fringe_field_order', 'use_mge_for_dipoles',
     'quad_aperture', 'dipole_aperture', 'mode', 'beam_energy',
+    'bunch_charge_nc', 'sc_ds_max',
 })
 
 # FELsim class name → generic element type
@@ -210,6 +212,9 @@ class MultiCodeSimulator(SimulatorBase):
 
         All adapters accept and return FELsim coordinates, so particles
         are passed directly between sections without coordinate transforms.
+        A section whose adapter shares a bunch charge among its particles
+        (RF-Track) is told how many particles entered the first section, so
+        survivors of a lossy section keep their charge.
 
         Parameters
         ----------
@@ -241,7 +246,11 @@ class MultiCodeSimulator(SimulatorBase):
             if bl_slice and hasattr(sim, 'set_beamline'):
                 sim.set_beamline(bl_slice)
 
-            result = sim.simulate(particles=current_particles)
+            if 'n_initial' in inspect.signature(sim.simulate).parameters:
+                result = sim.simulate(particles=current_particles,
+                                      n_initial=particles.shape[0])
+            else:
+                result = sim.simulate(particles=current_particles)
 
             if not result.success:
                 return SimulationResult(

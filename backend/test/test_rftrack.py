@@ -104,6 +104,21 @@ def test_coordinate_transforms():
     assert np.allclose(particles, p_same)
 
 
+def test_coordinate_transforms_of_an_integer_array():
+    """Integer input converts as its float values do, into a float array: P
+    and t are not truncated, and a same-system call returns floats too."""
+    sim = RFTrackAdapter(beam_energy=BEAM_ENERGY)
+    particles = np.array([[1, 0, 2, 0, 3, 10], [0, 1, 0, -1, -2, -20]])
+    for a, b in ((CoordinateSystem.FELSIM, CoordinateSystem.RFTRACK),
+                 (CoordinateSystem.RFTRACK, CoordinateSystem.FELSIM),
+                 (CoordinateSystem.COSY, CoordinateSystem.RFTRACK),
+                 (CoordinateSystem.RFTRACK, CoordinateSystem.COSY),
+                 (CoordinateSystem.FELSIM, CoordinateSystem.FELSIM)):
+        out = sim.transform_coordinates(particles, a, b)
+        assert out.dtype == np.float64
+        np.testing.assert_array_equal(out, sim.transform_coordinates(particles.astype(float), a, b))
+
+
 def test_beamline_setup():
     sim = RFTrackAdapter(beam_energy=BEAM_ENERGY)
 

@@ -324,9 +324,9 @@ class TestHybridFELsimRFTrack:
     def test_hybrid_vs_full_rftrack(self, beamline, particles):
         """MultiCode(felsim+rftrack) vs full RF-Track: same physics, different models.
 
-        FELsim uses linear transfer matrices; RF-Track uses analytical
-        sector-bend corrections. Results should be qualitatively similar
-        (same order of magnitude) but not identical.
+        FELsim uses linear transfer matrices; RF-Track tracks its native
+        sector bends, which differ from FELsim off momentum. Results should
+        be qualitatively similar (same order of magnitude) but not identical.
         """
         n_elem = len(beamline)
 

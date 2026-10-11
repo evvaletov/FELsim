@@ -50,12 +50,45 @@ class BeamlineElement:
         self.length = length
         self.parameters = parameters
 
+    @property
+    def edge_angle(self):
+        """Pole-face angle [deg] of a DIPOLE_WEDGE: 'wedge_angle' when given,
+        else 'angle', else 0. Elements converted from FELsim's dipole_wedge
+        carry it as 'angle'; lattice-sheet rows carry both, and there 'angle'
+        is the sheet's dipole angle."""
+        for key in ('wedge_angle', 'angle'):
+            if self.parameters.get(key) is not None:
+                return self.parameters[key]
+        return 0.0
+
     def __repr__(self):
         try:
             params_str = ", ".join(f"{k}={v!r}" for k, v in self.parameters.items())
         except (TypeError, AttributeError):
             params_str = f"<{len(self.parameters)} parameters>"
         return f"{self.element_type}(L={self.length}, {params_str})"
+
+
+def wedge_bend(elements, index):
+    """(dipole_length [m], dipole_angle [deg], source) that set the bend
+    radius of the DIPOLE_WEDGE elements[index].
+
+    A wedge with both has its own, source None. One with neither takes the
+    length and angle of the DIPOLE beside it, the one before it first (a
+    wedge after a dipole is its exit face), source that dipole's index; None
+    when no DIPOLE is beside it. A wedge with only one of the two raises.
+    """
+    p = elements[index].parameters
+    length, angle = p.get('dipole_length'), p.get('dipole_angle')
+    if length is not None and angle is not None:
+        return length, angle, None
+    if length is not None or angle is not None:
+        raise ValueError(f"DIPOLE_WEDGE {index} has only one of dipole_length and "
+                         f"dipole_angle; give both or neither")
+    for j in (index - 1, index + 1):
+        if 0 <= j < len(elements) and elements[j].element_type.upper() in ('DIPOLE', 'DPH'):
+            return elements[j].length, elements[j].parameters.get('angle', 0.0), j
+    return None
 
 
 class SimulationResult:

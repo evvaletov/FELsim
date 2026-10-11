@@ -78,7 +78,8 @@ class SimulatorFactory:
             'lattice_path', 'excel_path', 'mode', 'debug',
             'space_charge', 'sc_mesh', 'beam_energy',
             'particle_mass', 'particle_charge', 'aperture',
-            'G_quad', 'dipole_slices', 'rf_frequency',
+            'G_quad', 'dipole_slices', 'rf_frequency', 'bunch_charge_nc',
+            'sc_ds_max',
         }),
         'xsuite': frozenset({
             'lattice_path', 'excel_path', 'mode', 'debug',
@@ -96,7 +97,8 @@ class SimulatorFactory:
         'sc_mesh': frozenset({'rftrack', 'xsuite'}),
         'sc_method': frozenset({'xsuite'}),
         'n_slice_sc': frozenset({'xsuite'}),
-        'bunch_charge_nc': frozenset({'xsuite'}),
+        'bunch_charge_nc': frozenset({'rftrack', 'xsuite'}),
+        'sc_ds_max': frozenset({'rftrack'}),
         'transfer_matrix_order': frozenset({'cosy'}),
         'fringe_field_order': frozenset({'cosy'}),
         'use_mge_for_dipoles': frozenset({'cosy'}),
@@ -140,7 +142,8 @@ class SimulatorFactory:
             - Common: lattice_path (Excel, JSON, or YAML)
             - FELsim: (no additional parameters)
             - COSY: mode, config, debug
-            - RF-Track: space_charge, aperture, G_quad, debug
+            - RF-Track: space_charge, bunch_charge_nc, sc_mesh, sc_ds_max,
+              aperture, G_quad, debug
         """
         if isinstance(simulator_type, SimulatorType):
             sim_type = simulator_type.value
