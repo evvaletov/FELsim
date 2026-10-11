@@ -91,10 +91,11 @@ The other adapter tests:
         test/test_rftrack_dipoles.py test/test_rftrack_space_charge.py \
         test/test_rftrack_unified.py test/test_multicode.py -v
 
-The COSY-backed tests in `test_multicode.py` run COSY INFINITY, which the
-COSY simulator starts as `./cosy` in its output directory `results/`, so
-they need a COSY INFINITY binary at `backend/results/cosy` and fail without
-it. `test_rftrack_unified.py` and the FELsim sections of `test_multicode.py`
+The COSY-backed tests in `test_multicode.py` run COSY INFINITY. The COSY
+simulator looks for the `cosy` binary and `cosy.fox` in `backend/`, the
+working directory, `fields/`, `/usr/local/bin` and `~/COSY/10.2/UNIX`, copies
+them into `results/` and runs them there, so these tests fail on a machine
+without COSY INFINITY. `test_rftrack_unified.py` and the FELsim sections of `test_multicode.py`
 build an `ebeam`, which calls `plt.cm.get_cmap`; that was removed in
 matplotlib 3.9, so these tests need matplotlib 3.8 or older.
 
