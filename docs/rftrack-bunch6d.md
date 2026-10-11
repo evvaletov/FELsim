@@ -90,3 +90,15 @@ The other adapter tests:
         test/test_rftrack_elements.py test/test_rftrack_quad_convention.py \
         test/test_rftrack_dipoles.py test/test_rftrack_space_charge.py \
         test/test_multicode.py -v
+
+## RF-Track versions
+
+The tests above pass on RF-Track 2.5.5 and 2.7.2. On 2.7.2 the SLAC energy
+agrees with 2.5.5 to 1e-14 relative, and transport without space charge on
+the UH line is identical except for coord5 at 7e-11. Space charge differs
+slightly between the versions: the drift known-answer slope by 5e-6
+relative at 1 nC, and up to 2 to 3 percent of the space-charge kick for a
+2 nC bunch on a 32^3 mesh. On 2.7.2 a space-charge result is also not
+bit-reproducible between processes (it is within one process), so the
+engine-isolation tests in `test_rftrack_space_charge.py`, which compare
+tracks run in separate processes to 1e-12, fail intermittently there.
