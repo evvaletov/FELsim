@@ -501,6 +501,12 @@ def test_multicode_sections_keep_the_charge_of_the_survivors(bunch):
 
 
 # ── the global engine (each case in its own process) ────────────────────────
+#
+# The reference for a case is the first track in the same process, before any
+# other engine exists. RF-Track 2.7 PIC results are reproducible within a
+# process but can differ between processes when it runs on many threads (up
+# to 8.8e-4 in x' against a 3e-2 kick for 2 nC on a 32^3 mesh), so references
+# from separate processes are not comparable to 1e-12 there.
 
 _PRELUDE = textwrap.dedent(f'''
     import gc, json, logging, sys
@@ -562,13 +568,13 @@ def test_engine_after_space_charge_is_switched_off():
 
 
 def test_engine_after_its_adapter_is_collected():
-    alone = _in_process('result(run(adapter(charge=2.0, mesh=32)))')
-    out = _in_process('''
+    alone, out = _in_process('''
+        alone = run(adapter(charge=2.0, mesh=32))
         a = adapter()
         run(a)
         del a
         j = junk()
-        result(run(adapter(charge=2.0, mesh=32)))
+        result([alone, run(adapter(charge=2.0, mesh=32))])
     ''')
     _same(out, alone)
 
@@ -577,15 +583,22 @@ def test_adapters_alternate():
     """Each adapter tracks with its own engine. The mesh shows in the result
     (RF-Track's default engine would give 16^3 and 32^3 the same answer), so
     an engine left installed by the other adapter would too."""
-    alone_a = _in_process('result(run(adapter(charge=1.0, mesh=16)))')
-    alone_b = _in_process('result(run(adapter(charge=2.0, mesh=32)))')
-    out = _in_process('''
-        a, b = adapter(charge=1.0, mesh=16), adapter(charge=2.0, mesh=32)
-        result([run(a), run(b), run(a), run(b), run(adapter(charge=1.0, mesh=32))])
-    ''')
-    for got, want in zip(out, (alone_a, alone_b, alone_a, alone_b)):
-        _same(got, want)
-    assert abs(slope(np.asarray(out[4])) / slope(np.asarray(alone_a)) - 1.0) > 0.01
+    out = {}
+    for first in ('a', 'b'):
+        out[first] = _in_process(f'''
+            kw = dict(a=dict(charge=1.0, mesh=16), b=dict(charge=2.0, mesh=32))
+            alone = run(adapter(**kw[{first!r}]))
+            a, b = adapter(**kw['a']), adapter(**kw['b'])
+            result([alone, run(a), run(b), run(a), run(b),
+                    run(adapter(charge=1.0, mesh=32))])
+        ''')
+    alone_a, got_a, _, again_a, _, mesh32 = out['a']
+    alone_b, _, got_b, _, again_b, _ = out['b']
+    for got in (got_a, again_a):
+        _same(got, alone_a)
+    for got in (got_b, again_b):
+        _same(got, alone_b)
+    assert abs(slope(np.asarray(mesh32)) / slope(np.asarray(alone_a)) - 1.0) > 0.01
 
 
 def test_lattice_outlives_its_adapter():

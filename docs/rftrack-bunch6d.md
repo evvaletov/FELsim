@@ -89,7 +89,14 @@ The other adapter tests:
     python -m pytest test/test_rftrack.py test/test_rftrack_bunch.py \
         test/test_rftrack_elements.py test/test_rftrack_quad_convention.py \
         test/test_rftrack_dipoles.py test/test_rftrack_space_charge.py \
-        test/test_multicode.py -v
+        test/test_rftrack_unified.py test/test_multicode.py -v
+
+The COSY-backed tests in `test_multicode.py` run COSY INFINITY, which the
+COSY simulator starts as `./cosy` in its output directory `results/`, so
+they need a COSY INFINITY binary at `backend/results/cosy` and fail without
+it. `test_rftrack_unified.py` and the FELsim sections of `test_multicode.py`
+build an `ebeam`, which calls `plt.cm.get_cmap`; that was removed in
+matplotlib 3.9, so these tests need matplotlib 3.8 or older.
 
 ## RF-Track versions
 
@@ -98,7 +105,13 @@ agrees with 2.5.5 to 1e-14 relative, and transport without space charge on
 the UH line is identical except for coord5 at 7e-11. Space charge differs
 slightly between the versions: the drift known-answer slope by 5e-6
 relative at 1 nC, and up to 2 to 3 percent of the space-charge kick for a
-2 nC bunch on a 32^3 mesh. On 2.7.2 a space-charge result is also not
-bit-reproducible between processes (it is within one process), so the
-engine-isolation tests in `test_rftrack_space_charge.py`, which compare
-tracks run in separate processes to 1e-12, fail intermittently there.
+2 nC bunch on a 32^3 mesh.
+
+On 2.7.2 a space-charge result is also not always bit-reproducible between
+processes when RF-Track runs on many threads: for 2 nC on a 32^3 mesh two
+processes differed by up to 8.8e-4 in x' against a 3e-2 kick. Within one
+process it is reproducible. The engine-isolation tests in
+`test_rftrack_space_charge.py` run each case in its own process and compare
+to 1e-12, so each takes its reference from the first track in the same
+process, before any other engine exists, rather than from a separate
+process.
