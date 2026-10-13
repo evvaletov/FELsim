@@ -10,8 +10,9 @@ on axis at 1 MeV kinetic energy:
   advance phase_advance_deg (2 pi / 3) per cell;
 - cell length c * phase_advance / (2 pi f) (synchronous with beta = 1), and
   a fractional number of cells that gives the element length (3.048 m);
-- phid = phase_deg (0), then the lattice autophased on the electron, so
-  phid = 0 is the phase of maximum energy gain.
+- phid = phase_deg (0). RF-Track already phases the structure on the first
+  particle, so phid = 0 is the crest; the autophase call is kept as a guard
+  and does not change the result.
 
 It prints the kinetic energy out, 41.47 MeV.
 

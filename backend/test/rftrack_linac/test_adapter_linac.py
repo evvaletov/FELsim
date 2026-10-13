@@ -1,7 +1,7 @@
 """
 Integration test: load the SLAC linac JSON via the RF-Track adapter and
 verify the adapter produces results consistent with the standalone RF-Track
-model in linac_standalone.py (same structure, autophased, phid = 0).
+model in linac_standalone.py (same structure, phid = 0).
 
 Eremey Valetov, 2026-04-05
 """
@@ -19,7 +19,7 @@ LATTICE_JSON = REPO_ROOT / 'var' / 'slac_linac.json'
 sys.path.insert(0, str(BACKEND))
 
 K_INJECT = 1.0
-EXPECTED_K_OUT = 41.47  # MeV, linac_standalone.py (phid=0, autophased)
+EXPECTED_K_OUT = 41.47  # MeV, linac_standalone.py (phid=0)
 TOLERANCE = 0.05        # MeV
 
 

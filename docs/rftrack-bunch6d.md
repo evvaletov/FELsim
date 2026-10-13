@@ -98,9 +98,13 @@ a `TW_Structure` with a single Fourier coefficient, the peak on-axis field
 E0 = 13.3 MV/m (`gradient_mv_per_m`), f = 2856 MHz and a phase advance of
 2 pi / 3 per cell (`phase_advance_deg`), with cell length
 c (2 pi / 3) / (2 pi f) = 35.0 mm and the fractional number of cells that
-gives 3.048 m. It sets phid = 0 (`phase_deg`), autophases the lattice on the
-1 MeV electron, so that phid = 0 is the phase of maximum energy gain, and
-tracks it: 41.4683 MeV on RF-Track 2.5.5.
+gives 3.048 m. It sets phid = 0 (`phase_deg`) and tracks the 1 MeV electron:
+41.4683 MeV on RF-Track 2.5.5. RF-Track phases the structure on the first
+particle, so phid = 0 is already the crest (a scan gives 41.4628 MeV at +-1
+degree); the script's autophase call does not change the result. The script
+builds the structure the same way the adapter does, so the test checks the
+adapter's bunch and phasing path against a direct RF-Track run, not against an
+independent model.
 
     python test/rftrack_linac/linac_standalone.py
 
@@ -125,8 +129,7 @@ The tests above pass on RF-Track 2.5.5 and 2.7.2. On 2.7.2 the SLAC energy
 agrees with 2.5.5 to 1e-14 relative, and transport without space charge on
 the UH line is identical except for coord5 at 7e-11. Space charge differs
 slightly between the versions: the drift known-answer slope by 5e-6 relative
-at 1 nC, and up to 2 to 3 percent of the space-charge kick for a 2 nC bunch
-on a 32^3 mesh. For such a bunch (2000 particles through ten 0.1 m drifts at 45
+at 1 nC. For a 2 nC bunch on a 32^3 mesh (2000 particles through ten 0.1 m drifts at 45
 MeV) at 4 threads, where both versions are bit-reproducible, the largest
 difference in x' is 8.8e-4 against a largest kick of 3.0e-2 (2.9 percent;
 0.15 percent in rms), and in y' 1.4e-4 against 2.9e-2. This is the same size
@@ -134,8 +137,8 @@ as the scatter between processes of 2.7.2 on many threads, described next, so
 it does not show that one version is more accurate than the other.
 
 On 2.7.2 a space-charge result is not always bit-reproducible between
-processes when RF-Track runs on many threads. For the same 2 nC bunch on a
-32^3 mesh at 32 threads, each process lands on one of two outcomes, which
+processes when RF-Track runs on many threads. For a 2 nC bunch on a 32^3
+mesh at 32 threads (the engine-isolation test case), each process lands on one of two outcomes, which
 differ by up to 5.3e-4 in x' (once 8.8e-4) against a 3e-2 kick. At 4 threads,
 and on 2.5.5, every process gave bit-identical results. Within one process
 the result is reproducible. The engine-isolation tests in
