@@ -1,6 +1,7 @@
 """
 Integration test: load the SLAC linac JSON via the RF-Track adapter and
-verify the adapter produces results consistent with the standalone script.
+verify the adapter produces results consistent with the standalone RF-Track
+model in linac_standalone.py (same structure, autophased, phid = 0).
 
 Eremey Valetov, 2026-04-05
 """
@@ -18,7 +19,7 @@ LATTICE_JSON = REPO_ROOT / 'var' / 'slac_linac.json'
 sys.path.insert(0, str(BACKEND))
 
 K_INJECT = 1.0
-EXPECTED_K_OUT = 41.47  # MeV, from standalone script (phid=0, autophased)
+EXPECTED_K_OUT = 41.47  # MeV, linac_standalone.py (phid=0, autophased)
 TOLERANCE = 0.05        # MeV
 
 
@@ -39,7 +40,8 @@ def _track_linac():
 
 
 def test_slac_linac_energy_gain():
-    """Adapter-path energy gain matches standalone reference (41.47 MeV)."""
+    """Adapter-path energy gain matches the reference of linac_standalone.py
+    (41.47 MeV)."""
     K_out = _track_linac()
     assert abs(K_out - EXPECTED_K_OUT) < TOLERANCE, (
         f"K_out = {K_out:.4f} MeV, expected {EXPECTED_K_OUT} ± {TOLERANCE} MeV"

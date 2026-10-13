@@ -54,14 +54,23 @@ element gets max(1, ceil(L / sc_ds_max)) space-charge steps
 ### Weights through losses
 
 `n_initial` is the number of particles in the bunch before any losses.
-`simulate()` and `track_elements()` take it, and `MultiCodeSimulator` passes
-the size of the beam that entered its first section to every section whose
-adapter accepts it. A particle that survives a lossy element, a
-`track_elements` range or an earlier code section therefore keeps the charge
-`Q_bunch / n_initial`, and the bunch charge falls with the losses instead of
-being redistributed over the survivors. With space charge on, calling
-`track_elements` on a range that does not start at the first element without
-`n_initial` warns once that the given particles are taken as the whole bunch.
+Within one `simulate()` or `collect_evolution()` call it is carried from
+element to element, and `MultiCodeSimulator` passes the size of the beam that
+entered its first section to `simulate()` of every later section whose
+adapter accepts it. `track_elements()` takes it as an argument, for chaining
+ranges: `track_elements(a, b)` followed by `track_elements(b, c,
+n_initial=n)` equals `track_elements(a, c)` for n particles handed in at a.
+A particle that survives a lossy element, a `track_elements` range or an
+earlier code section therefore keeps the charge `Q_bunch / n_initial`, and
+the bunch charge falls with the losses instead of being redistributed over
+the survivors. With space charge on, calling `track_elements` on a range
+that does not start at the first element without `n_initial` warns once
+that the given particles are taken as the whole bunch.
+
+On a track that loses particles RF-Track may warn that the beam's first
+particle was lost. For the adapter this warning is spurious: its columns are
+absolute, the zero-weight reference particle stays in row 0, and the arrival
+times are taken relative to it by the adapter, not by RF-Track.
 
 ### Known limit
 
@@ -77,12 +86,23 @@ weights would be replaced by equal shares at the first boundary.
 (one 3.048 m S-band travelling-wave structure) through the adapter and tracks
 a single electron injected on axis at 1 MeV kinetic energy, with no space
 charge and no aperture. It checks the energy only: the kinetic energy out is
-41.47 MeV within 0.05 MeV, the value of the standalone RF-Track script with
-the cavity autophased. It also checks that the phase does not depend on the
-beam, and that a new beam energy rephases the cavity.
+41.47 MeV within 0.05 MeV. It also checks that the phase does not depend on
+the beam, and that a new beam energy rephases the cavity.
 
     cd backend
     python -m pytest test/rftrack_linac/test_adapter_linac.py -v
+
+The reference comes from `backend/test/rftrack_linac/linac_standalone.py`,
+which builds the same structure directly in RF-Track, without the adapter:
+a `TW_Structure` with a single Fourier coefficient, the peak on-axis field
+E0 = 13.3 MV/m (`gradient_mv_per_m`), f = 2856 MHz and a phase advance of
+2 pi / 3 per cell (`phase_advance_deg`), with cell length
+c (2 pi / 3) / (2 pi f) = 35.0 mm and the fractional number of cells that
+gives 3.048 m. It sets phid = 0 (`phase_deg`), autophases the lattice on the
+1 MeV electron, so that phid = 0 is the phase of maximum energy gain, and
+tracks it: 41.4683 MeV on RF-Track 2.5.5.
+
+    python test/rftrack_linac/linac_standalone.py
 
 The other adapter tests:
 
@@ -104,15 +124,21 @@ matplotlib 3.9, so these tests need matplotlib 3.8 or older.
 The tests above pass on RF-Track 2.5.5 and 2.7.2. On 2.7.2 the SLAC energy
 agrees with 2.5.5 to 1e-14 relative, and transport without space charge on
 the UH line is identical except for coord5 at 7e-11. Space charge differs
-slightly between the versions: the drift known-answer slope by 5e-6
-relative at 1 nC, and up to 2 to 3 percent of the space-charge kick for a
-2 nC bunch on a 32^3 mesh.
+slightly between the versions: the drift known-answer slope by 5e-6 relative
+at 1 nC, and up to 2 to 3 percent of the space-charge kick for a 2 nC bunch
+on a 32^3 mesh. For such a bunch (2000 particles through ten 0.1 m drifts at 45
+MeV) at 4 threads, where both versions are bit-reproducible, the largest
+difference in x' is 8.8e-4 against a largest kick of 3.0e-2 (2.9 percent;
+0.15 percent in rms), and in y' 1.4e-4 against 2.9e-2. This is the same size
+as the scatter between processes of 2.7.2 on many threads, described next, so
+it does not show that one version is more accurate than the other.
 
-On 2.7.2 a space-charge result is also not always bit-reproducible between
-processes when RF-Track runs on many threads: for 2 nC on a 32^3 mesh two
-processes differed by up to 8.8e-4 in x' against a 3e-2 kick. Within one
-process it is reproducible. The engine-isolation tests in
+On 2.7.2 a space-charge result is not always bit-reproducible between
+processes when RF-Track runs on many threads. For the same 2 nC bunch on a
+32^3 mesh at 32 threads, each process lands on one of two outcomes, which
+differ by up to 5.3e-4 in x' (once 8.8e-4) against a 3e-2 kick. At 4 threads,
+and on 2.5.5, every process gave bit-identical results. Within one process
+the result is reproducible. The engine-isolation tests in
 `test_rftrack_space_charge.py` run each case in its own process and compare
 to 1e-12, so each takes its reference from the first track in the same
-process, before any other engine exists, rather than from a separate
-process.
+process, before any other engine exists, rather than from a separate process.

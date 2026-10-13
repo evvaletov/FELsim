@@ -505,6 +505,9 @@ class RFTrackAdapter(SimulatorBase):
         lost-particle table (rows x xp y yp t P S m Q N id)."""
         if rows.shape[0] == 0:
             return rows, np.empty((0, 11))
+        # RF-Track's "beam's first particle was lost" warning on a lossy
+        # track is spurious here: the columns are absolute and the reference
+        # stays in row 0.
         out = np.asarray(lat.track(self._make_bunch(rows)).get_phase_space(self.BUNCH_COLUMNS),
                          dtype=float).reshape(-1, 10)
         if out.shape[0] == rows.shape[0]:

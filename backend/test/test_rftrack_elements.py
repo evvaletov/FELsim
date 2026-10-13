@@ -77,7 +77,7 @@ def test_solenoid_without_field_is_a_drift():
 
 @pytest.mark.parametrize('charge', [0, 0.0, np.float64(0.0)])
 def test_neutral_particles_are_rejected(charge):
-    """Correctors, quadrupoles (strength set with P/q) and space charge all
+    """Quadrupoles (strength set with P/q) and space charge all
     act through the charge."""
     with pytest.raises(ValueError, match='particle_charge'):
         RFTrackAdapter(beam_energy=45.0, particle_charge=charge)
